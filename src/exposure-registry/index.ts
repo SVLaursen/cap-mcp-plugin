@@ -99,7 +99,7 @@ export class ExposureRegistry {
   private readonly lists = new Map<string, ToolSpec[]>();
 
   constructor(
-    private readonly spec: ExposureSpec,
+    readonly spec: ExposureSpec,
     private readonly options: RegistryOptions = {},
     readDiagnostics: Diagnostic[] = [],
   ) {
