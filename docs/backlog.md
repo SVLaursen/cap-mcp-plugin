@@ -40,9 +40,9 @@ Fast loop: `npm run test:contract`.
 
 ## M3 — Executor on CAP ✅
 
-From here, tests run against the demo (`npm run test:behaviour`). Until M4 lands, drive the
-executor directly inside `cds.test` (call it with `cds.services.X` within a
-`cds.tx({ user }, …)`), then switch the same tests to `/mcp` in M4.
+From here, tests run against the demo (`npm run test:behaviour`). Since M4 they call tools over
+`/mcp` (`test/helpers/tools.ts`); `executeDirectly` runs the executor for what `/mcp` cannot do
+(yet): unlisted tools, confirmed calls.
 
 - [x] Reads: query `{ rows, total, nextCursor }`, paging, count, where/orderby/select limits, `q` via `SELECT.search`, `get` NOT_FOUND, one text block _(`executor.test.ts` › reads)_
 - [x] Describe tools (`<Service>_describe`, compact `list_entities` / `describe_entity`) scoped to what the caller can reach _(`executor-describe.test.ts`)_; regression #3
@@ -62,7 +62,7 @@ executor directly inside `cds.test` (call it with `cds.services.X` within a
 - [x] `activate(cds)`: mount `/mcp` on `served` behind `cds.middlewares.before` + `express.json()`; handler = `toNodeHandler(createMcpHandler(factory))`; factory from the registry for `cds.context.user`, keyed by `cds.context.model ?? cds.model`; advertise only implemented capabilities (ADR 0009, 0010) _(mounting)_
 - [x] `@mcp` services keep their OData endpoints (guard against a protocol named `mcp`) _(mounting)_
 - [x] Stateless tools/list and tools/call; `server/discover`; version errors; `resultType`; `ttlMs`/`cacheScope` _(stateless)_
-- [ ] Switch M3 executor tests to go through `/mcp`; delete the placeholder test in `demo-baseline.test.ts`
+- [x] Switch M3 executor tests to go through `/mcp`; delete the placeholder test in `demo-baseline.test.ts`
 - [ ] Regression #3 (describe never leaks), #4 (no session state) _(`v1-findings.test.ts`)_
 - [ ] Auth metadata: own 401 on `/mcp` (Bearer `resource_metadata` for JWT/IAS, `req._login` for mocked), `/.well-known/oauth-protected-resource/mcp` at the root, no fake DCR _(auth metadata)_
 - [ ] `cds.context.user` is the caller; AMS middleware applies without special code _(mounting)_

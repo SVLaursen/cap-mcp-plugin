@@ -3,7 +3,7 @@
  * (srv.tx per call, as the adapter will); M4 switches them to go through /mcp.
  */
 import { as, bootDemo } from "../helpers/demo";
-import { callTool as call, page } from "../helpers/tools";
+import { callTool as call, executeDirectly, expectInvalidArgument, page } from "../helpers/tools";
 
 const demo = bootDemo();
 
@@ -74,9 +74,7 @@ describe("executor: reads", () => {
     ]) {
       const result = await call("bob", "CatalogService_Books_query", args);
       expect(result.isError).toBe(true);
-      expect(result.structuredContent).toEqual({
-        error: expect.objectContaining({ code: "INVALID_ARGUMENT" }),
-      });
+      expectInvalidArgument(result);
     }
   });
 
@@ -100,9 +98,7 @@ describe("executor: reads", () => {
       [{ field: "title", op: "like", value: "x" }],
     ]) {
       const result = await call("bob", "CatalogService_Books_query", { where });
-      expect(result.structuredContent).toEqual({
-        error: expect.objectContaining({ code: "INVALID_ARGUMENT" }),
-      });
+      expectInvalidArgument(result);
     }
   });
 
@@ -152,17 +148,13 @@ describe("executor: reads", () => {
       { entity: "AdminService.Books", select: ["costPrice"] },
     ]) {
       const result = await call("alice", "AdminService_query", args);
-      expect(result.structuredContent).toEqual({
-        error: expect.objectContaining({ code: "INVALID_ARGUMENT" }),
-      });
+      expectInvalidArgument(result);
     }
     const badKey = await call("alice", "AdminService_get", {
       entity: "AdminService.Books",
       key: { ID: 201, costPrice: 1 },
     });
-    expect(badKey.structuredContent).toEqual({
-      error: expect.objectContaining({ code: "INVALID_ARGUMENT" }),
-    });
+    expectInvalidArgument(badKey);
   });
 
   test("results are structuredContent plus ONE text block (not one block per row)", async () => {
@@ -217,8 +209,12 @@ describe("executor: authorization is CAP's", () => {
   );
 
   test("bob calling an AdminService tool gets a 403-equivalent tool error from CAP", async () => {
-    // The registry hides it from bob; call it anyway (as if a client cached alice's list).
-    const result = await call(
+    // The registry hides it from bob, so /mcp does not even dispatch it...
+    await expect(
+      call("bob", "AdminService_query", { entity: "AdminService.Books" }),
+    ).rejects.toThrow(/-32602 Tool AdminService_query not found/);
+    // ...but CAP is the boundary: run it anyway (as if a client cached alice's list).
+    const result = await executeDirectly(
       "bob",
       "AdminService_query",
       { entity: "AdminService.Books" },

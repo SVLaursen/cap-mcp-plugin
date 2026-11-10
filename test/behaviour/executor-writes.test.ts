@@ -3,7 +3,7 @@
  * never change what the read tests see (cds.test gives each file its own database).
  */
 import { as, bootDemo } from "../helpers/demo";
-import { callTool } from "../helpers/tools";
+import { callTool, expectInvalidArgument } from "../helpers/tools";
 
 const demo = bootDemo();
 
@@ -110,12 +110,15 @@ describe("executor: writes", () => {
   });
 
   test("a write tool for an entity without that mode is not listed and not callable", async () => {
-    await expect(callTool("bob", "CatalogService_Books_create")).rejects.toThrow(/not listed/);
+    await expect(callTool("bob", "CatalogService_Books_create")).rejects.toThrow(
+      /-32602 Tool \w+ not found/,
+    );
     // Authors in AdminService has no write modes: the compact write tools refuse it.
     const result = await callTool("alice", "AdminService_create", {
       entity: "AdminService.Authors",
       data: { ID: 500, name: "Anne Brontë" },
     });
-    expect(result.structuredContent).toEqual(error("INVALID_ARGUMENT", { target: "entity" }));
+    // Not in the tool's entity enum, so the SDK's input-schema check refuses it.
+    expectInvalidArgument(result);
   });
 });

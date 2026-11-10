@@ -5,7 +5,7 @@
  */
 import cds from "@sap/cds";
 import { as, bootDemo } from "../helpers/demo";
-import { callTool, page } from "../helpers/tools";
+import { callTool, expectInvalidArgument, page } from "../helpers/tools";
 
 const demo = bootDemo();
 
@@ -57,9 +57,7 @@ describe("executor: drafts and deep insert", () => {
       { book_ID: 251 },
     ]) {
       const bad = await callTool("bob", "OrdersService_Orders_create", { reason: "bad", items });
-      expect(bad.structuredContent).toEqual({
-        error: expect.objectContaining({ code: "INVALID_ARGUMENT" }),
-      });
+      expectInvalidArgument(bad);
     }
   });
 

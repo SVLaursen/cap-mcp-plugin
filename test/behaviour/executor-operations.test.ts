@@ -2,7 +2,7 @@
  * M3 — operations through srv.send, so the app's handlers run and their errors reach the agent.
  */
 import { bootDemo } from "../helpers/demo";
-import { callTool } from "../helpers/tools";
+import { callTool, executeDirectly, expectInvalidArgument } from "../helpers/tools";
 
 bootDemo();
 
@@ -47,16 +47,14 @@ describe("executor: operations", () => {
   test("operation arguments are checked: unknown and mistyped parameters are refused", async () => {
     for (const args of [{ genre: 11, extra: 1 }, { genre: "eleven" }]) {
       const result = await callTool("bob", "CatalogService_stockByGenre", args);
-      expect(result.structuredContent).toEqual({
-        error: expect.objectContaining({ code: "INVALID_ARGUMENT" }),
-      });
+      expectInvalidArgument(result);
     }
   });
 
   test("the unannotated action restock is neither listed nor callable", async () => {
     await expect(
       callTool("bob", "CatalogService_restock", { book: 201, quantity: 1 }),
-    ).rejects.toThrow(/not listed/);
+    ).rejects.toThrow(/-32602 Tool \w+ not found/);
   });
 
   test("an @mcp.elicit operation does not run until the call is confirmed", async () => {
@@ -72,7 +70,8 @@ describe("executor: operations", () => {
   });
 
   test("bound action OrdersService.Orders.cancel takes the order key plus parameters", async () => {
-    const result = await callTool(
+    // Confirmed directly: confirming over /mcp (MRTR) is M5.
+    const result = await executeDirectly(
       "bob",
       "OrdersService_Orders_cancel",
       { ID: ORDER, reason: "changed my mind" },

@@ -24,7 +24,15 @@ export type DemoUser = keyof typeof USERS;
  * Each test file gets a fresh database, so writes in one file never leak into another.
  */
 export function bootDemo() {
-  return cds.test(DEMO_DIR);
+  return (booted = cds.test(DEMO_DIR));
+}
+
+let booted: ReturnType<typeof cds.test> | undefined;
+
+/** The demo booted by this test file (Jest gives each file its own module registry). */
+export function currentDemo(): ReturnType<typeof cds.test> {
+  if (!booted) throw new Error("call bootDemo() at the top of the test file first");
+  return booted;
 }
 
 /** Axios request config that authenticates as a demo user. */

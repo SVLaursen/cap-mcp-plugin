@@ -9,11 +9,13 @@ const demo = bootDemo();
 
 describe("v1 regressions", () => {
   test("#1 a failed commit is reported as an error (AdminService DELETE Books 207 fails at commit)", async () => {
-    // The executor never commits or catches: the caller's transaction does, and its failure
-    // reaches the caller (the adapter turns it into an error in M4).
-    await expect(
-      callTool("alice", "AdminService_delete", { entity: "AdminService.Books", key: { ID: 207 } }),
-    ).rejects.toThrow("SIMULATED_COMMIT_FAILURE");
+    // The executor never commits or catches: the service's transaction does, and its failure
+    // reaches the agent as a tool error (the message is hidden in production, as CAP does).
+    const result = await callTool("alice", "AdminService_delete", {
+      entity: "AdminService.Books",
+      key: { ID: 207 },
+    });
+    expect(result).toEqual({ text: "SIMULATED_COMMIT_FAILURE", isError: true });
     expect((await demo.GET("/admin/Books(207)?$select=ID", as("alice"))).status).toBe(200);
   });
   test("#2 q search never matches on @mcp.omit fields (an omitted email is not searchable)", async () => {
