@@ -120,13 +120,17 @@ export function readModel(csn: unknown): ModelReadResult {
 }
 
 function readService(service: string, def: Definition, ctx: Context): ServiceSpec | undefined {
+  if (isExcluded(def)) return undefined;
   const optedIn = isOptedIn(def);
   const entities: EntitySpec[] = [];
   const operations: OperationSpec[] = [];
 
   for (const [name, member] of Object.entries(ctx.definitions)) {
     if (!name.startsWith(`${service}.`) || isExcluded(member)) continue;
-    if (member.kind === "entity" && !isGenerated(name, member, ctx.definitions)) {
+    if (member.kind === "entity") {
+      // CAP-generated entities are not baseline, but an explicit @mcp on one still counts.
+      const generated = isGenerated(name, member, ctx.definitions);
+      if (generated && !isOptedIn(member)) continue;
       if (optedIn || isOptedIn(member)) entities.push(readEntity(name, service, member, ctx));
       const addressable = isAddressable(member);
       for (const [action, op] of Object.entries(member.actions ?? {})) {

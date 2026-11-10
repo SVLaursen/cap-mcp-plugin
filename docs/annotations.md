@@ -33,8 +33,9 @@ query, plus create if listed: get, update, delete and bound operations would hit
 several.
 
 Entities CAP generates on its own are never part of the baseline: localized `.texts` entities
-and `DraftAdministrativeData`. `@mcp: false` and `@cds.api.ignore` on an entity also remove its
-bound operations.
+and `DraftAdministrativeData`, unless one carries `@mcp` itself. `@mcp: false` and
+`@cds.api.ignore` on an entity also remove its bound operations; `@mcp: false` on a service
+removes the whole service, including members with their own `@mcp`.
 
 ## Reference
 

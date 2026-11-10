@@ -157,6 +157,27 @@ describe("model-reader: opt-in", () => {
     expect(exposed(readModel(csn).spec)).toEqual({ S: { entities: {}, operations: [] } });
   });
 
+  test("@mcp: false on a service switches the whole service off, even opted-in members", () => {
+    const csn = compileSnippet(`
+      @mcp: false service S {
+        @mcp entity Books { key ID: Integer; }
+        @mcp action order();
+      }
+    `);
+    expect(readModel(csn).spec).toEqual({ services: [] });
+  });
+
+  test("an explicit @mcp exposes an entity CAP generated, which the baseline skips", () => {
+    const csn = compileSnippet(`
+      @mcp service S { entity Books { key ID: Integer; title: localized String; } }
+      annotate S.Books.texts with @mcp;
+    `);
+    expect(Object.keys(exposed(readModel(csn).spec).S?.entities ?? {})).toEqual([
+      "S.Books",
+      "S.Books.texts",
+    ]);
+  });
+
   test("@cds.api.ignore on an entity or element removes it", () => {
     const csn = compileSnippet(`
       @mcp service S {
