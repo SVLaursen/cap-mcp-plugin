@@ -2,37 +2,10 @@
  * M3 — executor, exercised end to end over /mcp against the demo app (cds.test).
  * Every call goes through srv.run / srv.send in the request's cds.context.
  */
-import cds from "@sap/cds";
-import { Executor, type ServiceLike, type ToolResult } from "../../src/executor";
-import { ExposureRegistry } from "../../src/exposure-registry";
-import { bootDemo, type DemoUser } from "../helpers/demo";
+import { bootDemo } from "../helpers/demo";
+import { callTool as call, page } from "../helpers/tools";
 
-const demo = bootDemo();
-void demo;
-
-const ROLES: Record<DemoUser, string[]> = { alice: ["admin"], bob: [], carol: ["support"] };
-
-/**
- * Call a tool the way the adapter will (M4): pick it from the caller's tool list, then run the
- * executor inside a transaction for that user, against the real CAP service.
- */
-async function call(
-  who: DemoUser,
-  name: string,
-  args: Record<string, unknown> = {},
-): Promise<ToolResult> {
-  const model = cds.model as unknown as object;
-  const registry = ExposureRegistry.fromModel(model);
-  const user = new cds.User({ id: who, roles: ROLES[who], attr: {} });
-  const tool = registry.toolsFor(user).find((t) => t.name === name);
-  if (!tool) throw new Error(`${name} is not listed for ${who}`);
-  const service = cds.services[name.split("_")[0] ?? ""] as unknown as ServiceLike;
-  const executor = new Executor(registry.spec);
-  return cds.tx({ user }, () => executor.execute(tool, args, service));
-}
-
-type Page = { rows: Record<string, unknown>[]; total: number; nextCursor?: string };
-const page = (result: ToolResult) => result.structuredContent as Page;
+bootDemo();
 
 describe("executor: reads", () => {
   test("query returns { rows, total, nextCursor } and rows never contain costPrice", async () => {
