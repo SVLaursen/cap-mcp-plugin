@@ -1,7 +1,7 @@
 import cds from "@sap/cds";
 import { ExposureRegistry } from "../../src/exposure-registry";
 import type { ToolSpec } from "../../src/types";
-import { bootDemo } from "../helpers/demo";
+import { as, bootDemo } from "../helpers/demo";
 import { listTools, rpc } from "../helpers/mcp";
 import { demoUser } from "../helpers/tools";
 
@@ -42,6 +42,18 @@ describe("protocol: mounting inside CAP", () => {
       expect(res.status).toBe(200);
       expect(res.message?.result?.tools).toEqual(registry.toolsFor(demoUser(who)).map(listed));
     }
+  });
+
+  test("@mcp services keep their OData endpoints: no protocol named mcp is registered", async () => {
+    // A protocol named `mcp` would make CAP treat @mcp as the protocol choice (ADR 0009).
+    expect(Object.keys(cds.env.protocols ?? {})).not.toContain("mcp");
+    const registry = ExposureRegistry.fromModel(cds.model as unknown as object);
+    for (const { name } of registry.spec.services) {
+      const endpoints = (cds.services[name] as unknown as { endpoints: { kind: string }[] })
+        .endpoints;
+      expect(endpoints.map((e) => e.kind)).toContain("odata");
+    }
+    expect((await demo.GET("/browse/Books?$top=1", as("bob"))).status).toBe(200);
   });
 
   test("only implemented capabilities are advertised (tools, listChanged off)", async () => {
