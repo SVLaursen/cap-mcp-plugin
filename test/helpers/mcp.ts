@@ -19,7 +19,11 @@ export interface HttpResponse {
 type Poster = (
   url: string,
   data: unknown,
-  config: { headers?: Record<string, string>; validateStatus?: () => boolean },
+  config: {
+    headers?: Record<string, string>;
+    validateStatus?: () => boolean;
+    responseType?: "text";
+  },
 ) => Promise<HttpResponse>;
 
 /** A JSON-RPC response, whichever way it came (JSON body or one SSE `message` event). */
@@ -55,7 +59,11 @@ function credentials(caller: Caller) {
 /** The JSON-RPC message in a response: the JSON body, or the last SSE `data:` event. */
 export function messageOf(res: HttpResponse): RpcMessage | undefined {
   const data = res.data;
-  if (typeof data === "string") {
+  const type = String(res.headers["content-type"] ?? "");
+  if (typeof data === "string" && type.startsWith("application/json")) {
+    return JSON.parse(data) as RpcMessage;
+  }
+  if (typeof data === "string" && type.startsWith("text/event-stream")) {
     const events = data
       .split(/\r?\n/)
       .filter((line) => line.startsWith("data:"))
@@ -113,6 +121,8 @@ export async function rpc(
   const name = nameOf(method, params);
   const res = await post("/mcp", body, {
     ...credentials(caller),
+    // Parsed here: the body is JSON or an SSE stream, depending on era and response mode.
+    responseType: "text",
     headers: without({
       "content-type": "application/json",
       accept: "application/json, text/event-stream",
@@ -146,6 +156,8 @@ export async function legacyRpc(
   };
   const res = await post("/mcp", body, {
     ...credentials(caller),
+    // Parsed here: the body is JSON or an SSE stream, depending on era and response mode.
+    responseType: "text",
     headers: {
       "content-type": "application/json",
       accept: "application/json, text/event-stream",

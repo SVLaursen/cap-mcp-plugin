@@ -59,7 +59,8 @@ export function activate(cds: CdsLike): void {
     const auth = { path: MCP_PATH, auth: () => cds.requires.auth };
     // RFC 9728 metadata is public: clients read it to find out how to authenticate.
     cds.app.get(metadataPath(MCP_PATH), metadataHandler(auth));
-    cds.app.post(
+    // All methods: the SDK answers GET/DELETE (2025 session operations) with 405.
+    cds.app.all(
       MCP_PATH,
       ...cds.middlewares.before,
       requireUser({ ...auth, user: () => cds.context?.user }),

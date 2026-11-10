@@ -2,7 +2,7 @@ import { McpServer, createMcpHandler, fromJsonSchema } from "@modelcontextprotoc
 import type { CallToolResult, McpServerFactory } from "@modelcontextprotocol/server";
 import { toNodeHandler } from "@modelcontextprotocol/node";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
-import { Executor, errorResult, type ServiceLike, type ToolResult } from "../executor";
+import { Executor, ToolError, errorResult, type ServiceLike, type ToolResult } from "../executor";
 import type { ExposureRegistry } from "../exposure-registry";
 import type { ExposureSpec, ToolSpec, UserLike } from "../types";
 
@@ -95,9 +95,22 @@ function toCallToolResult(result: ToolResult): CallToolResult {
   };
 }
 
+/**
+ * A 2025-era request is stateless: the server cannot ask the user anything mid-call, so a call
+ * that needs confirmation (@mcp.elicit) can never run. Say so, instead of asking for it.
+ */
+function forLegacy(error: unknown): unknown {
+  if (!(error instanceof ToolError) || error.code !== "CONFIRMATION_REQUIRED") return error;
+  return new ToolError(
+    error.code,
+    `${error.message}; this client's MCP version cannot ask for confirmation, so it cannot run this tool (use a client that speaks 2026-07-28)`,
+    error.target,
+  );
+}
+
 /** The per-request server factory: one McpServer with the caller's tools. */
 export function serverFactory(options: AdapterOptions): McpServerFactory {
-  return () => {
+  return ({ era }) => {
     const context = options.context();
     if (!context)
       throw new Error("cap-mcp: no cds.context; is /mcp mounted behind CAP's middlewares?");
@@ -136,7 +149,7 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
             );
             return toCallToolResult(result);
           } catch (error) {
-            const result = errorResult(error);
+            const result = errorResult(era === "legacy" ? forLegacy(error) : error);
             if (result) return toCallToolResult(result);
             options.log.error(`${tool.name} failed:`, error);
             const message =

@@ -47,6 +47,9 @@ The data passed between them is defined in `src/types.ts`.
    dispatches the JSON-RPC method. Only `tools` is advertised, with `listChanged: false`;
    `tools/list` and `server/discover` say `cacheScope: private` (lists depend on the user) and
    `ttlMs` 60 s. No session, no `Mcp-Session-Id`.
+   2025-era clients get the same tools statelessly: each request (`initialize` included) stands
+   alone, answered as SSE; GET and DELETE are 405. They cannot confirm an `@mcp.elicit` call,
+   so it is refused with a `CONFIRMATION_REQUIRED` tool error that says why.
    A 401 (CAP's `next(401)`, e.g. an invalid token) becomes CAP's own login challenge
    (`req._login`, Basic for mocked/basic auth) or, for XSUAA/JWT/IAS,
    `WWW-Authenticate: Bearer resource_metadata="<origin>/.well-known/oauth-protected-resource/mcp"`.

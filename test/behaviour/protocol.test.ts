@@ -4,7 +4,15 @@ import { ExposureRegistry } from "../../src/exposure-registry";
 import type { ToolSpec } from "../../src/types";
 import type { Request } from "express";
 import { DEMO_DIR, as, bootDemo, inProduction } from "../helpers/demo";
-import { PROTOCOL_VERSION, callTool, listTools, rpc } from "../helpers/mcp";
+import {
+  LEGACY_VERSION,
+  PROTOCOL_VERSION,
+  callTool,
+  legacyInitialize,
+  legacyRpc,
+  listTools,
+  rpc,
+} from "../helpers/mcp";
 import { TOOLS_TTL_MS } from "../../src/adapter";
 import { demoUser } from "../helpers/tools";
 
@@ -101,10 +109,56 @@ describe("protocol: stateless 2026-07-28", () => {
   });
 });
 
-describe("protocol: older clients", () => {
-  test.todo(
-    "SPIKE: decide whether 2025-11-25 clients (initialize handshake) are supported, and how",
-  );
+describe("protocol: older clients (2025-era, stateless; ADR 0010)", () => {
+  test("initialize is answered without a session", async () => {
+    for (const version of [LEGACY_VERSION, "2024-11-05"]) {
+      const res = await legacyInitialize(demo.POST, "bob", version);
+      expect(res.status).toBe(200);
+      expect(res.headers["mcp-session-id"]).toBeUndefined();
+      expect(res.message?.result).toMatchObject({
+        protocolVersion: version,
+        capabilities: { tools: { listChanged: false } },
+        serverInfo: { name: "@gavdi/cap-mcp" },
+      });
+    }
+  });
+
+  test("tools/list and tools/call work as standalone requests, per user", async () => {
+    const registry = ExposureRegistry.fromModel(cds.model as unknown as object);
+    for (const who of ["alice", "bob"] as const) {
+      const list = await legacyRpc(demo.POST, who, "tools/list");
+      expect(list.headers["mcp-session-id"]).toBeUndefined();
+      expect(list.message?.result?.tools).toEqual(registry.toolsFor(demoUser(who)).map(listed));
+    }
+    const call = await legacyRpc(demo.POST, "bob", "tools/call", {
+      name: "CatalogService_Books_get",
+      arguments: { ID: 201 },
+    });
+    expect(call.message?.result).toMatchObject({
+      structuredContent: { ID: 201, title: "Wuthering Heights" },
+    });
+  });
+
+  test("GET and DELETE on /mcp answer 405: there is no session stream to open or close", async () => {
+    expect((await demo.GET("/mcp", as("bob"))).status).toBe(405);
+    expect((await demo.DELETE("/mcp", as("bob"))).status).toBe(405);
+  });
+
+  test("@mcp.elicit tools give a clear isError: a 2025-era client cannot confirm", async () => {
+    const res = await legacyRpc(demo.POST, "bob", "tools/call", {
+      name: "OrdersService_Orders_cancel",
+      arguments: { ID: "7e2f9c58-1c1d-4c0b-9a7a-6d1f0b5e0a01", reason: "changed my mind" },
+    });
+    expect(res.message?.result).toMatchObject({
+      isError: true,
+      structuredContent: {
+        error: {
+          code: "CONFIRMATION_REQUIRED",
+          message: expect.stringMatching(/confirmation.*2026-07-28/),
+        },
+      },
+    });
+  });
 });
 
 describe("protocol: production default (CAP's restrict_all_services)", () => {
