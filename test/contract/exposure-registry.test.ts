@@ -113,6 +113,40 @@ describe("exposure-registry: tool list", () => {
     expect(tools.Shop_order?.outputSchema).toBeUndefined();
   });
 
+  test("a namespaced service's tools use its short name; long names get LONG_TOOL_NAME", () => {
+    const r = registry(`
+      namespace my.shop;
+      @mcp @mcp.describe service CatalogService { entity Books { key ID: Integer; } }
+      @mcp service other.CatalogService { entity Authors { key ID: Integer; } }
+      @mcp service Inventory { entity ${"W".repeat(60)} { key ID: Integer; } }
+    `);
+    expect(names(r.toolsFor(user()))).toEqual([
+      "CatalogService_Authors_get",
+      "CatalogService_Authors_query",
+      "CatalogService_Books_get",
+      "CatalogService_Books_query",
+      "CatalogService_describe",
+      `Inventory_${"W".repeat(60)}_get`,
+      `Inventory_${"W".repeat(60)}_query`,
+    ]);
+    expect(r.diagnostics.map((d) => [d.level, d.code])).toEqual([
+      ["warn", "LONG_TOOL_NAME"],
+      ["warn", "LONG_TOOL_NAME"],
+    ]);
+  });
+
+  test("two services with the same short name clash where their tool names meet", () => {
+    const r = registry(`
+      @mcp service a.Shop { entity Books { key ID: Integer; } }
+      @mcp service b.Shop { entity Books { key ID: Integer; } }
+    `);
+    expect(names(r.toolsFor(user()))).toEqual([]);
+    expect(r.diagnostics.map((d) => [d.code, d.target])).toEqual([
+      ["TOOL_NAME_CLASH", "Shop_Books_query"],
+      ["TOOL_NAME_CLASH", "Shop_Books_get"],
+    ]);
+  });
+
   test("names outside MCP's [A-Za-z0-9._-]{1,128} are left out and reported as INVALID_TOOL_NAME", () => {
     const long = "L".repeat(124); // S_ + 124 + _get = 130 characters
     const r = registry(`
@@ -419,7 +453,87 @@ describe("exposure-registry: per-user filtering (advertising only; CAP enforces)
         entity Orders { key ID: Integer; createdBy: String; }
       }
     `);
-    expect(names(r.toolsFor(user()))).toEqual(["S_Orders_get", "S_Orders_query"]);
+    // The where condition filters rows for bob; it never hides the tool from him.
+    expect(names(r.toolsFor(capUser("bob")))).toEqual(["S_Orders_get", "S_Orders_query"]);
+    // The grant's role still counts: CAP refuses an anonymous caller outright.
+    expect(names(r.toolsFor(cds.User.anonymous))).toEqual([]);
+  });
+
+  test("role-only @restrict grants hide the modes and operations they do not grant", () => {
+    const r = registry(`
+      @mcp service S {
+        @mcp.wrap.modes: ['create', 'update', 'delete']
+        @restrict: [{ grant: 'READ', to: 'support' }, { grant: 'WRITE', to: 'admin' }]
+        entity Tickets { key ID: Integer; } actions {
+          @mcp action close();
+          function age() returns Integer;
+        }
+        @restrict: [{ grant: 'cancel', to: 'support' }]
+        entity Orders { key ID: Integer; } actions { @mcp action cancel(); }
+        @restrict: [{ to: 'admin' }] function audit() returns Integer;
+      }
+    `);
+    // Tickets: READ for support; WRITE for admin; no grant names close/age, so nobody may call them.
+    // Orders: only a bound-action grant, so CRUD stays open; cancel is for support.
+    expect(names(r.toolsFor(capUser("carol", "support")))).toEqual([
+      "S_Orders_cancel",
+      "S_Orders_get",
+      "S_Orders_query",
+      "S_Tickets_get",
+      "S_Tickets_query",
+    ]);
+    expect(names(r.toolsFor(capUser("alice", "admin")))).toEqual([
+      "S_Orders_get",
+      "S_Orders_query",
+      "S_Tickets_create",
+      "S_Tickets_delete",
+      "S_Tickets_update",
+      "S_audit",
+    ]);
+  });
+
+  test("a service-level @restrict hides the service from users without one of its roles", () => {
+    const r = registry(`
+      @restrict: [{ grant: '*', to: 'admin' }] @mcp service S { entity Books { key ID: Integer; } }
+    `);
+    expect(names(r.toolsFor(capUser("bob")))).toEqual([]);
+    expect(names(r.toolsFor(capUser("alice", "admin")))).toEqual(["S_Books_get", "S_Books_query"]);
+  });
+
+  test("describe and compact tools only name what the user can reach", () => {
+    const r = registry(`
+      @mcp @mcp.compact @mcp.describe service D {
+        entity Books { key ID: Integer; }
+        @requires: 'admin' entity Secrets { key ID: Integer; }
+        @requires: 'admin' @mcp.wrap.modes: ['delete'] entity Purge { key ID: Integer; }
+        @requires: 'admin' @mcp action wipe();
+      }
+    `);
+    const enums = (u: UserLike) =>
+      Object.fromEntries(
+        r.toolsFor(u).map((t) => {
+          const p = t.inputSchema.properties as Record<string, { enum?: string[] }>;
+          return [t.name, (p.entity ?? p.operation)?.enum];
+        }),
+      );
+    expect(enums(capUser("bob"))).toEqual({
+      D_describe: ["D.Books"],
+      D_describe_entity: ["D.Books"],
+      D_get: ["D.Books"],
+      D_list_entities: undefined,
+      D_query: ["D.Books"],
+    });
+    expect(enums(capUser("alice", "admin"))).toEqual({
+      D_call_operation: ["D.wipe"],
+      D_delete: ["D.Purge"],
+      D_describe: ["D.Books", "D.Secrets", "D.Purge"],
+      D_describe_entity: ["D.Books", "D.Secrets", "D.Purge"],
+      D_get: ["D.Books", "D.Secrets", "D.Purge"],
+      D_list_entities: undefined,
+      D_query: ["D.Books", "D.Secrets", "D.Purge"],
+    });
+    // Users with the same access share the same tool objects.
+    expect(r.toolsFor(capUser("bob"))[0]).toBe(r.toolsFor(capUser("ben"))[0]);
   });
 
   test("the same spec yields identical lists for users with identical roles", () => {

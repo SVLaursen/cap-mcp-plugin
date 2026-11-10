@@ -162,6 +162,8 @@ export type DiagnosticCode =
   | "TOOL_NAME_CLASH"
   /** A tool name outside MCP's [A-Za-z0-9._-]{1,128}; the tool is left out. */
   | "INVALID_TOOL_NAME"
+  /** A tool name over 64 characters, which some LLM tool APIs reject; still exposed. */
+  | "LONG_TOOL_NAME"
   /** A bound operation parameter with the name of one of its entity's keys. */
   | "PARAMETER_SHADOWS_KEY"
   /** An element or parameter type with no JSON Schema mapping; agents see it as "any value". */

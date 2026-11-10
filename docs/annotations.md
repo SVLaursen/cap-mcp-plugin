@@ -32,6 +32,16 @@ An entity whose records cannot be addressed (no keys, or a key is `@mcp.omit`) o
 query, plus create if listed: get, update, delete and bound operations would hit no record or
 several.
 
+### Who sees which tools
+
+`tools/list` only shows tools CAP would not always refuse for the caller: `@requires` on the
+service, the entity and the operation (a bound operation's own `@requires` replaces its
+entity's), and the roles of `@restrict` grants (`READ` for query/get, `CREATE`/`UPDATE`/`DELETE`
+or `WRITE` for writes, the operation's name for operations). `where` conditions only filter rows
+and never hide a tool. Composition children are authorized by their parent, as in CAP. Describe
+and compact tools only list the entities and operations the caller can reach. CAP still checks
+every call.
+
 ### Annotations on other layers
 
 CAP copies annotations from a db entity (or another service's entity) to every projection of it.
@@ -85,6 +95,7 @@ The model reader and the exposure registry report these; the startup report (M6)
 | `OMITTED_KEY`                  | warn  | `@mcp.omit` on a key of an exposed entity                                                                                                                                                                                    | Only query (and create) are offered for it                                                 |
 | `TOOL_NAME_CLASH`              | error | Two tools would get the same name (also across services, e.g. `A.B_C` and `A_B.C`). Target is the tool name                                                                                                                  | Neither is exposed, unless one is the plugin's own (describe, compact set): that one stays |
 | `INVALID_TOOL_NAME`            | error | A tool name outside MCP's `[A-Za-z0-9._-]{1,128}` (spaces, non-ASCII, very long namespaces). Target is the tool name                                                                                                         | The tool is not exposed                                                                    |
+| `LONG_TOOL_NAME`               | warn  | A tool name over 64 characters, which some LLM tool APIs reject                                                                                                                                                              | Exposed                                                                                    |
 
 ## Names and descriptions
 

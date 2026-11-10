@@ -14,6 +14,7 @@ import type {
   EntityMode,
   EntitySpec,
   ExposureSpec,
+  GrantSpec,
   OperationSpec,
   ServiceSpec,
   ToolSpec,
@@ -43,6 +44,8 @@ type Hints = ToolSpec["annotations"];
 
 /** MCP tool names (SEP-986, kept in 2026-07-28); the SDK enforces the same pattern. */
 const TOOL_NAME = /^[A-Za-z0-9._-]{1,128}$/;
+/** Many LLM tool APIs accept at most 64 characters; longer names get a warning. */
+const PORTABLE_NAME_LENGTH = 64;
 
 /**
  * One registry per model object, built on first use. Keyed weakly, so a tenant's extended model
@@ -79,15 +82,21 @@ const DESCRIBE_MODE: Record<EntityMode, (title: string) => string> = {
   delete: (t) => `Delete a ${t} record by key.`,
 };
 
+/** A tool built once, with the check that decides who sees it. */
+interface Entry {
+  tool: ToolSpec;
+  visible: (user: UserLike) => boolean;
+}
+
 export class ExposureRegistry {
-  /** Problems found while building tools (e.g. name clashes). Reported at startup. */
+  /** Problems found while reading the model and building tools. Reported at startup. */
   readonly diagnostics: Diagnostic[] = [];
-  private readonly tools: ToolSpec[];
-  /**
-   * Per tool: the @requires CAP checks for it, each met by any one of its roles. The service's
-   * always applies; a bound operation uses its own, else its entity's (CAP's requires.js).
-   */
-  private readonly requires = new WeakMap<ToolSpec, string[][]>();
+  /** Entity and operation tools, shared by everyone. */
+  private readonly entries: Entry[] = [];
+  /** Names the describe and compact tools may use (clashes and invalid names removed). */
+  private readonly builtinNames = new Set<string>();
+  /** Tool lists per distinct access pattern, so equal access shares the same objects. */
+  private readonly lists = new Map<string, ToolSpec[]>();
 
   constructor(
     private readonly spec: ExposureSpec,
@@ -95,7 +104,7 @@ export class ExposureRegistry {
     readDiagnostics: Diagnostic[] = [],
   ) {
     this.diagnostics.push(...readDiagnostics);
-    this.tools = this.build();
+    this.build();
   }
 
   /** Read a compiled model and build its registry; diagnostics cover both steps. */
@@ -105,105 +114,220 @@ export class ExposureRegistry {
   }
 
   /**
-   * The tools this user could ever call. Only hides what CAP would always refuse by @requires;
-   * @restrict (instance rules, `where`) is CAP's job when the call runs.
+   * The tools this user could ever call: what CAP's @requires and role grants of @restrict
+   * would not always refuse. `where` conditions only filter rows, so they never hide a tool.
+   * Describe and compact tools only name the entities and operations the user can reach.
    */
   toolsFor(user: UserLike): ToolSpec[] {
-    return this.tools.filter((tool) =>
-      this.requires.get(tool)?.every((roles) => roles.some((role) => user.is(role))),
-    );
+    const views = this.spec.services.map((service) => view(service, user));
+    const entries = this.entries.filter((entry) => entry.visible(user));
+    const key = JSON.stringify([entries.map((e) => e.tool.name), views.map(viewKey)]);
+    let list = this.lists.get(key);
+    if (!list) {
+      const builtins = views
+        .flatMap((service) => builtinTools(service, this.options.limits))
+        .filter((tool) => this.builtinNames.has(tool.name))
+        .map(deepFreeze);
+      list = sortByName([...entries.map((e) => e.tool), ...builtins]);
+      this.lists.set(key, list);
+    }
+    return list;
   }
 
-  private build(): ToolSpec[] {
-    const byName = new Map<string, ToolSpec[]>();
+  /** Name checks and clashes are decided once, on the full (unfiltered) tool set. */
+  private build(): void {
+    const byName = new Map<string, Entry[]>();
     for (const service of this.spec.services) {
-      for (const tool of this.serviceTools(service)) {
-        if (!TOOL_NAME.test(tool.name)) {
+      const all = [
+        ...builtinTools(service, this.options.limits).map((tool) => ({
+          tool,
+          visible: () => true,
+        })),
+        ...this.modelEntries(service),
+      ];
+      for (const entry of all) {
+        const name = entry.tool.name;
+        if (!TOOL_NAME.test(name)) {
           this.diagnostics.push({
             level: "error",
             code: "INVALID_TOOL_NAME",
-            target: tool.name,
-            message: `${describeTarget(tool)} would be the tool "${tool.name}", which MCP does not allow (1-128 of A-Z a-z 0-9 _ - .); not exposed`,
+            target: name,
+            message: `${describeTarget(entry.tool)} would be the tool "${name}", which MCP does not allow (1-128 of A-Z a-z 0-9 _ - .); not exposed`,
           });
           continue;
         }
-        byName.set(tool.name, [...(byName.get(tool.name) ?? []), tool]);
+        if (name.length > PORTABLE_NAME_LENGTH) {
+          this.diagnostics.push({
+            level: "warn",
+            code: "LONG_TOOL_NAME",
+            target: name,
+            message: `${name} is longer than ${PORTABLE_NAME_LENGTH} characters; some LLM tool APIs reject it`,
+          });
+        }
+        byName.set(name, [...(byName.get(name) ?? []), entry]);
       }
     }
-    const tools: ToolSpec[] = [];
     for (const [name, candidates] of byName) {
-      const [tool, ...others] = candidates;
-      if (tool && others.length === 0) {
-        tools.push(tool);
-        continue;
-      }
       // The plugin's own tools (describe, the compact set) keep their name; model tools yield.
-      const builtin = candidates.filter(
-        (t) => t.target.kind === "describe" || t.target.kind === "compact",
-      );
-      const kept = builtin.length === 1 ? builtin[0] : undefined;
-      if (kept) tools.push(kept);
+      const builtin = candidates.filter((c) => isBuiltin(c.tool));
+      const kept =
+        candidates.length === 1 ? candidates[0] : builtin.length === 1 ? builtin[0] : undefined;
+      if (kept && isBuiltin(kept.tool)) this.builtinNames.add(name);
+      else if (kept) this.entries.push({ ...kept, tool: deepFreeze(kept.tool) });
+      if (candidates.length === 1) continue;
       this.diagnostics.push({
         level: "error",
         code: "TOOL_NAME_CLASH",
         target: name,
         message: kept
           ? `${candidates
-              .filter((t) => t !== kept)
-              .map(describeTarget)
+              .filter((c) => c !== kept)
+              .map((c) => describeTarget(c.tool))
               .join(
                 " and ",
-              )} would be the tool ${name}, which ${describeTarget(kept)} uses; not exposed`
-          : `${candidates.map(describeTarget).join(" and ")} would all be the tool ${name}; none is exposed`,
+              )} would be the tool ${name}, which ${describeTarget(kept.tool)} uses; not exposed`
+          : `${candidates.map((c) => describeTarget(c.tool)).join(" and ")} would all be the tool ${name}; none is exposed`,
       });
     }
-    // Shared by every user and request, so nobody may change them in place.
-    return tools.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)).map(deepFreeze);
   }
 
-  private serviceTools(service: ServiceSpec): ToolSpec[] {
+  private modelEntries(service: ServiceSpec): Entry[] {
     const entities = new Map(service.entities.map((e) => [e.name, e]));
     const lookup = (name: string) => entities.get(name);
     const limits = this.options.limits;
-    const tools: ToolSpec[] = [];
-    const tag = (tool: ToolSpec, ...requires: (string[] | undefined)[]) => {
-      this.requires.set(
-        tool,
-        [service.requires, ...requires].filter((r): r is string[] => !!r),
-      );
-      return tool;
-    };
-    if (service.describe) tools.push(tag(describeTool(service)));
-    if (service.compact) {
-      // An MCP App is bound to its own tool, so @mcp.ui operations stay separate.
-      const [ui, rest] = partition(service.operations, (op) => op.ui !== undefined);
-      tools.push(...compactTools(service, rest, limits).map((tool) => tag(tool)));
-      for (const op of ui) {
-        const bound = lookup(op.boundTo ?? "");
-        tools.push(tag(operationTool(service, op, bound), op.requires ?? bound?.requires));
-      }
-      return tools;
-    }
-    for (const entity of service.entities) {
-      for (const mode of entity.modes) {
-        const tool: ToolSpec = {
-          name: toolName(service.name, entity.name, mode),
-          title: `${entity.title}: ${mode}`,
-          description: withDescription(DESCRIBE_MODE[mode](entity.title), entity.description),
-          inputSchema: entityInputSchema(entity, mode, { limits, entities: lookup }),
-          outputSchema: entityOutputSchema(entity, mode),
-          annotations: HINTS[mode],
-          target: { kind: "entity", entity: entity.name, mode },
-        };
-        tools.push(tag(tool, entity.requires));
+    const entries: Entry[] = [];
+    // In a compact service only @mcp.ui operations keep a tool of their own (a host binds the
+    // MCP App to it); everything else goes through the generic set.
+    if (!service.compact) {
+      for (const entity of service.entities) {
+        for (const mode of entity.modes) {
+          entries.push({
+            tool: {
+              name: toolName(service.name, entity.name, mode),
+              title: `${entity.title}: ${mode}`,
+              description: withDescription(DESCRIBE_MODE[mode](entity.title), entity.description),
+              inputSchema: entityInputSchema(entity, mode, { limits, entities: lookup }),
+              outputSchema: entityOutputSchema(entity, mode),
+              annotations: HINTS[mode],
+              target: { kind: "entity", entity: entity.name, mode },
+            },
+            visible: (user) => canUseMode(user, service, entity, mode),
+          });
+        }
       }
     }
     for (const op of service.operations) {
+      if (service.compact && !op.ui) continue;
       const bound = op.boundTo ? entities.get(op.boundTo) : undefined;
-      tools.push(tag(operationTool(service, op, bound), op.requires ?? bound?.requires));
+      entries.push({
+        tool: operationTool(service, op, bound),
+        visible: (user) => canCall(user, service, op, bound),
+      });
     }
-    return tools;
+    return entries;
   }
+}
+
+/** CAP's event for each entity mode, as @restrict grants name it. */
+const EVENTS: Record<EntityMode, string> = {
+  query: "READ",
+  get: "READ",
+  create: "CREATE",
+  update: "UPDATE",
+  delete: "DELETE",
+};
+const CRUD = new Set(["READ", "CREATE", "UPDATE", "DELETE"]);
+
+const has = (user: UserLike, role: string) => role === "any" || user.is(role);
+
+/** @requires: any one of the roles. */
+function meets(user: UserLike, roles: string[] | undefined): boolean {
+  return !roles || roles.some((role) => has(user, role));
+}
+
+/**
+ * @restrict as CAP decides it (generic/auth/restrictions.js): some grant for the event (or `*`)
+ * to one of the user's roles. CRUD stays open when every grant is for a bound operation.
+ */
+function permits(user: UserLike, restrict: GrantSpec[] | undefined, event: string): boolean {
+  if (!restrict) return true;
+  if (CRUD.has(event) && restrict.every((g) => g.grant !== "*" && !CRUD.has(g.grant))) return true;
+  return restrict.some(
+    (g) => (g.grant === "*" || g.grant === event) && g.to.some((role) => has(user, role)),
+  );
+}
+
+function canUseMode(user: UserLike, service: ServiceSpec, entity: EntitySpec, mode: EntityMode) {
+  return (
+    meets(user, service.requires) &&
+    meets(user, entity.requires) &&
+    permits(user, entity.restrict, EVENTS[mode])
+  );
+}
+
+/** A bound operation: its own @requires, else its entity's; grants of both, named after it. */
+function canCall(user: UserLike, service: ServiceSpec, op: OperationSpec, bound?: EntitySpec) {
+  const grants =
+    op.restrict || bound?.restrict
+      ? [...(op.restrict ?? []), ...(bound?.restrict ?? [])]
+      : undefined;
+  return (
+    meets(user, service.requires) &&
+    meets(user, op.requires ?? bound?.requires) &&
+    permits(user, grants, op.name.slice(op.name.lastIndexOf(".") + 1))
+  );
+}
+
+/** The service as this user can reach it: entities with only their usable modes, callable operations. */
+function view(service: ServiceSpec, user: UserLike): ServiceSpec | undefined {
+  if (!meets(user, service.requires)) return undefined;
+  const entities = new Map(service.entities.map((e) => [e.name, e]));
+  return {
+    ...service,
+    entities: service.entities
+      .map((e) => ({
+        ...e,
+        modes: new Set([...e.modes].filter((m) => canUseMode(user, service, e, m))),
+      }))
+      .filter((e) => e.modes.size > 0),
+    operations: service.operations.filter((op) =>
+      canCall(user, service, op, op.boundTo ? entities.get(op.boundTo) : undefined),
+    ),
+  };
+}
+
+function viewKey(service: ServiceSpec | undefined): unknown {
+  return (
+    service && [
+      service.entities.map((e) => [e.name, [...e.modes]]),
+      service.operations.map((o) => o.name),
+    ]
+  );
+}
+
+/** Describe and compact tools of a service (or of one user's view of it). */
+function builtinTools(service: ServiceSpec | undefined, limits?: Limits): ToolSpec[] {
+  if (!service) return [];
+  const tools: ToolSpec[] = [];
+  if (service.describe) tools.push(describeTool(service));
+  if (service.compact) {
+    tools.push(
+      ...compactTools(
+        service,
+        service.operations.filter((op) => !op.ui),
+        limits,
+      ),
+    );
+  }
+  return tools;
+}
+
+function isBuiltin(tool: ToolSpec): boolean {
+  return tool.target.kind === "describe" || tool.target.kind === "compact";
+}
+
+function sortByName(tools: ToolSpec[]): ToolSpec[] {
+  return tools.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
 
 function operationTool(service: ServiceSpec, op: OperationSpec, bound?: EntitySpec): ToolSpec {
@@ -223,7 +347,7 @@ function operationTool(service: ServiceSpec, op: OperationSpec, bound?: EntitySp
 /** `<Service>_describe`: what this service exposes over MCP, and nothing else (v1 finding #3). */
 function describeTool(service: ServiceSpec): ToolSpec {
   return {
-    name: `${service.name}_describe`,
+    name: `${shortName(service.name)}_describe`,
     title: `${service.title}: describe`,
     description: withDescription(
       `Describe what ${service.title} exposes: its entities, fields, keys and operations. Pass an entity to describe just that one.`,
@@ -341,13 +465,17 @@ function compactTools(
     },
   ];
   const tools = [
-    compactTool(
-      service,
-      "list_entities",
-      "List the entities this service exposes.",
-      args({}, []),
-      READ,
-    ),
+    ...(all.length
+      ? [
+          compactTool(
+            service,
+            "list_entities",
+            "List the entities this service exposes.",
+            args({}, []),
+            READ,
+          ),
+        ]
+      : []),
     ...generic
       .filter((g) => g.entities.length > 0)
       .map((g) =>
@@ -387,7 +515,7 @@ function compactTool(
   annotations: Hints,
 ): ToolSpec {
   return {
-    name: `${service.name}_${action}`,
+    name: `${shortName(service.name)}_${action}`,
     title: `${service.title}: ${action}`,
     description,
     inputSchema,
@@ -404,14 +532,18 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
-function partition<T>(items: T[], test: (item: T) => boolean): [T[], T[]] {
-  return [items.filter(test), items.filter((item) => !test(item))];
-}
-
-/** `Shop` + `Shop.Books` + `get` → `Shop_Books_get`; dots inside the service's names become `_`. */
+/**
+ * `my.shop.Shop` + `my.shop.Shop.Books` + `get` → `Shop_Books_get`. The service's namespace is
+ * dropped and dots in local names become `_`, because many LLM tool APIs only accept
+ * [a-zA-Z0-9_-]. Two services with the same short name then clash, which is reported.
+ */
 function toolName(service: string, definition: string, suffix?: string): string {
   const local = definition.slice(service.length + 1).replaceAll(".", "_");
-  return [service, local, suffix].filter(Boolean).join("_");
+  return [shortName(service), local, suffix].filter(Boolean).join("_");
+}
+
+function shortName(service: string): string {
+  return service.slice(service.lastIndexOf(".") + 1);
 }
 
 function withDescription(summary: string, description?: string): string {

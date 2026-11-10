@@ -45,6 +45,14 @@ The data passed between them is defined in `src/types.ts`.
 5. The result goes back as `structuredContent` plus one text block, or as a tool error that
    keeps CAP's `code`, `target` and `details`.
 
+## Tool names
+
+`<Service>_<Entity>_<mode>` and `<Service>_<operation>`, using the service's short name (its
+namespace is dropped) and `_` for dots in local names, so names fit `[a-zA-Z0-9_-]` that many LLM
+tool APIs require. Names must match MCP's `[A-Za-z0-9._-]{1,128}` (`INVALID_TOOL_NAME`); over 64
+characters is a `LONG_TOOL_NAME` warning; equal names clash (`TOOL_NAME_CLASH`), and the plugin's
+own tools win over model tools. Sorted by code point.
+
 ## Tool input shapes
 
 Built by `schema-mapper`, executed by `executor`. Every argument is structured JSON, so the
@@ -85,16 +93,16 @@ in an output schema, including in records an operation returns.
 
 ## Division of labour
 
-| Concern        | CAP does it                                  | The plugin does it                                                                                                                                                                                                      |
-| -------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Authentication | ✔ (auth strategies, AMS)                     | Serves RFC 9728 metadata so clients can find the authorization server                                                                                                                                                   |
-| Authorization  | ✔ (`@requires`, `@restrict`, instance rules) | Hides tools whose `@requires` (service, entity, operation) the user cannot meet; never decides access. Compact tools are hidden by the service's `@requires` only; CAP refuses calls on entities the user cannot access |
-| Transactions   | ✔ (one per request, commit/rollback)         | Never opens, commits or swallows                                                                                                                                                                                        |
-| Validation     | ✔ (`@mandatory`, `@assert.*`, handlers)      | JSON Schema for the agent's benefit only                                                                                                                                                                                |
-| Search         | ✔ (`SELECT.search`, `@cds.search`)           | Passes `q` with explicit columns: CAP's `@cds.search` rules minus `@mcp.omit`                                                                                                                                           |
-| Drafts         | ✔ (draft API)                                | Chooses NEW/EDIT/SAVE for draft-enabled entities                                                                                                                                                                        |
-| Exposure       |                                              | ✔ (`@mcp*` annotations, opt-in)                                                                                                                                                                                         |
-| Protocol       |                                              | ✔ (SDK v2)                                                                                                                                                                                                              |
+| Concern        | CAP does it                                  | The plugin does it                                                                                                                                                                                                                                                                |
+| -------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Authentication | ✔ (auth strategies, AMS)                     | Serves RFC 9728 metadata so clients can find the authorization server                                                                                                                                                                                                             |
+| Authorization  | ✔ (`@requires`, `@restrict`, instance rules) | Hides tools CAP would always refuse: `@requires` (service, entity, operation) and the roles of `@restrict` grants, as CAP evaluates them; `where` only filters rows, so it never hides a tool. Describe and compact tools only name what the user can reach. Never decides access |
+| Transactions   | ✔ (one per request, commit/rollback)         | Never opens, commits or swallows                                                                                                                                                                                                                                                  |
+| Validation     | ✔ (`@mandatory`, `@assert.*`, handlers)      | JSON Schema for the agent's benefit only                                                                                                                                                                                                                                          |
+| Search         | ✔ (`SELECT.search`, `@cds.search`)           | Passes `q` with explicit columns: CAP's `@cds.search` rules minus `@mcp.omit`                                                                                                                                                                                                     |
+| Drafts         | ✔ (draft API)                                | Chooses NEW/EDIT/SAVE for draft-enabled entities                                                                                                                                                                                                                                  |
+| Exposure       |                                              | ✔ (`@mcp*` annotations, opt-in)                                                                                                                                                                                                                                                   |
+| Protocol       |                                              | ✔ (SDK v2)                                                                                                                                                                                                                                                                        |
 
 ## What lives where at runtime
 
