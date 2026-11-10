@@ -2,7 +2,13 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import express, { type Application, type RequestHandler } from "express";
 import { mcpHandlers, type RequestContext } from "./adapter";
-import { authErrors, metadataHandler, metadataPath, type AuthConfig } from "./adapter/auth";
+import {
+  authErrors,
+  metadataHandler,
+  metadataPath,
+  requireUser,
+  type AuthConfig,
+} from "./adapter/auth";
 import { registryCache } from "./exposure-registry";
 
 /** The parts of the `cds` facade the plugin uses. Passed in, never read from a global (ADR 0005). */
@@ -56,6 +62,7 @@ export function activate(cds: CdsLike): void {
     cds.app.post(
       MCP_PATH,
       ...cds.middlewares.before,
+      requireUser({ ...auth, user: () => cds.context?.user }),
       express.json(),
       ...handlers,
       authErrors(auth),

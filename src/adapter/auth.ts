@@ -11,6 +11,8 @@ import type { ErrorRequestHandler, Request, RequestHandler, Response } from "exp
 export interface AuthConfig {
   kind?: string;
   credentials?: { url?: string };
+  /** CAP: in production, services without @requires need an authenticated user unless false. */
+  restrict_all_services?: boolean;
 }
 
 const OAUTH_KINDS = new Set(["jwt", "xsuaa", "ias", "jwt-auth", "xsuaa-auth", "ias-auth"]);
@@ -45,6 +47,25 @@ export interface AuthOptions {
   path: string;
   /** `cds.requires.auth`, read per request. */
   auth(): AuthConfig | undefined;
+}
+
+export interface GateOptions extends AuthOptions {
+  /** The caller, from cds.context. */
+  user(): { is(role: string): boolean } | undefined;
+}
+
+/**
+ * CAP's production default (`restrict_all_services`) lives in its protocol adapters, so the
+ * service layer the executor calls never applies it. Apply it to /mcp itself, as CAP decides it
+ * (lib/srv/protocols/http.js): in production, unless switched off, callers must authenticate.
+ */
+export function requireUser(options: GateOptions): RequestHandler {
+  return (req, res, next) => {
+    const restricted =
+      process.env.NODE_ENV === "production" && options.auth()?.restrict_all_services !== false;
+    if (restricted && !options.user()?.is("authenticated-user")) challenge(req, res, options);
+    else next();
+  };
 }
 
 type LoginRequest = Request & { _login?: () => unknown };

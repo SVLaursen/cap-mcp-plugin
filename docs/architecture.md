@@ -36,7 +36,11 @@ The data passed between them is defined in `src/types.ts`.
 1. `activate(cds)` mounts one `POST /mcp` route on `served`, behind `cds.middlewares.before`
    (ADR 0009). That chain authenticates the request and sets `cds.context` (user, tenant,
    locale, model). Other plugins' middleware (e.g. `@sap/ams`) runs here too, with no special
-   code in the plugin. Then `express.json()` and one `createMcpHandler(factory)` (ADR 0010).
+   code in the plugin. CAP's production default (`restrict_all_services`) lives only in its
+   protocol adapters, so `/mcp` applies it itself: with `NODE_ENV=production` and
+   `restrict_all_services` not `false`, an anonymous caller gets the login challenge (ADR 0009;
+   so `@requires: 'any'` services are not public over MCP in that setting). Then
+   `express.json()` and one `createMcpHandler(factory)` (ADR 0010).
 2. The SDK classifies the request (2026-07-28 envelope or 2025 era), rejects unsupported
    versions, and calls the factory, which builds a fresh `McpServer` with the caller's tools
    (registry for `cds.context.model ?? cds.model`, `toolsFor(cds.context.user)`); the server

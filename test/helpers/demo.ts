@@ -39,3 +39,24 @@ export function currentDemo(): ReturnType<typeof cds.test> {
 export function as(user: DemoUser) {
   return { auth: USERS[user], validateStatus: () => true };
 }
+
+/**
+ * Run `fn` as if the app ran in production (NODE_ENV=production), as CAP's protocol adapters
+ * and the plugin decide per request. Restores NODE_ENV and the given auth settings afterwards.
+ */
+export async function inProduction<T>(
+  fn: () => Promise<T>,
+  auth: { restrict_all_services?: boolean } = {},
+): Promise<T> {
+  const env = process.env.NODE_ENV;
+  const config = cds.env.requires.auth as Record<string, unknown>;
+  const saved = Object.fromEntries(Object.keys(auth).map((k) => [k, config[k]]));
+  process.env.NODE_ENV = "production";
+  Object.assign(config, auth);
+  try {
+    return await fn();
+  } finally {
+    process.env.NODE_ENV = env;
+    Object.assign(config, saved);
+  }
+}

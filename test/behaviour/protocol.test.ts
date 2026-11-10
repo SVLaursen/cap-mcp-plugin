@@ -3,7 +3,7 @@ import pkg from "../../package.json";
 import { ExposureRegistry } from "../../src/exposure-registry";
 import type { ToolSpec } from "../../src/types";
 import type { Request } from "express";
-import { DEMO_DIR, as, bootDemo } from "../helpers/demo";
+import { DEMO_DIR, as, bootDemo, inProduction } from "../helpers/demo";
 import { PROTOCOL_VERSION, callTool, listTools, rpc } from "../helpers/mcp";
 import { TOOLS_TTL_MS } from "../../src/adapter";
 import { demoUser } from "../helpers/tools";
@@ -105,6 +105,35 @@ describe("protocol: older clients", () => {
   test.todo(
     "SPIKE: decide whether 2025-11-25 clients (initialize handshake) are supported, and how",
   );
+});
+
+describe("protocol: production default (CAP's restrict_all_services)", () => {
+  test("in production, anonymous callers must log in, as CAP's protocol adapters demand", async () => {
+    const res = await inProduction(() => listTools(demo.POST, "anonymous"), {
+      restrict_all_services: true,
+    });
+    expect(res.status).toBe(401);
+    expect(res.headers["www-authenticate"]).toBe('Basic realm="Users"');
+    // Authenticated users are unaffected.
+    const bob = await inProduction(() => listTools(demo.POST, "bob"), {
+      restrict_all_services: true,
+    });
+    expect(bob.status).toBe(200);
+  });
+
+  test("restrict_all_services: false (mocked auth's default) lets anonymous callers in, as CAP does", async () => {
+    const res = await inProduction(() => listTools(demo.POST, "anonymous"), {
+      restrict_all_services: false,
+    });
+    expect(res.status).toBe(200);
+  });
+
+  test("outside production, anonymous callers see only what CAP lets anonymous users reach", async () => {
+    const registry = ExposureRegistry.fromModel(cds.model as unknown as object);
+    const res = await listTools(demo.POST, "anonymous");
+    expect(res.message?.result?.tools).toEqual(registry.toolsFor(cds.User.anonymous).map(listed));
+    expect(JSON.stringify(res.message?.result)).not.toContain("AdminService");
+  });
 });
 
 describe("protocol: auth metadata (mocked; OAuth in protocol-auth.test.ts)", () => {

@@ -1,5 +1,5 @@
 import cds from "@sap/cds";
-import { bootDemo } from "../helpers/demo";
+import { bootDemo, inProduction } from "../helpers/demo";
 import { rpc } from "../helpers/mcp";
 
 /**
@@ -34,6 +34,20 @@ describe("protocol: auth metadata (OAuth)", () => {
     );
     expect(res.status).toBe(401);
     expect(res.headers["www-authenticate"]).toBe(`Bearer resource_metadata="${metadataUrl()}"`);
+  });
+
+  test("in production, a request without a token gets 401 with the resource_metadata pointer", async () => {
+    const res = await inProduction(() => rpc(demo.POST, "anonymous", "tools/list"));
+    expect(res.status).toBe(401);
+    expect(res.headers["www-authenticate"]).toBe(`Bearer resource_metadata="${metadataUrl()}"`);
+  });
+
+  test("the metadata stays public in production", async () => {
+    const status = await inProduction(async () => {
+      const res = await demo.GET("/.well-known/oauth-protected-resource/mcp", anyone);
+      return res.status;
+    });
+    expect(status).toBe(200);
   });
 
   test("/.well-known/oauth-protected-resource/mcp serves RFC 9728 metadata, unauthenticated", async () => {
