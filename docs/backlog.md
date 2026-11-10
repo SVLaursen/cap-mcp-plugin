@@ -24,7 +24,7 @@ Fast loop: `npm run test:contract`.
 - [ ] Write modes, resource, prompts, ui, elicit, completion, describe, compact, deepInsert, draft flags _(opt-in)_
 - [ ] Names and descriptions fallback chain _(names and descriptions)_
 - [ ] Field shapes: keys, mandatory, readonly, enum, length/precision/scale, range, FK targets, `Entity:element` params _(field shapes)_
-- [ ] Diagnostics: unknown keys, v1 annotations, bound op without keys; demo reads with zero errors _(diagnostics)_
+- [ ] Diagnostics: unknown keys, v1 annotations, bound op without keys, `@mcp.omit` on a key (warn); demo reads with zero errors _(diagnostics)_
 - [ ] Schema mapper: scalar types _(`schema-mapper.test.ts` › scalar types)_
 - [ ] Schema mapper: tool input schemas per mode and for operations _(input)_
 - [ ] Schema mapper: output schemas _(output)_

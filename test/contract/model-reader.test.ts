@@ -228,5 +228,8 @@ describe("model-reader: diagnostics", () => {
   test.todo("an unknown @mcp.* key yields UNKNOWN_ANNOTATION naming the definition and key");
   test.todo("v1-only annotations (@mcp.wrap.tools, @mcp.usePrimaryKey) yield V1_ANNOTATION");
   test.todo("a bound operation on an entity without keys yields BOUND_OPERATION_WITHOUT_KEYS");
+  test.todo(
+    "@mcp.omit on a key element of an exposed entity yields a warn-level diagnostic (get cannot address records)",
+  );
   test.todo("the demo model reads with zero error-level diagnostics");
 });
