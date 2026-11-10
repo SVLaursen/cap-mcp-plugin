@@ -181,12 +181,6 @@ describe("executor: reads", () => {
   });
 });
 
-describe("executor: drafts and deep insert", () => {
-  test.todo("create on draft-enabled Orders goes NEW → (patch) → SAVE and yields an active order");
-  test.todo("update on draft-enabled Orders goes EDIT → patch → SAVE");
-  test.todo("deep insert of Orders with items creates the composition children");
-});
-
 describe("executor: authorization is CAP's", () => {
   test.todo("bob's Orders query over MCP returns exactly what OData returns for bob");
   test.todo("bob calling an AdminService tool gets a 403-equivalent tool error from CAP");

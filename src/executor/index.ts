@@ -197,12 +197,69 @@ export class Executor {
   }
 
   private async create(entity: EntitySpec, data: Args, service: ServiceLike): Promise<ToolResult> {
-    const entry = writable(entity, data, "create");
+    refuseDraftChild(entity);
+    const entry = this.writable(entity, data, "create");
+    if (entity.draftRoot) {
+      // A plain CREATE would only start a draft: NEW it, then SAVE (activate) it, so the app's
+      // NEW and SAVE handlers run. One transaction: if SAVE fails, no draft is left behind.
+      const [draft] = (await service.send({
+        event: "NEW",
+        entity: `${entity.name}.drafts`,
+        data: entry,
+      })) as Args[];
+      const key = pick(draft ?? {}, entity);
+      await service.send({ event: "SAVE", entity: `${entity.name}.drafts`, data: key });
+      return this.get(entity, key, service);
+    }
     const written = (await service.run({
       INSERT: { into: { ref: [entity.name] }, entries: [entry] },
     })) as Args[];
     // CAP returns the written keys, generated ones included.
     return this.get(entity, pick(written[0] ?? entry, entity), service);
+  }
+
+  /**
+   * Data the agent may write: fields that are not readonly, each of its type (null only where
+   * optional), and @mcp.deepInsert compositions checked the same way against the child's own
+   * fields, without its back link (CAP fills it). Keys can be given on create but never changed
+   * by update. CAP checks the rest (@mandatory, @assert.*, handlers).
+   */
+  private writable(
+    entity: EntitySpec,
+    data: Args,
+    mode: "create" | "update",
+    backlink?: string,
+  ): Args {
+    const fields = byName(
+      entity.fields.filter(
+        (f) =>
+          !f.readonly && (mode === "create" || !f.key) && (!backlink || f.association !== backlink),
+      ),
+    );
+    const nested = new Map(entity.deepInsert.map((d) => [d.element, d]));
+    for (const [name, v] of Object.entries(data)) {
+      const deep = nested.get(name);
+      if (deep) {
+        const child = this.entities.get(deep.target);
+        if (!child)
+          throw new ToolError("INVALID_ARGUMENT", `Unknown field ${name}`, `data.${name}`);
+        const items = deep.many ? v : [v];
+        if (!Array.isArray(items) || (!deep.many && (v === null || typeof v !== "object"))) {
+          throw new ToolError(
+            "INVALID_ARGUMENT",
+            `${name} must be ${deep.many ? "an array" : "an object"}`,
+            `data.${name}`,
+          );
+        }
+        items.forEach((item, i) =>
+          this.writable(child, object(item, `data.${name}[${i}]`), "create", deep.backlink),
+        );
+        continue;
+      }
+      const f = field(fields, name, `data.${name}`);
+      if (v !== null || f.mandatory) value(f, v, `data.${name}`);
+    }
+    return data;
   }
 
   private async update(
@@ -211,8 +268,11 @@ export class Executor {
     data: Args,
     service: ServiceLike,
   ): Promise<ToolResult> {
+    refuseDraftChild(entity);
     const address = keyOf(entity, key);
-    const changes = writable(entity, data, "update");
+    // On a draft root this is CAP's update of the active record: for non-OData callers it runs
+    // the activation (SAVE) handlers and is refused while someone holds a draft.
+    const changes = this.writable(entity, data, "update");
     // req.data = changes plus keys, as with OData's PATCH /Books(201).
     const done = (await service.send({
       query: { UPDATE: { entity: addressed(entity, address), data: changes } },
@@ -465,18 +525,14 @@ const addressed = (entity: EntitySpec, key: Args) => ({
 const pick = (row: Args, entity: EntitySpec) =>
   Object.fromEntries(entity.keys.map((k) => [k.name, row[k.name]]));
 
-/**
- * Data the agent may write: fields that are not readonly, each of its type; null only where the
- * field is optional. Keys can be given on create but never changed by update. CAP checks the
- * rest (@mandatory, @assert.*, handlers).
- */
-function writable(entity: EntitySpec, data: Args, mode: "create" | "update"): Args {
-  const fields = byName(entity.fields.filter((f) => !f.readonly && (mode === "create" || !f.key)));
-  for (const [name, v] of Object.entries(data)) {
-    const f = field(fields, name, `data.${name}`);
-    if (v !== null || f.mandatory) value(f, v, `data.${name}`);
+/** A draft's composition children are written through their root (deep insert), not directly. */
+function refuseDraftChild(entity: EntitySpec): void {
+  if (entity.draft && !entity.draftRoot) {
+    throw new ToolError(
+      "INVALID_ARGUMENT",
+      `${entity.title} is part of a draft; write it through its root`,
+    );
   }
-  return data;
 }
 
 interface ToolErrorLike {

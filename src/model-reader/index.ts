@@ -271,6 +271,7 @@ function readEntity(name: string, service: string, def: Definition, ctx: Context
     resource: def["@mcp.resource"] === true,
     // Linked CSN gives draft roots and the compositions inside them a `drafts` entity.
     draft,
+    draftRoot: def["@odata.draft.enabled"] === true ? true : undefined,
     deepInsert: elements
       .filter(([, el]) => el.type === "cds.Composition" && el["@mcp.deepInsert"] === true)
       .map(([element, el]) => ({

@@ -441,10 +441,10 @@ describe("model-reader: opt-in", () => {
       }
     `);
     const { entities } = onlyService(readModel(csn).spec);
-    expect(entities.map((e) => [e.name, e.draft])).toEqual([
-      ["S.Orders", true],
-      ["S.Items", true],
-      ["S.Books", false],
+    expect(entities.map((e) => [e.name, e.draft, e.draftRoot])).toEqual([
+      ["S.Orders", true, true],
+      ["S.Items", true, undefined],
+      ["S.Books", false, undefined],
     ]);
   });
 });

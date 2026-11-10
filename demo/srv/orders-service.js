@@ -4,8 +4,11 @@ module.exports = class OrdersService extends cds.ApplicationService {
   init() {
     const { Orders } = this.entities;
 
-    this.before("NEW", Orders, (req) => {
+    // Runs when a draft is activated (SAVE), for OData and MCP alike: numbers new orders and
+    // validates the reason. (orderNo is @readonly, so CAP drops it if set on the draft at NEW.)
+    this.before("SAVE", Orders, (req) => {
       req.data.orderNo ??= `ORD-${Date.now()}`;
+      if (req.data.reason?.length > 200) req.error(400, "REASON_TOO_LONG", "reason");
     });
 
     this.on("cancel", Orders, async (req) => {

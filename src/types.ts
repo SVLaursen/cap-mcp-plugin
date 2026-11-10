@@ -72,6 +72,8 @@ export interface EntitySpec {
   resource: boolean;
   /** @odata.draft.enabled, or a composition inside such an entity. Writes must go through the draft API (or be refused). */
   draft: boolean;
+  /** The root of a draft (@odata.draft.enabled itself); writes to its children go through it. */
+  draftRoot?: true;
   /** Compositions opted in with @mcp.deepInsert. */
   deepInsert: DeepInsertSpec[];
   /** @requires on the entity (or its composition ancestor), if any. Only hides tools; CAP enforces. */
