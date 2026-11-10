@@ -13,27 +13,56 @@ import type { EntityMode, EntitySpec, FieldSpec, JsonSchema, OperationSpec } fro
  * - Readonly fields never appear in write input schemas. Keys are required on get/update/delete.
  * - Output schemas describe exactly what the executor returns (structuredContent).
  */
+const INT16: JsonSchema = { type: "integer", minimum: -32768, maximum: 32767 };
+const INT32: JsonSchema = { type: "integer", minimum: -2147483648, maximum: 2147483647 };
+const UINT8: JsonSchema = { type: "integer", minimum: 0, maximum: 255 };
+// Beyond 2^53 a JSON number loses digits, so these travel as strings (CAP returns them so).
+const INT64: JsonSchema = { type: "string", pattern: "^-?\\d+$" };
+const DECIMAL: JsonSchema = { type: "string", pattern: "^-?\\d+(\\.\\d+)?$" };
+const STRING: JsonSchema = { type: "string" };
+const BINARY: JsonSchema = { type: "string", contentEncoding: "base64" };
+
 /** CDS builtin → JSON Schema. The one place type mapping lives. */
 const TYPES: Record<string, JsonSchema> = {
-  "cds.String": { type: "string" },
-  "cds.LargeString": { type: "string" },
+  "cds.String": STRING,
+  "cds.LargeString": STRING,
   "cds.UUID": { type: "string", format: "uuid" },
   "cds.Boolean": { type: "boolean" },
-  "cds.UInt8": { type: "integer", minimum: 0, maximum: 255 },
-  "cds.Int16": { type: "integer", minimum: -32768, maximum: 32767 },
-  "cds.Int32": { type: "integer", minimum: -2147483648, maximum: 2147483647 },
-  "cds.Integer": { type: "integer", minimum: -2147483648, maximum: 2147483647 },
-  // Beyond 2^53 a JSON number loses digits, so these travel as strings (as OData does).
-  "cds.Int64": { type: "string", pattern: "^-?\\d+$" },
-  "cds.Decimal": { type: "string", pattern: "^-?\\d+(\\.\\d+)?$" },
+  "cds.UInt8": UINT8,
+  "cds.Int16": INT16,
+  "cds.Int32": INT32,
+  "cds.Integer": INT32,
+  "cds.Int64": INT64,
+  "cds.Integer64": INT64,
+  "cds.Decimal": DECIMAL,
+  "cds.DecimalFloat": DECIMAL,
   "cds.Double": { type: "number" },
   "cds.Date": { type: "string", format: "date" },
-  "cds.Time": { type: "string", format: "time" },
+  // Not `format: time`: RFC 3339 full-time needs a zone, and CAP returns "10:00:00".
+  "cds.Time": { type: "string", pattern: "^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d)?$" },
   "cds.DateTime": { type: "string", format: "date-time" },
   "cds.Timestamp": { type: "string", format: "date-time" },
-  "cds.Binary": { type: "string", contentEncoding: "base64" },
-  "cds.LargeBinary": { type: "string", contentEncoding: "base64" },
+  "cds.Binary": BINARY,
+  "cds.LargeBinary": BINARY,
+  "cds.Map": { type: "object" },
+  "cds.hana.TINYINT": UINT8,
+  "cds.hana.SMALLINT": INT16,
+  "cds.hana.SMALLDECIMAL": DECIMAL,
+  "cds.hana.REAL": { type: "number" },
+  "cds.hana.CHAR": STRING,
+  "cds.hana.NCHAR": STRING,
+  "cds.hana.VARCHAR": STRING,
+  "cds.hana.CLOB": STRING,
+  "cds.hana.BINARY": BINARY,
 };
+
+/** Numeric types that travel as strings; inputs also take JSON numbers, as CAP does. */
+const NUMERIC_STRINGS = new Set([INT64, DECIMAL]);
+
+/** Whether a CDS builtin has a JSON Schema mapping. Unmapped types are diagnosed by the reader. */
+export function isMappedType(cdsType: string): boolean {
+  return cdsType in TYPES;
+}
 
 export function fieldToSchema(field: FieldSpec): JsonSchema {
   const schema: JsonSchema = { ...(TYPES[field.cdsType] ?? {}) };
@@ -159,10 +188,17 @@ function writable(fields: FieldSpec[]): FieldSpec[] {
   return fields.filter((f) => !f.readonly);
 }
 
+function inputField(field: FieldSpec): JsonSchema {
+  const schema = fieldToSchema(field);
+  const base = TYPES[field.cdsType];
+  if (base && NUMERIC_STRINGS.has(base) && !schema.enum) schema.type = ["string", "number"];
+  return schema;
+}
+
 function object(fields: FieldSpec[], required: FieldSpec[]): JsonSchema {
   const schema: JsonSchema = {
     type: "object",
-    properties: Object.fromEntries(fields.map((f) => [f.name, fieldToSchema(f)])),
+    properties: Object.fromEntries(fields.map((f) => [f.name, inputField(f)])),
   };
   if (required.length) schema.required = required.map((f) => f.name);
   schema.additionalProperties = false;

@@ -900,6 +900,15 @@ describe("model-reader: diagnostics", () => {
     ]);
   });
 
+  test("an element type with no JSON Schema mapping yields UNSUPPORTED_TYPE", () => {
+    const csn = compileSnippet(`
+      @mcp service S { entity Docs { key ID: Integer; embedding: Vector(3); title: String; } }
+    `);
+    expect(codes(readModel(csn).diagnostics)).toEqual([
+      { level: "warn", code: "UNSUPPORTED_TYPE", target: "S.Docs:embedding" },
+    ]);
+  });
+
   test("the demo model reads with zero error-level diagnostics", async () => {
     const { diagnostics } = readModel(await compileDemo());
     expect(diagnostics.filter((d) => d.level === "error")).toEqual([]);

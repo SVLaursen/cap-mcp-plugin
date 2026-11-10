@@ -20,14 +20,14 @@ flowchart LR
 
 ## Modules
 
-| Module              | Milestone | Responsibility                                                                          | Depends on                   | Test style                  |
-| ------------------- | --------- | --------------------------------------------------------------------------------------- | ---------------------------- | --------------------------- |
-| `model-reader`      | M1        | Linked CSN + `@mcp` annotations → `ExposureSpec`; diagnostics for unknown/v1 keys       | CSN only                     | Contract (CDS snippets)     |
-| `schema-mapper`     | M1        | `FieldSpec` → JSON Schema 2020-12 for inputs and outputs                                | Nothing                      | Contract                    |
-| `exposure-registry` | M2        | Cache specs per model; build `ToolSpec[]`; hide tools a user can never call             | `model-reader`, a `UserLike` | Contract + `cds.test`       |
-| `executor`          | M3        | Tool args → CQN objects → `srv.run` / `srv.send`; results and CAP errors → `ToolResult` | A `ServiceLike`              | `cds.test` against the demo |
-| `adapter`           | M4        | JSON-RPC, protocol versions, auth metadata, HTTP and stdio entry points                 | SDK v2, registry, executor   | Behaviour + conformance     |
-| `cli`               | M6        | `cds add mcp`, `cds mcp`, build task, startup report                                    | `cds`                        | Smoke                       |
+| Module              | Milestone | Responsibility                                                                          | Depends on                                                 | Test style                  |
+| ------------------- | --------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------- | --------------------------- |
+| `model-reader`      | M1        | Linked CSN + `@mcp` annotations → `ExposureSpec`; diagnostics for unknown/v1 keys       | CSN; `schema-mapper`'s type table (for `UNSUPPORTED_TYPE`) | Contract (CDS snippets)     |
+| `schema-mapper`     | M1        | `FieldSpec` → JSON Schema 2020-12 for inputs and outputs                                | Nothing                                                    | Contract                    |
+| `exposure-registry` | M2        | Cache specs per model; build `ToolSpec[]`; hide tools a user can never call             | `model-reader`, a `UserLike`                               | Contract + `cds.test`       |
+| `executor`          | M3        | Tool args → CQN objects → `srv.run` / `srv.send`; results and CAP errors → `ToolResult` | A `ServiceLike`                                            | `cds.test` against the demo |
+| `adapter`           | M4        | JSON-RPC, protocol versions, auth metadata, HTTP and stdio entry points                 | SDK v2, registry, executor                                 | Behaviour + conformance     |
+| `cli`               | M6        | `cds add mcp`, `cds mcp`, build task, startup report                                    | `cds`                                                      | Smoke                       |
 
 The data passed between them is defined in `src/types.ts`.
 

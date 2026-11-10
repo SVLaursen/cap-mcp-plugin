@@ -124,6 +124,8 @@ export type DiagnosticCode =
   | "UNKNOWN_ANNOTATION"
   | "INVALID_ANNOTATION_VALUE"
   | "BOUND_OPERATION_WITHOUT_KEYS"
+  /** An element or parameter type with no JSON Schema mapping; agents see it as "any value". */
+  | "UNSUPPORTED_TYPE"
   /** @mcp.omit on a key element: the entity's get tool cannot address records. */
   | "OMITTED_KEY"
   | "DRAFT_WRITE_NOT_SUPPORTED"

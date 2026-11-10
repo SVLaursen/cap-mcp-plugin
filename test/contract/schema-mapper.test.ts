@@ -11,6 +11,7 @@ import {
 } from "../../src/schema-mapper";
 import type { EntitySpec, FieldSpec, ServiceSpec } from "../../src/types";
 import { compileSnippet } from "../helpers/snippet";
+import { schemaError } from "../helpers/validate";
 
 /** A plain, optional, writable field of the given CDS type. */
 function field(cdsType: string, extra: Partial<FieldSpec> = {}): FieldSpec {
@@ -71,9 +72,13 @@ describe("schema-mapper: scalar types", () => {
     expect(fieldToSchema(field("cds.UUID"))).toEqual({ type: "string", format: "uuid" });
   });
 
-  test("Date → string, format date; Time → time; DateTime/Timestamp → date-time", () => {
+  test("Date → string, format date; Time → HH:MM[:SS] pattern; DateTime/Timestamp → date-time", () => {
     expect(fieldToSchema(field("cds.Date"))).toEqual({ type: "string", format: "date" });
-    expect(fieldToSchema(field("cds.Time"))).toEqual({ type: "string", format: "time" });
+    // A pattern, not format "time": RFC 3339 full-time needs a zone; CAP returns "10:00:00".
+    expect(fieldToSchema(field("cds.Time"))).toEqual({
+      type: "string",
+      pattern: "^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d)?$",
+    });
     expect(fieldToSchema(field("cds.DateTime"))).toEqual({ type: "string", format: "date-time" });
     expect(fieldToSchema(field("cds.Timestamp"))).toEqual({ type: "string", format: "date-time" });
   });
@@ -106,6 +111,41 @@ describe("schema-mapper: scalar types", () => {
       type: "number",
       minimum: 0.5,
     });
+  });
+
+  test("Integer64, DecimalFloat and common SAP HANA types map like their CDS counterparts", () => {
+    const int64 = fieldToSchema(field("cds.Int64"));
+    const decimal = fieldToSchema(field("cds.Decimal"));
+    expect(fieldToSchema(field("cds.Integer64"))).toEqual(int64);
+    expect(fieldToSchema(field("cds.DecimalFloat"))).toEqual(decimal);
+    expect(fieldToSchema(field("cds.hana.SMALLDECIMAL"))).toEqual(decimal);
+    expect(fieldToSchema(field("cds.hana.SMALLINT"))).toEqual(fieldToSchema(field("cds.Int16")));
+    expect(fieldToSchema(field("cds.hana.TINYINT"))).toEqual(fieldToSchema(field("cds.UInt8")));
+    expect(fieldToSchema(field("cds.hana.REAL"))).toEqual({ type: "number" });
+    expect(fieldToSchema(field("cds.hana.NCHAR", { length: 3 }))).toEqual({
+      type: "string",
+      maxLength: 3,
+    });
+    expect(fieldToSchema(field("cds.Map"))).toEqual({ type: "object" });
+  });
+
+  test("values exactly as CAP returns them pass the MCP SDK's validator", () => {
+    const samples: [string, unknown][] = [
+      ["cds.Time", "10:00:00"],
+      ["cds.Date", "2026-11-10"],
+      ["cds.DateTime", "2026-11-10T20:11:15Z"],
+      ["cds.Timestamp", "2026-11-10T20:11:15.415Z"],
+      ["cds.Decimal", "11.11"],
+      ["cds.Decimal", "-3"],
+      ["cds.Int64", "9007199254740993"],
+      ["cds.UUID", "1d0d6a2c-3a8f-4f43-9d0b-6a7d3c1f2e45"],
+      ["cds.Boolean", true],
+      ["cds.Double", 0.5],
+    ];
+    expect(
+      samples.map(([type, value]) => [type, schemaError(fieldToSchema(field(type)), value)]),
+    ).toEqual(samples.map(([type]) => [type, undefined]));
+    expect(schemaError(fieldToSchema(field("cds.Time")), "25:00:00")).toBeDefined();
   });
 
   test("description is copied when present", () => {
@@ -144,6 +184,8 @@ const books = serviceOf(`
 const Books = entityOf(books, "S.Books");
 const ID = { type: "integer", minimum: -2147483648, maximum: 2147483647 };
 const decimal = { type: "string", pattern: "^-?\\d+(\\.\\d+)?$" };
+// Inputs also accept JSON numbers, which CAP takes as well.
+const decimalIn = { ...decimal, type: ["string", "number"] };
 
 describe("schema-mapper: tool input schemas", () => {
   test("get: required keys only, additionalProperties false", () => {
@@ -230,7 +272,7 @@ describe("schema-mapper: tool input schemas", () => {
   test("create: readonly fields absent; mandatory fields required", () => {
     expect(entityInputSchema(Books, "create")).toEqual({
       type: "object",
-      properties: { ID, title: { type: "string", maxLength: 100 }, price: decimal },
+      properties: { ID, title: { type: "string", maxLength: 100 }, price: decimalIn },
       required: ["title"],
       additionalProperties: false,
     });
@@ -239,7 +281,7 @@ describe("schema-mapper: tool input schemas", () => {
   test("update: keys required; every other writable field optional", () => {
     expect(entityInputSchema(Books, "update")).toEqual({
       type: "object",
-      properties: { ID, title: { type: "string", maxLength: 100 }, price: decimal },
+      properties: { ID, title: { type: "string", maxLength: 100 }, price: decimalIn },
       required: ["ID"],
       additionalProperties: false,
     });

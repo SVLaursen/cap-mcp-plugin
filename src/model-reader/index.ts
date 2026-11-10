@@ -9,6 +9,7 @@ import type {
   ReturnSpec,
   ServiceSpec,
 } from "../types";
+import { isMappedType } from "../schema-mapper";
 
 /**
  * model-reader (milestone M1)
@@ -183,6 +184,7 @@ function readEntity(name: string, service: string, def: Definition, ctx: Context
   }
   const draft = def["@odata.draft.enabled"] === true || def.drafts !== undefined;
   const fields = readFields(def.elements).filter((f) => !draft || !DRAFT_ELEMENTS.has(f.name));
+  checkTypes(ctx, name, fields);
   return {
     name,
     service,
@@ -287,6 +289,8 @@ function readOperation(
   ctx: Context,
   boundTo?: string,
 ): OperationSpec {
+  const params = Object.entries(def.params ?? {}).map(([param, p]) => readField(param, p));
+  checkTypes(ctx, name, params);
   return {
     name,
     service,
@@ -294,7 +298,7 @@ function readOperation(
     title: title(name, def),
     boundTo,
     description: describe(def),
-    params: Object.entries(def.params ?? {}).map(([param, p]) => readField(param, p)),
+    params,
     returns: readReturns(def.returns, ctx),
     requires: roles(def),
     elicit: strings(def["@mcp.elicit"]),
@@ -440,6 +444,18 @@ function checkKeys(ctx: Context, target: string, def: Definition): void {
         message: `Unknown annotation ${key} on ${target}; it has no effect`,
       });
     }
+  }
+}
+
+function checkTypes(ctx: Context, owner: string, fields: FieldSpec[]): void {
+  for (const field of fields) {
+    if (isMappedType(field.cdsType)) continue;
+    ctx.diagnostics.push({
+      level: "warn",
+      code: "UNSUPPORTED_TYPE",
+      target: `${owner}:${field.name}`,
+      message: `${field.cdsType || "this type"} has no JSON Schema mapping; agents see ${field.name} as any value`,
+    });
   }
 }
 
