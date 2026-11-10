@@ -56,16 +56,19 @@ executor directly inside `cds.test` (call it with `cds.services.X` within a
 
 ## M4 — Adapter (MCP 2026-07-28, stateless)
 
-- [ ] **SPIKE**: mount as a CAP protocol adapter (`cds.env.protocols`, see `node_modules/@sap/cds/lib/srv/protocols/`) vs. one `/mcp` route behind `cds.middlewares.before`. One endpoint for all services or one per service? → ADR 0009 _(`protocol.test.ts` › mounting)_
-- [ ] **SPIKE**: support for 2025-11-25 clients (initialize handshake) — does SDK v2 serve both? → ADR 0010 _(older clients)_
-- [ ] Verify `_meta` keys and `Mcp-Method` header against the spec and SDK; fix `test/helpers/mcp.ts` once
+- [x] **SPIKE**: mount as a CAP protocol adapter (`cds.env.protocols`, see `node_modules/@sap/cds/lib/srv/protocols/`) vs. one `/mcp` route behind `cds.middlewares.before`. One endpoint for all services or one per service? → ADR 0009: one `/mcp` route on `served` behind `cds.middlewares.before`, one endpoint for all services _(`protocol.test.ts` › mounting)_
+- [x] **SPIKE**: support for 2025-11-25 clients (initialize handshake) — does SDK v2 serve both? → ADR 0010: `createMcpHandler` with `legacy: 'stateless'` _(older clients)_
+- [ ] Fix `test/helpers/mcp.ts` to what the SDK requires: `MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name` headers; `clientCapabilities`/`clientInfo` in `_meta`; a legacy helper that parses SSE (ADR 0010)
+- [ ] `activate(cds)`: mount `/mcp` on `served` behind `cds.middlewares.before` + `express.json()`; handler = `toNodeHandler(createMcpHandler(factory))`; factory from the registry for `cds.context.user`, keyed by `cds.context.model ?? cds.model`; advertise only implemented capabilities (ADR 0009, 0010) _(mounting)_
+- [ ] `@mcp` services keep their OData endpoints (guard against a protocol named `mcp`) _(mounting)_
 - [ ] Stateless tools/list and tools/call; `server/discover`; version errors; `resultType`; `ttlMs`/`cacheScope` _(stateless)_
 - [ ] Switch M3 executor tests to go through `/mcp`; delete the placeholder test in `demo-baseline.test.ts`
 - [ ] Regression #3 (describe never leaks), #4 (no session state) _(`v1-findings.test.ts`)_
-- [ ] Auth metadata: 401 + `WWW-Authenticate`, RFC 9728 endpoint, no fake DCR _(auth metadata)_
+- [ ] Auth metadata: own 401 on `/mcp` (Bearer `resource_metadata` for JWT/IAS, `req._login` for mocked), `/.well-known/oauth-protected-resource/mcp` at the root, no fake DCR _(auth metadata)_
 - [ ] `cds.context.user` is the caller; AMS middleware applies without special code _(mounting)_
 - [ ] `activate()` leaves `cds.env.cdsc` untouched (ADR 0011) _(mounting)_
 - [ ] Production default: CAP requires `authenticated-user` on services without `@requires` (`restrict_all_services`); make `tools/list` for anonymous callers agree (or always authenticate `/mcp`) _(mounting)_
+- [ ] Legacy era: `initialize` → `tools/list` / `tools/call` without a session; GET → 405; `@mcp.elicit` tools give a clear `isError` _(older clients)_
 - [ ] Auth matrix: mocked _(`auth-matrix.test.ts`)_
 - [ ] Review: run the `reviewer` agent on M4
 

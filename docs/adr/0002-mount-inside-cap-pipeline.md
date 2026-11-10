@@ -1,6 +1,6 @@
 # 0002 — Mount MCP inside CAP's middleware pipeline
 
-Status: proposed · settled by the M4 spike
+Status: accepted · refined by [0009](0009-single-mcp-route-behind-cap-middleware.md) (one route behind `cds.middlewares.before`, not a protocol adapter)
 
 ## Context
 
