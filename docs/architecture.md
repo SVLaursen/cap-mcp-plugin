@@ -49,7 +49,8 @@ The data passed between them is defined in `src/types.ts`.
 
 Built by `schema-mapper`, executed by `executor`. Every argument is structured JSON, so the
 executor builds CQN objects and the agent can only name exposed fields (the field names are
-JSON Schema enums). `additionalProperties` is always `false`.
+JSON Schema enums). `additionalProperties` is always `false`, except for the open `key`/`data`/`args`
+objects of compact tools, which the executor checks against the target's own schema.
 
 | Tool        | Arguments                                                                                                                                  |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------ |

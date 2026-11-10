@@ -5,7 +5,7 @@ import cds from "@sap/cds";
 import { ExposureRegistry, registryCache } from "../../src/exposure-registry";
 import { readModel } from "../../src/model-reader";
 import type { JsonSchema, ToolSpec, UserLike } from "../../src/types";
-import { compileSnippet } from "../helpers/snippet";
+import { compileDemo, compileSnippet } from "../helpers/snippet";
 
 /** A user with exactly these roles. CAP's pseudo roles are not modelled here. */
 function user(...roles: string[]): UserLike {
@@ -132,6 +132,62 @@ describe("exposure-registry: tool list", () => {
       ["INVALID_TOOL_NAME", `S_${long}_query`],
       ["INVALID_TOOL_NAME", `S_${long}_get`],
     ]);
+  });
+
+  test("a clash across services drops both; a clash with the plugin's own tools keeps the plugin's", () => {
+    const r = registry(`
+      @mcp service A { entity B_C { key ID: Integer; } }
+      @mcp service A_B { entity C { key ID: Integer; } }
+      @mcp @mcp.compact service K { @mcp.ui: 'ui://k/q.html' function query() returns Integer; entity E { key ID: Integer; } }
+    `);
+    const listed = names(r.toolsFor(user()));
+    expect(listed.filter((n) => n.startsWith("A_"))).toEqual([]);
+    expect(listed).toContain("K_query");
+    expect(r.toolsFor(user()).find((t) => t.name === "K_query")?.target).toEqual({
+      kind: "compact",
+      service: "K",
+      action: "query",
+    });
+    expect(r.diagnostics.map((d) => [d.code, d.target])).toEqual([
+      ["TOOL_NAME_CLASH", "A_B_C_query"],
+      ["TOOL_NAME_CLASH", "A_B_C_get"],
+      ["TOOL_NAME_CLASH", "K_query"],
+    ]);
+  });
+
+  test("order depends only on names, not on declaration order or letter case", () => {
+    const one = registry(
+      `@mcp service S { entity b { key ID: Integer; } entity A { key ID: Integer; } entity a { key ID: Integer; } }`,
+    );
+    const two = registry(
+      `@mcp service S { entity a { key ID: Integer; } entity b { key ID: Integer; } entity A { key ID: Integer; } }`,
+    );
+    // Code-point order: upper case before lower case.
+    expect(names(one.toolsFor(user()))).toEqual([
+      "S_A_get",
+      "S_A_query",
+      "S_a_get",
+      "S_a_query",
+      "S_b_get",
+      "S_b_query",
+    ]);
+    expect(names(two.toolsFor(user()))).toEqual(names(one.toolsFor(user())));
+  });
+
+  test("the demo gives each demo user the tools CAP would let them call", async () => {
+    const r = ExposureRegistry.fromModel(await compileDemo());
+    expect(r.diagnostics.filter((d) => d.level === "error")).toEqual([]);
+    const bob = names(r.toolsFor(capUser("bob")));
+    const alice = names(r.toolsFor(capUser("alice", "admin")));
+    // AdminService requires admin; OrdersService any authenticated user.
+    expect(bob.some((n) => n.startsWith("AdminService_"))).toBe(false);
+    expect(alice).toContain("AdminService_query");
+    expect(bob).toContain("OrdersService_Orders_cancel");
+    expect(bob).toContain("CatalogService_describe");
+    expect(bob).not.toContain("CatalogService_restock");
+    expect(names(r.toolsFor(cds.User.anonymous)).some((n) => n.startsWith("OrdersService_"))).toBe(
+      false,
+    );
   });
 
   test("tool specs are deeply frozen, since every user and request shares them", () => {

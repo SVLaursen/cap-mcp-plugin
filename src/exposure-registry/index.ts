@@ -110,7 +110,7 @@ export class ExposureRegistry {
    */
   toolsFor(user: UserLike): ToolSpec[] {
     return this.tools.filter((tool) =>
-      (this.requires.get(tool) ?? []).every((roles) => roles.some((role) => user.is(role))),
+      this.requires.get(tool)?.every((roles) => roles.some((role) => user.is(role))),
     );
   }
 
@@ -137,11 +137,24 @@ export class ExposureRegistry {
         tools.push(tool);
         continue;
       }
+      // The plugin's own tools (describe, the compact set) keep their name; model tools yield.
+      const builtin = candidates.filter(
+        (t) => t.target.kind === "describe" || t.target.kind === "compact",
+      );
+      const kept = builtin.length === 1 ? builtin[0] : undefined;
+      if (kept) tools.push(kept);
       this.diagnostics.push({
         level: "error",
         code: "TOOL_NAME_CLASH",
         target: name,
-        message: `${candidates.map(describeTarget).join(" and ")} would both be the tool ${name}; neither is exposed`,
+        message: kept
+          ? `${candidates
+              .filter((t) => t !== kept)
+              .map(describeTarget)
+              .join(
+                " and ",
+              )} would be the tool ${name}, which ${describeTarget(kept)} uses; not exposed`
+          : `${candidates.map(describeTarget).join(" and ")} would all be the tool ${name}; none is exposed`,
       });
     }
     // Shared by every user and request, so nobody may change them in place.
@@ -218,7 +231,9 @@ function describeTool(service: ServiceSpec): ToolSpec {
     ),
     inputSchema: {
       type: "object",
-      properties: { entity: { enum: service.entities.map((e) => e.name) } },
+      properties: service.entities.length
+        ? { entity: { enum: service.entities.map((e) => e.name) } }
+        : {},
       additionalProperties: false,
     },
     annotations: READ,
