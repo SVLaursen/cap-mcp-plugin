@@ -143,8 +143,10 @@ export type DiagnosticCode =
   | "BOUND_OPERATION_WITHOUT_KEYS"
   /** An @mcp.* feature annotation on a definition that is not exposed, so it has no effect. */
   | "UNUSED_ANNOTATION"
-  /** Two tools of the same service would get the same name; both are left out. */
+  /** Two tools would get the same name (also across services); both are left out. */
   | "TOOL_NAME_CLASH"
+  /** A tool name outside MCP's [A-Za-z0-9._-]{1,128}; the tool is left out. */
+  | "INVALID_TOOL_NAME"
   /** A bound operation parameter with the name of one of its entity's keys. */
   | "PARAMETER_SHADOWS_KEY"
   /** An element or parameter type with no JSON Schema mapping; agents see it as "any value". */
@@ -159,7 +161,7 @@ export type DiagnosticCode =
 export interface Diagnostic {
   level: "info" | "warn" | "error";
   code: DiagnosticCode;
-  /** The CSN definition (and element) the diagnostic is about. */
+  /** The CSN definition (and element) the diagnostic is about; a tool name for tool diagnostics. */
   target: string;
   message: string;
 }

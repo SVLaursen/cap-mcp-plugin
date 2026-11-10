@@ -39,6 +39,9 @@ export interface RegistryOptions {
 
 type Hints = ToolSpec["annotations"];
 
+/** MCP tool names (SEP-986, kept in 2026-07-28); the SDK enforces the same pattern. */
+const TOOL_NAME = /^[A-Za-z0-9._-]{1,128}$/;
+
 /**
  * One registry per model object, built on first use. Keyed weakly, so a tenant's extended model
  * (a new object) gets its own tools and an unused one can be collected. Create one cache per
@@ -113,6 +116,15 @@ export class ExposureRegistry {
     const byName = new Map<string, ToolSpec[]>();
     for (const service of this.spec.services) {
       for (const tool of this.serviceTools(service)) {
+        if (!TOOL_NAME.test(tool.name)) {
+          this.diagnostics.push({
+            level: "error",
+            code: "INVALID_TOOL_NAME",
+            target: tool.name,
+            message: `${describeTarget(tool)} would be the tool "${tool.name}", which MCP does not allow (1-128 of A-Z a-z 0-9 _ - .); not exposed`,
+          });
+          continue;
+        }
         byName.set(tool.name, [...(byName.get(tool.name) ?? []), tool]);
       }
     }

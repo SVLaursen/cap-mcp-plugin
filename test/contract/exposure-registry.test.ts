@@ -113,6 +113,27 @@ describe("exposure-registry: tool list", () => {
     expect(tools.Shop_order?.outputSchema).toBeUndefined();
   });
 
+  test("names outside MCP's [A-Za-z0-9._-]{1,128} are left out and reported as INVALID_TOOL_NAME", () => {
+    const long = "L".repeat(124); // S_ + 124 + _get = 130 characters
+    const r = registry(`
+      @mcp service S {
+        entity ![Book Shelf] { key ID: Integer; }
+        entity Bücher { key ID: Integer; }
+        entity ${long} { key ID: Integer; }
+        entity Fine { key ID: Integer; }
+      }
+    `);
+    expect(names(r.toolsFor(user()))).toEqual(["S_Fine_get", "S_Fine_query"]);
+    expect(r.diagnostics.map((d) => [d.code, d.target])).toEqual([
+      ["INVALID_TOOL_NAME", "S_Book Shelf_query"],
+      ["INVALID_TOOL_NAME", "S_Book Shelf_get"],
+      ["INVALID_TOOL_NAME", "S_Bücher_query"],
+      ["INVALID_TOOL_NAME", "S_Bücher_get"],
+      ["INVALID_TOOL_NAME", `S_${long}_query`],
+      ["INVALID_TOOL_NAME", `S_${long}_get`],
+    ]);
+  });
+
   test("tool specs are deeply frozen, since every user and request shares them", () => {
     const [tool] = registry(shop).toolsFor(user());
     expect(Object.isFrozen(tool)).toBe(true);
