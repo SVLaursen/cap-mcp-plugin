@@ -48,7 +48,7 @@ executor directly inside `cds.test` (call it with `cds.services.X` within a
 - [x] Describe tools (`<Service>_describe`, compact `list_entities` / `describe_entity`) scoped to what the caller can reach _(`executor-describe.test.ts`)_; regression #3
 - [x] Regression #2, #6 _(`v1-findings.test.ts`)_
 - [x] Writes through the service; custom handlers run; mode gating _(`executor-writes.test.ts`)_
-- [ ] Regression #1 (failed commit), #5 (same user context) _(`v1-findings.test.ts`)_
+- [x] Regression #1 (failed commit), #5 (same user context) _(`v1-findings.test.ts`)_
 - [ ] Operations: functions, actions, bound actions; structured CAP errors _(operations)_
 - [ ] Drafts and deep insert _(drafts and deep insert)_
 - [ ] Authorization is CAP's: MCP rows equal OData rows per user _(authorization)_

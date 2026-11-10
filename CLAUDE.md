@@ -110,6 +110,12 @@ docs/                   plan, architecture, annotation spec, backlog, testing, A
   between files. Inside one file, order matters.
 - **Failed commits**: the demo's `AdminService` makes `DELETE /Books(207)` fail at commit time
   via `req.before('commit')`. Use it for regression #1.
+- **Key-addressed writes need `req.data`**: `srv.run(DELETE/UPDATE …)` leaves `req.data` empty,
+  even with the key as a ref filter, so handlers checking `req.data.ID` silently skip (the demo's
+  failed-commit hook did). Use `srv.send({ query, data: key })` like OData does. A missing record
+  then comes back as CAP's own 404.
+- **Draft reads add columns**: SELECT on a draft-enabled entity returns `IsActiveEntity` and the
+  keys even when not selected; project rows to what was asked for.
 - **`@restrict where`** already works over OData in the demo (bob sees only ORD-1001). MCP tests
   should assert "same rows as OData", not re-derive the rule.
 

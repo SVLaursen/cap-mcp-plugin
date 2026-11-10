@@ -8,9 +8,14 @@ import { callTool, page } from "../helpers/tools";
 const demo = bootDemo();
 
 describe("v1 regressions", () => {
-  test.todo(
-    "#1 a failed commit is reported as an error (AdminService DELETE Books 207 fails at commit)",
-  );
+  test("#1 a failed commit is reported as an error (AdminService DELETE Books 207 fails at commit)", async () => {
+    // The executor never commits or catches: the caller's transaction does, and its failure
+    // reaches the caller (the adapter turns it into an error in M4).
+    await expect(
+      callTool("alice", "AdminService_delete", { entity: "AdminService.Books", key: { ID: 207 } }),
+    ).rejects.toThrow("SIMULATED_COMMIT_FAILURE");
+    expect((await demo.GET("/admin/Books(207)?$select=ID", as("alice"))).status).toBe(200);
+  });
   test("#2 q search never matches on @mcp.omit fields (an omitted email is not searchable)", async () => {
     // CAP's own search covers every String of Authors, including the omitted email...
     const odata = await demo.GET("/browse/Authors?$search=example.com&$select=ID", as("bob"));
@@ -36,12 +41,33 @@ describe("v1 regressions", () => {
     expect(text).toContain("CatalogService.Books");
   });
   test.todo("#4 there is no session state: a request never sees tools resolved for another user");
-  test.todo("#5 reads and writes run with the same user context (cds.context.user)");
+  test("#5 reads and writes run with the same user context (cds.context.user)", async () => {
+    // Reads: @restrict where createdBy = $user only lets bob see his own order.
+    const orders = page(
+      await callTool("bob", "OrdersService_Orders_query", { select: ["orderNo"] }),
+    );
+    expect(orders.rows).toEqual([{ orderNo: "ORD-1001" }]);
+    // Writes: CAP stamps the managed createdBy/modifiedBy with the caller, not a technical user.
+    await callTool("alice", "AdminService_create", {
+      entity: "AdminService.Books",
+      data: { ID: 920, title: "Agnes Grey", author_ID: 101 },
+    });
+    await callTool("alice", "AdminService_update", {
+      entity: "AdminService.Books",
+      key: { ID: 920 },
+      data: { stock: 1 },
+    });
+    const book = await demo.GET("/admin/Books(920)?$select=createdBy,modifiedBy", as("alice"));
+    expect(book.data).toMatchObject({ createdBy: "alice", modifiedBy: "alice" });
+  });
   test("#6 count with skip > 0 returns the full count", async () => {
     const first = page(await callTool("bob", "CatalogService_Books_query", { top: 2 }));
     const third = page(
       await callTool("bob", "CatalogService_Books_query", { top: 2, cursor: first.nextCursor }),
     );
-    expect(third.total).toBe(5);
+    // Same count as OData, whatever earlier tests in this file wrote.
+    const odata = await demo.GET("/browse/Books/$count", as("bob"));
+    expect(third.total).toBe(Number(odata.data));
+    expect(third.rows).toHaveLength(2);
   });
 });

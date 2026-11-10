@@ -17,10 +17,11 @@ export interface ServiceLike {
   name: string;
   run(query: unknown): Promise<unknown>;
   send(request: {
-    event: string;
+    event?: string;
     entity?: string;
+    query?: unknown;
     data?: unknown;
-    params?: unknown[];
+    params?: unknown;
   }): Promise<unknown>;
 }
 
@@ -163,8 +164,10 @@ export class Executor {
       delete: async (key, data) => {
         allowOnly(data, []);
         const address = keyOf(entity, key);
-        const done = (await service.run({
-          DELETE: { from: { ref: [entity.name] }, where: keyWhere(address) },
+        // Keys in req.data as with OData's DELETE /Books(201): handlers rely on req.data.ID.
+        const done = (await service.send({
+          query: { DELETE: { from: addressed(entity, address) } },
+          data: address,
         })) as Affected;
         if (affected(done) === 0) throw notFound(entity, address);
         return result({ deleted: address });
@@ -189,8 +192,10 @@ export class Executor {
   ): Promise<ToolResult> {
     const address = keyOf(entity, key);
     const changes = writable(entity, data, "update");
-    const done = (await service.run({
-      UPDATE: { entity: { ref: [entity.name] }, data: changes, where: keyWhere(address) },
+    // req.data = changes plus keys, as with OData's PATCH /Books(201).
+    const done = (await service.send({
+      query: { UPDATE: { entity: addressed(entity, address), data: changes } },
+      data: { ...changes, ...address },
     })) as Affected;
     if (affected(done) === 0) throw notFound(entity, address);
     return this.get(entity, address, service);
@@ -277,8 +282,14 @@ export class Executor {
     })) as { total: number | string } | undefined;
     const total = Number(counted?.total ?? 0);
     const next = offset + rows.length;
+    // Exactly what was selected: CAP adds keys and draft columns (IsActiveEntity) to draft reads.
+    const selected = columns.map((c) => c.ref[0] as string);
     return result(
-      { rows, total, ...(next < total && rows.length > 0 && { nextCursor: encodeCursor(next) }) },
+      {
+        rows: rows.map((row) => project(row, selected)),
+        total,
+        ...(next < total && rows.length > 0 && { nextCursor: encodeCursor(next) }),
+      },
       resourceLinks(entity, rows),
     );
   }
@@ -288,13 +299,18 @@ export class Executor {
     const row = (await service.run({
       SELECT: {
         one: true,
-        from: { ref: [entity.name] },
+        from: addressed(entity, key),
         columns: entity.fields.map((f) => ref(f.name)),
-        where: keyWhere(key),
       },
     })) as Args | undefined;
     if (!row) throw notFound(entity, key);
-    return result(row, resourceLinks(entity, [row]));
+    return result(
+      project(
+        row,
+        entity.fields.map((f) => f.name),
+      ),
+      resourceLinks(entity, [row]),
+    );
   }
 }
 
@@ -352,8 +368,18 @@ const affected = (r: Affected) => (typeof r === "number" ? r : (r?.affected ?? 0
 const notFound = (entity: EntitySpec, key: Args) =>
   new ToolError("NOT_FOUND", `No ${entity.title} with ${JSON.stringify(key)}`);
 
-const keyWhere = (key: Args) =>
-  and(...Object.entries(key).map(([name, val]) => [ref(name), "=", { val }]));
+/**
+ * One record, addressed like OData's `Books(201)`: the key as a filter on the entity reference.
+ * CAP then puts the key into req.data, which custom handlers rely on (req.data.ID).
+ */
+const addressed = (entity: EntitySpec, key: Args) => ({
+  ref: [
+    {
+      id: entity.name,
+      where: and(...Object.entries(key).map(([name, val]) => [ref(name), "=", { val }])),
+    },
+  ],
+});
 
 const pick = (row: Args, entity: EntitySpec) =>
   Object.fromEntries(entity.keys.map((k) => [k.name, row[k.name]]));
@@ -390,6 +416,9 @@ function capError(error: unknown): ToolErrorLike | undefined {
   const status = Number(e.status ?? e.statusCode ?? numeric ?? NaN);
   if (!(status >= 400 && status < 500)) return undefined;
   const message = typeof e.message === "string" ? e.message : "";
+  if (status === 404) {
+    return { code: "NOT_FOUND", message: message && message !== "404" ? message : "Not found" };
+  }
   return {
     code: typeof e.code === "string" ? e.code : message || String(status),
     message: message || String(e.code),
@@ -561,6 +590,8 @@ function and(...parts: unknown[][]): unknown[] {
 }
 
 const ref = (name: string) => ({ ref: [name] });
+const project = (row: Args, names: string[]) =>
+  Object.fromEntries(names.filter((n) => n in row).map((n) => [n, row[n]]));
 const byName = (fields: FieldSpec[]) => new Map(fields.map((f) => [f.name, f]));
 
 /** Stateless paging: the cursor is just the next offset, opaque to the agent. */
