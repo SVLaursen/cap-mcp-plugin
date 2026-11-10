@@ -25,7 +25,12 @@ its own annotation.
 | Compact generic tool mode           | No                                                             | `@mcp.compact` on the service                               |
 
 Without `@mcp` on the service, `@mcp` on a single entity or operation exposes just that
-definition (entity: query + get).
+definition (entity: query + get). Functions come with the service baseline only, not with
+`@mcp` on their entity.
+
+Entities CAP generates on its own are never part of the baseline: localized `.texts` entities
+and `DraftAdministrativeData`. `@mcp: false` and `@cds.api.ignore` on an entity also remove its
+bound operations.
 
 ## Reference
 

@@ -5,6 +5,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { readModel } from "../../src/model-reader";
+import type { ExposureSpec, ServiceSpec } from "../../src/types";
 import { compileSnippet } from "../helpers/snippet";
 
 describe("model-reader: doc comments (ADR 0011)", () => {
@@ -40,15 +41,135 @@ describe("model-reader: doc comments (ADR 0011)", () => {
   });
 });
 
+/** What a spec exposes, per service: entity modes and operation names. Hides field details. */
+function exposed(spec: ExposureSpec) {
+  return Object.fromEntries(
+    spec.services.map((s) => [
+      s.name,
+      {
+        entities: Object.fromEntries(s.entities.map((e) => [e.name, [...e.modes].sort()])),
+        operations: s.operations.map((o) => o.name),
+      },
+    ]),
+  );
+}
+
+/** The one service a snippet declares; fails the test if there is not exactly one. */
+function onlyService(spec: ExposureSpec): ServiceSpec {
+  const [service, ...rest] = spec.services;
+  if (!service || rest.length) throw new Error(`expected one service, got ${spec.services.length}`);
+  return service;
+}
+
 describe("model-reader: opt-in", () => {
-  test.todo("a model without any @mcp annotation produces an empty spec and no diagnostics");
-  test.todo("@mcp on a service exposes every entity with modes {query, get} and nothing else");
-  test.todo("@mcp on a service exposes every function (bound and unbound)");
-  test.todo("@mcp on a service does NOT expose actions without their own @mcp");
-  test.todo("@mcp on an action exposes it even when the service has no @mcp");
-  test.todo("@mcp on a single entity exposes only that entity, with modes {query, get}");
-  test.todo("@mcp: false on an entity removes it from an @mcp service");
-  test.todo("@cds.api.ignore on an entity or element removes it");
+  test("a model without any @mcp annotation produces an empty spec and no diagnostics", () => {
+    const csn = compileSnippet(`
+      service S {
+        entity Books { key ID: Integer; }
+        function f() returns Integer;
+        action a();
+      }
+    `);
+    expect(readModel(csn)).toEqual({ spec: { services: [] }, diagnostics: [] });
+  });
+
+  test("@mcp on a service exposes every entity with modes {query, get} and nothing else", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        entity Books { key ID: Integer; title: localized String; }
+        @odata.draft.enabled entity Orders { key ID: UUID; }
+      }
+    `);
+    // CAP-generated entities (Books.texts, DraftAdministrativeData) are not declared, so not exposed.
+    expect(exposed(readModel(csn).spec)).toEqual({
+      S: {
+        entities: { "S.Books": ["get", "query"], "S.Orders": ["get", "query"] },
+        operations: [],
+      },
+    });
+  });
+
+  test("@mcp on a service exposes every function (bound and unbound)", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        entity Books { key ID: Integer; } actions { function price() returns Decimal; }
+        function count() returns Integer;
+      }
+    `);
+    const { operations } = onlyService(readModel(csn).spec);
+    expect(operations.map(({ name, kind, boundTo }) => ({ name, kind, boundTo }))).toEqual([
+      { name: "S.Books.price", kind: "function", boundTo: "S.Books" },
+      { name: "S.count", kind: "function", boundTo: undefined },
+    ]);
+  });
+
+  test("@mcp on a service does NOT expose actions without their own @mcp", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        entity Books { key ID: Integer; } actions { action reprice(); @mcp action archive(); }
+        action restock();
+        @mcp action order();
+      }
+    `);
+    expect(onlyService(readModel(csn).spec).operations.map((o) => o.name)).toEqual([
+      "S.Books.archive",
+      "S.order",
+    ]);
+  });
+
+  test("@mcp on an action exposes it even when the service has no @mcp", () => {
+    const csn = compileSnippet(`
+      service S {
+        entity Books { key ID: Integer; }
+        function count() returns Integer;
+        @mcp action order();
+      }
+    `);
+    expect(exposed(readModel(csn).spec)).toEqual({ S: { entities: {}, operations: ["S.order"] } });
+  });
+
+  test("@mcp on a single entity exposes only that entity, with modes {query, get}", () => {
+    const csn = compileSnippet(`
+      service S {
+        @mcp entity Books { key ID: Integer; } actions { function price() returns Decimal; }
+        entity Authors { key ID: Integer; }
+      }
+    `);
+    expect(exposed(readModel(csn).spec)).toEqual({
+      S: { entities: { "S.Books": ["get", "query"] }, operations: [] },
+    });
+  });
+
+  test("@mcp: false on an entity removes it from an @mcp service", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        entity Books { key ID: Integer; }
+        @mcp: false entity Notes { key ID: Integer; } actions { function f() returns Integer; }
+      }
+    `);
+    expect(exposed(readModel(csn).spec)).toEqual({
+      S: { entities: { "S.Books": ["get", "query"] }, operations: [] },
+    });
+  });
+
+  test("@mcp: false on an operation removes it from an @mcp service", () => {
+    const csn = compileSnippet(`@mcp service S { @mcp: false function f() returns Integer; }`);
+    expect(exposed(readModel(csn).spec)).toEqual({ S: { entities: {}, operations: [] } });
+  });
+
+  test("@cds.api.ignore on an entity or element removes it", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        entity Books { key ID: Integer; title: String; @cds.api.ignore internal: String; }
+        @cds.api.ignore entity Notes { key ID: Integer; }
+      }
+    `);
+    const { entities } = onlyService(readModel(csn).spec);
+    expect(entities.map((e) => [e.name, e.fields.map((f) => f.name)])).toEqual([
+      ["S.Books", ["ID", "title"]],
+    ]);
+  });
+
   test.todo("@mcp.omit elements never appear in fields or keys");
   test.todo(
     "@mcp.wrap.modes adds the listed write modes to query/get; unknown modes are diagnostics",
