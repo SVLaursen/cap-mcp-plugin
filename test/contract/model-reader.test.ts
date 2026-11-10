@@ -506,6 +506,21 @@ describe("model-reader: names and descriptions", () => {
     });
   });
 
+  test("unresolved {i18n>…} texts are treated as absent, never shown to agents", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        @title: '{i18n>Books}' entity Books {
+          key ID: Integer;
+          @title: '{i18n>CreatedBy}' @description: '{i18n>UserID.Description}' createdBy: String;
+        }
+      }
+    `);
+    const [books] = onlyService(readModel(csn).spec).entities;
+    expect(books?.title).toBe("S.Books");
+    expect(books?.description).toBeUndefined();
+    expect(books?.fields.find((f) => f.name === "createdBy")?.description).toBeUndefined();
+  });
+
   test("element descriptions use @mcp.hint → @description → doc comment", () => {
     const csn = compileSnippet(`
       @mcp service S {

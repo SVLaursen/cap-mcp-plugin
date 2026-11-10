@@ -502,10 +502,14 @@ describe("schema-mapper: tool output schemas", () => {
     expect(entityOutputSchema(Books, "get")).toEqual(row);
   });
 
-  test("create and update return the written record; delete returns nothing", () => {
+  test("create and update return the written record; delete returns the deleted key", () => {
     expect(entityOutputSchema(Books, "create")).toEqual(row);
     expect(entityOutputSchema(Books, "update")).toEqual(row);
-    expect(entityOutputSchema(Books, "delete")).toBeUndefined();
+    expect(entityOutputSchema(Books, "delete")).toEqual({
+      type: "object",
+      properties: { deleted: { type: "object", properties: { ID }, required: ["ID"] } },
+      required: ["deleted"],
+    });
   });
 
   test("only keys and not null fields are non-null in output; @mandatory is checked on input only", () => {

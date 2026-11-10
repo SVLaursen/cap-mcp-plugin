@@ -48,6 +48,14 @@ The data passed between them is defined in `src/types.ts`.
 5. The result goes back as `structuredContent` plus one text block, or as a tool error that
    keeps CAP's `code`, `target` and `details`.
 
+## Describe tools and access
+
+Describe tools (`<Service>_describe`, compact `list_entities` / `describe_entity`) never call CAP:
+they describe the spec, scoped by `exposure-registry/access.ts`, the plugin's copy of CAP's
+`@requires` / `@restrict` role rules (the same rules that hide tools). That is advertising, as
+CAP's `$metadata` is; if the copy ever drifts from CAP, metadata could over- or under-share, so
+changes to CAP's auth rules must be mirrored there with a test.
+
 ## Tool names
 
 `<Service>_<Entity>_<mode>` and `<Service>_<operation>`, using the service's short name (its
@@ -103,7 +111,7 @@ in an output schema, including in records an operation returns.
 | Transactions   | ✔ (one per request, commit/rollback)         | Never opens, commits or swallows                                                                                                                                                                                                                                                  |
 | Validation     | ✔ (`@mandatory`, `@assert.*`, handlers)      | JSON Schema for the agent's benefit only                                                                                                                                                                                                                                          |
 | Search         | ✔ (`SELECT.search`, `@cds.search`)           | Passes `q` with explicit columns: CAP's `@cds.search` rules minus `@mcp.omit`                                                                                                                                                                                                     |
-| Drafts         | ✔ (draft API)                                | Chooses NEW/EDIT/SAVE for draft-enabled entities                                                                                                                                                                                                                                  |
+| Drafts         | ✔ (draft API)                                | Drives NEW → SAVE (create) and EDIT → patch → SAVE (update) for draft roots                                                                                                                                                                                                       |
 | Exposure       |                                              | ✔ (`@mcp*` annotations, opt-in)                                                                                                                                                                                                                                                   |
 | Protocol       |                                              | ✔ (SDK v2)                                                                                                                                                                                                                                                                        |
 

@@ -1,6 +1,6 @@
 /**
- * M3 — executor, exercised end to end over /mcp against the demo app (cds.test).
- * Every call goes through srv.run / srv.send in the request's cds.context.
+ * M3 — executor reads, against the demo app (cds.test). Calls go through test/helpers/tools.ts
+ * (srv.tx per call, as the adapter will); M4 switches them to go through /mcp.
  */
 import { as, bootDemo } from "../helpers/demo";
 import { callTool as call, page } from "../helpers/tools";

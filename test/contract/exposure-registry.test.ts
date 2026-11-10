@@ -108,8 +108,7 @@ describe("exposure-registry: tool list", () => {
     expect(tools.Shop_Books_reprice?.inputSchema).toEqual(
       expect.objectContaining({ required: ["ID"] }),
     );
-    // Delete and actions without a return type have no output schema.
-    expect(tools.Shop_Books_delete?.outputSchema).toBeUndefined();
+    // Actions without a return type have no output schema.
     expect(tools.Shop_order?.outputSchema).toBeUndefined();
   });
 

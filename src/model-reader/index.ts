@@ -643,15 +643,26 @@ function isGenerated(
 }
 
 function describeElement(def: Definition): string | undefined {
-  return str(def["@mcp.hint"]) ?? str(def["@description"]) ?? def.doc;
+  return text(def["@mcp.hint"]) ?? text(def["@description"]) ?? def.doc;
 }
 
 function title(name: string, def: Definition): string {
-  return str(def["@mcp.name"]) ?? str(def["@title"]) ?? name;
+  return text(def["@mcp.name"]) ?? text(def["@title"]) ?? name;
+}
+
+/**
+ * A title or description as agents may see it. `{i18n>key}` placeholders are unresolved here
+ * (the reader has no locale), so they count as absent and the fallback chain continues.
+ */
+function text(value: unknown): string | undefined {
+  const s = str(value);
+  return s && /^\{i18n>[^}]*\}$/.test(s) ? undefined : s;
 }
 
 function describe(def: Definition): string | undefined {
-  return str(def["@mcp.description"]) ?? str(def["@description"]) ?? def.doc ?? str(def["@title"]);
+  return (
+    text(def["@mcp.description"]) ?? text(def["@description"]) ?? def.doc ?? text(def["@title"])
+  );
 }
 
 /**

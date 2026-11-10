@@ -38,7 +38,7 @@ Fast loop: `npm run test:contract`.
 - [x] Cache per model object _(caching)_
 - [x] Review: run the `reviewer` agent on M2 (findings fixed in the `M2 review:` commits)
 
-## M3 — Executor on CAP
+## M3 — Executor on CAP ✅
 
 From here, tests run against the demo (`npm run test:behaviour`). Until M4 lands, drive the
 executor directly inside `cds.test` (call it with `cds.services.X` within a
@@ -52,7 +52,7 @@ executor directly inside `cds.test` (call it with `cds.services.X` within a
 - [x] Operations: functions, actions, bound actions; structured CAP errors _(`executor-operations.test.ts`)_
 - [x] Drafts and deep insert _(`executor-drafts.test.ts`)_
 - [x] Authorization is CAP's: MCP rows equal OData rows per user _(authorization)_
-- [ ] Review: run the `reviewer` agent on M3
+- [x] Review: run the `reviewer` agent on M3 (findings fixed in the `M3 review:` commits)
 
 ## M4 — Adapter (MCP 2026-07-28, stateless)
 
@@ -104,4 +104,4 @@ executor directly inside `cds.test` (call it with `cds.services.X` within a
 
 Multitenancy and extensibility · structured errors polish · OpenTelemetry and audit logging ·
 long-running actions (tasks extension) · `subscriptions/listen` · binary resources ·
-file-based prompts · row and call budgets · entities with parameters (`entity P(p: Integer)`; exposed today without a way to pass `p`). Add tasks here when 2.0 is out.
+file-based prompts · row and call budgets · localized titles, descriptions and error messages (`{i18n>…}` texts are left out today; CAP error details carry codes only) · decide whether 4xx errors from remote services are passed to agents verbatim · entities with parameters (`entity P(p: Integer)`; exposed today without a way to pass `p`). Add tasks here when 2.0 is out.

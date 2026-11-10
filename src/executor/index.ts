@@ -1,4 +1,3 @@
-import { NotImplementedError } from "../errors";
 import { DEFAULT_LIMITS, OPERATORS, type Limits } from "../schema-mapper";
 import { view } from "../exposure-registry/access";
 import type {
@@ -172,7 +171,8 @@ export class Executor {
       const writes = target.action === "create" || target.action === "update";
       return run(keyArgs, writes ? object(data, "data") : {});
     }
-    throw new NotImplementedError(`execute(${target.kind})`, "M3");
+    // describe, list_entities, describe_entity and call_operation are handled in execute().
+    throw new Error(`Unexpected tool target ${JSON.stringify(target)}`);
   }
 
   /** One runner per entity mode: (key, data) → result. */

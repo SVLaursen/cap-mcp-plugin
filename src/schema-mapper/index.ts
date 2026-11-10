@@ -254,7 +254,7 @@ function object(fields: FieldSpec[], required: FieldSpec[]): JsonSchema {
 }
 
 /** What the executor returns as structuredContent for an entity tool. */
-export function entityOutputSchema(entity: EntitySpec, mode: EntityMode): JsonSchema | undefined {
+export function entityOutputSchema(entity: EntitySpec, mode: EntityMode): JsonSchema {
   const row = record(entity.fields);
   switch (mode) {
     case "query":
@@ -272,7 +272,18 @@ export function entityOutputSchema(entity: EntitySpec, mode: EntityMode): JsonSc
     case "update":
       return row;
     case "delete":
-      return undefined;
+      // { deleted: <the key> }, so the agent sees which record went.
+      return {
+        type: "object",
+        properties: {
+          deleted: {
+            type: "object",
+            properties: Object.fromEntries(entity.keys.map((k) => [k.name, fieldToSchema(k)])),
+            required: entity.keys.map((k) => k.name),
+          },
+        },
+        required: ["deleted"],
+      };
   }
 }
 
