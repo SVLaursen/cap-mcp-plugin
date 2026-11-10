@@ -23,7 +23,7 @@ Fast loop: `npm run test:contract`.
 - [x] `@mcp.omit` never reaches FieldSpecs _(opt-in)_
 - [x] Write modes, resource, prompts, ui, elicit, completion, describe, compact, deepInsert, draft flags _(opt-in)_
 - [x] Names and descriptions fallback chain _(names and descriptions)_
-- [ ] Field shapes: keys, mandatory, readonly, enum, length/precision/scale, range, FK targets, `Entity:element` params _(field shapes)_
+- [x] Field shapes: keys, mandatory, readonly, enum, length/precision/scale, range, FK targets, `Entity:element` params _(field shapes)_
 - [ ] Diagnostics: unknown keys, v1 annotations, bound op without keys, `@mcp.omit` on a key (warn); demo reads with zero errors _(diagnostics)_
 - [ ] Schema mapper: scalar types _(`schema-mapper.test.ts` › scalar types)_
 - [ ] Schema mapper: tool input schemas per mode and for operations _(input)_

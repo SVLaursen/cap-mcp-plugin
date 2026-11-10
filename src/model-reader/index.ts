@@ -35,6 +35,11 @@ interface Definition {
   type?: string;
   target?: string;
   key?: boolean;
+  notNull?: boolean;
+  length?: number;
+  precision?: number;
+  scale?: number;
+  enum?: Record<string, { val?: string | number }>;
   doc?: string;
   elements?: Record<string, Definition>;
   actions?: Record<string, Definition>;
@@ -110,7 +115,7 @@ function readEntity(name: string, service: string, def: Definition, ctx: Context
   const elements = Object.entries(def.elements ?? {});
   const fields = elements
     .filter(([, el]) => !ASSOCIATION.has(el.type ?? "") && !isExcluded(el) && !isOmitted(el))
-    .map(([field, el]) => readField(field, el));
+    .map(([field, el]) => readField(field, el, def.elements));
   return {
     name,
     service,
@@ -196,16 +201,42 @@ function readPrompts(service: string, def: Definition): PromptSpec[] {
   }));
 }
 
-function readField(name: string, def: Definition): FieldSpec {
+/**
+ * One element or parameter as the agent sees it. Node.js-flavoured CSN has already resolved
+ * named types and `Entity:element` references to builtins, with enums inlined.
+ * `siblings` are the other elements of the same entity, to find a foreign key's association.
+ */
+function readField(
+  name: string,
+  def: Definition,
+  siblings: Record<string, Definition> = {},
+): FieldSpec {
+  const association = str(def["@odata.foreignKey4"]);
+  const range = def["@assert.range"];
   return {
     name,
     cdsType: def.type ?? "",
     key: def.key === true,
     description: str(def["@mcp.hint"]) ?? str(def["@description"]) ?? def.doc,
-    mandatory: false,
-    readonly: false,
+    mandatory: def.notNull === true || def["@mandatory"] === true,
+    readonly:
+      def["@readonly"] === true ||
+      def["@Core.Computed"] === true ||
+      def["@cds.on.insert"] !== undefined ||
+      def["@cds.on.update"] !== undefined,
+    enum: def.enum && Object.entries(def.enum).map(([symbol, { val }]) => val ?? symbol),
+    length: def.length,
+    precision: def.precision,
+    scale: def.scale,
+    range: Array.isArray(range) ? [bound(range[0]), bound(range[1])] : undefined,
+    target: association ? siblings[association]?.target : undefined,
     completion: def["@mcp.completion"] === true,
   };
+}
+
+/** An @assert.range bound; `_` (open) compiles to `{ "=": "_" }`. */
+function bound(value: unknown): number | undefined {
+  return typeof value === "number" ? value : undefined;
 }
 
 function invalid(ctx: Context, target: string, message: string): void {

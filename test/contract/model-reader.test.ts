@@ -470,12 +470,167 @@ describe("model-reader: names and descriptions", () => {
 });
 
 describe("model-reader: field shapes", () => {
-  test.todo("keys are FieldSpecs with key: true, in declaration order");
-  test.todo("@mandatory and not null set mandatory: true");
-  test.todo("@readonly, @Core.Computed and managed fields set readonly: true");
-  test.todo("enum types list their values; length, precision, scale and @assert.range are carried");
-  test.todo("managed associations appear as their foreign key fields with target set");
-  test.todo("operation parameters typed as Entity:element resolve to the element's builtin type");
+  /** The fields of the one entity a snippet's service declares first. */
+  function fieldsOf(source: string): FieldSpec[] {
+    const [entity] = onlyService(readModel(compileSnippet(source)).spec).entities;
+    if (!entity) throw new Error("expected an entity");
+    return entity.fields;
+  }
+  const pick = <K extends keyof FieldSpec>(fields: FieldSpec[], key: K) =>
+    fields.map((f) => [f.name, f[key]]);
+
+  test("keys are FieldSpecs with key: true, in declaration order", () => {
+    const csn = compileSnippet(`
+      @mcp service S { entity Editions { key isbn: String(13); title: String; key edition: Integer; } }
+    `);
+    const [entity] = onlyService(readModel(csn).spec).entities;
+    expect(entity?.keys).toEqual([
+      {
+        name: "isbn",
+        cdsType: "cds.String",
+        key: true,
+        mandatory: false,
+        readonly: false,
+        length: 13,
+        completion: false,
+      },
+      {
+        name: "edition",
+        cdsType: "cds.Integer",
+        key: true,
+        mandatory: false,
+        readonly: false,
+        completion: false,
+      },
+    ]);
+  });
+
+  test("@mandatory and not null set mandatory: true", () => {
+    const fields = fieldsOf(`
+      @mcp service S { entity Books { key ID: Integer; title: String not null; @mandatory descr: String; note: String; } }
+    `);
+    expect(pick(fields, "mandatory")).toEqual([
+      ["ID", false],
+      ["title", true],
+      ["descr", true],
+      ["note", false],
+    ]);
+  });
+
+  test("@readonly, @Core.Computed and managed fields set readonly: true", () => {
+    const fields = fieldsOf(`
+      aspect managed {
+        createdAt: Timestamp @cds.on.insert: $now;
+        modifiedAt: Timestamp @cds.on.insert: $now @cds.on.update: $now;
+      }
+      @mcp service S {
+        entity Books : managed {
+          key ID: Integer;
+          @readonly stock: Integer;
+          @Core.Computed total: Decimal;
+          virtual rating: Integer;
+          title: String;
+        }
+      }
+    `);
+    expect(pick(fields, "readonly")).toEqual([
+      ["createdAt", true],
+      ["modifiedAt", true],
+      ["ID", false],
+      ["stock", true],
+      ["total", true],
+      ["rating", true],
+      ["title", false],
+    ]);
+  });
+
+  test("enum types list their values; length, precision, scale and @assert.range are carried", () => {
+    const fields = fieldsOf(`
+      type Status : String(1) enum { open = 'O'; closed = 'C'; }
+      @mcp service S {
+        entity Books {
+          key ID: Integer;
+          status: Status;
+          level: Integer enum { low = 1; high = 3; };
+          colour: String enum { red; green; };
+          price: Decimal(9, 2);
+          @assert.range: [0, 100] pct: Integer;
+          @assert.range: [_, 10] capped: Integer;
+        }
+      }
+    `);
+    const shape = ({ name, enum: values, length, precision, scale, range }: FieldSpec) => ({
+      name,
+      ...(values && { enum: values }),
+      ...(length !== undefined && { length }),
+      ...(precision !== undefined && { precision, scale }),
+      ...(range && { range }),
+    });
+    expect(fields.map(shape)).toEqual([
+      { name: "ID" },
+      { name: "status", enum: ["O", "C"], length: 1 },
+      { name: "level", enum: [1, 3] },
+      { name: "colour", enum: ["red", "green"] },
+      { name: "price", precision: 9, scale: 2 },
+      { name: "pct", range: [0, 100] },
+      { name: "capped", range: [undefined, 10] },
+    ]);
+  });
+
+  test("managed associations appear as their foreign key fields with target set", () => {
+    const fields = fieldsOf(`
+      @mcp service S {
+        entity Books { key ID: Integer; author: Association to Authors; genre: Association to Genres; }
+        entity Authors { key ID: Integer; }
+        entity Genres { key code: String; key lang: String; }
+      }
+    `);
+    expect(pick(fields, "target")).toEqual([
+      ["ID", undefined],
+      ["author_ID", "S.Authors"],
+      ["genre_code", "S.Genres"],
+      ["genre_lang", "S.Genres"],
+    ]);
+  });
+
+  test("operation parameters typed as Entity:element resolve to the element's builtin type", () => {
+    const csn = compileSnippet(`
+      type Status : String(1) enum { open = 'O'; closed = 'C'; }
+      @mcp service S {
+        entity Books { key ID: Integer; status: Status; }
+        @mcp action order(book: Books:ID, status: Books:status, quantity: Integer not null);
+      }
+    `);
+    const [order] = onlyService(readModel(csn).spec).operations;
+    expect(order?.params).toEqual([
+      {
+        name: "book",
+        cdsType: "cds.Integer",
+        key: false,
+        mandatory: false,
+        readonly: false,
+        completion: false,
+      },
+      {
+        name: "status",
+        cdsType: "cds.String",
+        key: false,
+        mandatory: false,
+        readonly: false,
+        enum: ["O", "C"],
+        length: 1,
+        completion: false,
+      },
+      {
+        name: "quantity",
+        cdsType: "cds.Integer",
+        key: false,
+        mandatory: true,
+        readonly: false,
+        completion: false,
+      },
+    ]);
+  });
 });
 
 describe("model-reader: diagnostics", () => {
