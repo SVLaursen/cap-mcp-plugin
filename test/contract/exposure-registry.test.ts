@@ -4,7 +4,7 @@
 import cds from "@sap/cds";
 import { ExposureRegistry, registryCache } from "../../src/exposure-registry";
 import { readModel } from "../../src/model-reader";
-import type { ToolSpec, UserLike } from "../../src/types";
+import type { JsonSchema, ToolSpec, UserLike } from "../../src/types";
 import { compileSnippet } from "../helpers/snippet";
 
 /** A user with exactly these roles. CAP's pseudo roles are not modelled here. */
@@ -216,6 +216,25 @@ describe("exposure-registry: tool list", () => {
       destructiveHint: false,
       idempotentHint: false,
     });
+  });
+
+  test("compact: call_operation names each operation's parameters; query reuses the mapper's pieces", () => {
+    const tools = registry(`
+      @mcp @mcp.compact service C {
+        entity Books { key ID: Integer; }
+        function stock(genre: Integer, @mandatory region: String) returns Integer;
+      }
+    `).toolsFor(user());
+    const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
+    expect(byName.C_call_operation?.description).toContain(
+      "C.stock(genre: Integer, region: String required)",
+    );
+    const query = byName.C_query?.inputSchema.properties as Record<string, JsonSchema>;
+    const where = (query.where?.items as JsonSchema).properties as Record<string, JsonSchema>;
+    expect(where.op).toEqual({
+      enum: ["eq", "ne", "gt", "ge", "lt", "le", "in", "contains", "startswith", "endswith"],
+    });
+    expect(query.top).toEqual({ type: "integer", minimum: 1, maximum: 200, default: 25 });
   });
 
   test("@mcp.ui operations carry the ui resource link in the tool's _meta", () => {

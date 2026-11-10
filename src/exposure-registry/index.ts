@@ -1,5 +1,7 @@
 import { readModel } from "../model-reader";
 import {
+  DEFAULT_LIMITS,
+  OPERATORS,
   entityInputSchema,
   entityOutputSchema,
   operationInputSchema,
@@ -162,7 +164,7 @@ export class ExposureRegistry {
     if (service.compact) {
       // An MCP App is bound to its own tool, so @mcp.ui operations stay separate.
       const [ui, rest] = partition(service.operations, (op) => op.ui !== undefined);
-      tools.push(...compactTools(service, rest, limits?.maxRows).map((tool) => tag(tool)));
+      tools.push(...compactTools(service, rest, limits).map((tool) => tag(tool)));
       for (const op of ui) {
         const bound = lookup(op.boundTo ?? "");
         tools.push(tag(operationTool(service, op, bound), op.requires ?? bound?.requires));
@@ -224,124 +226,142 @@ function describeTool(service: ServiceSpec): ToolSpec {
   };
 }
 
-const OBJECT = { type: "object" };
-
 /**
  * The generic tool set of an @mcp.compact service. Field-level shapes are not in these schemas
- * (they depend on the entity argument); agents get them from describe_entity, and the executor
- * validates arguments against the entity's own schemas.
+ * (they depend on the entity argument): agents get them from describe_entity, and the executor
+ * checks every argument against the target's own schema.
  */
-function compactTools(service: ServiceSpec, ops: OperationSpec[], maxRows = 200): ToolSpec[] {
+function compactTools(
+  service: ServiceSpec,
+  ops: OperationSpec[],
+  limits = DEFAULT_LIMITS,
+): ToolSpec[] {
   const withMode = (mode: EntityMode) =>
     service.entities.filter((e) => e.modes.has(mode)).map((e) => e.name);
-  const entityArg = (names: string[]) => ({ entity: { enum: names } });
-  const object = (properties: Record<string, unknown>, required: string[]) => ({
+  const all = service.entities.map((e) => e.name);
+  const record = { type: "object", description: "Field values, as describe_entity lists them" };
+  const key = { type: "object", description: "The record's key fields" };
+  const args = (properties: Record<string, unknown>, required: string[]) => ({
     type: "object",
     properties,
     required,
     additionalProperties: false,
   });
-  const all = service.entities.map((e) => e.name);
-  const candidates: [
-    CompactAction,
-    string[] | undefined,
-    string,
-    Record<string, unknown>,
-    Hints,
-  ][] = [
-    [
-      "list_entities",
-      all,
-      "List the entities this service exposes.",
-      { type: "object", properties: {}, additionalProperties: false },
-      READ,
-    ],
-    [
-      "describe_entity",
-      all,
-      "Describe one entity: fields, keys, types and the modes it allows.",
-      object(entityArg(all), ["entity"]),
-      READ,
-    ],
-    [
-      "query",
-      withMode("query"),
-      "Query records of an entity: where/orderby/select by field name, top, cursor, q.",
-      object(
-        {
-          ...entityArg(withMode("query")),
-          q: { type: "string" },
-          where: {
-            type: "array",
-            items: object({ field: { type: "string" }, op: { type: "string" }, value: {} }, [
-              "field",
-              "op",
-              "value",
-            ]),
+  const generic: {
+    action: CompactAction;
+    entities: string[];
+    description: string;
+    input: (entity: { enum: string[] }) => Record<string, unknown>;
+    hints: Hints;
+  }[] = [
+    {
+      action: "describe_entity",
+      entities: all,
+      description: "Describe one entity: fields, keys, types and the modes it allows.",
+      input: (entity) => args({ entity }, ["entity"]),
+      hints: READ,
+    },
+    {
+      action: "query",
+      entities: withMode("query"),
+      description:
+        "Query records of an entity: where/orderby/select by field name, top, cursor, q.",
+      input: (entity) =>
+        args(
+          {
+            entity,
+            q: { type: "string" },
+            where: {
+              type: "array",
+              items: args({ field: { type: "string" }, op: { enum: OPERATORS }, value: {} }, [
+                "field",
+                "op",
+                "value",
+              ]),
+            },
+            orderby: {
+              type: "array",
+              items: args({ field: { type: "string" }, dir: { enum: ["asc", "desc"] } }, ["field"]),
+            },
+            select: { type: "array", items: { type: "string" }, uniqueItems: true },
+            top: {
+              type: "integer",
+              minimum: 1,
+              maximum: limits.maxRows,
+              default: limits.defaultRows,
+            },
+            cursor: { type: "string" },
           },
-          orderby: {
-            type: "array",
-            items: object({ field: { type: "string" }, dir: { enum: ["asc", "desc"] } }, ["field"]),
-          },
-          select: { type: "array", items: { type: "string" }, uniqueItems: true },
-          top: { type: "integer", minimum: 1, maximum: maxRows },
-          cursor: { type: "string" },
-        },
-        ["entity"],
-      ),
-      READ,
-    ],
-    [
-      "get",
-      withMode("get"),
-      "Get one record of an entity by key.",
-      object({ ...entityArg(withMode("get")), key: OBJECT }, ["entity", "key"]),
-      HINTS.get,
-    ],
-    [
-      "create",
-      withMode("create"),
-      "Create a record of an entity.",
-      object({ ...entityArg(withMode("create")), data: OBJECT }, ["entity", "data"]),
-      HINTS.create,
-    ],
-    [
-      "update",
-      withMode("update"),
-      "Update a record of an entity by key; only the fields in data change.",
-      object({ ...entityArg(withMode("update")), key: OBJECT, data: OBJECT }, [
-        "entity",
-        "key",
-        "data",
-      ]),
-      HINTS.update,
-    ],
-    [
-      "delete",
-      withMode("delete"),
-      "Delete a record of an entity by key.",
-      object({ ...entityArg(withMode("delete")), key: OBJECT }, ["entity", "key"]),
-      HINTS.delete,
-    ],
+          ["entity"],
+        ),
+      hints: READ,
+    },
+    {
+      action: "get",
+      entities: withMode("get"),
+      description: "Get one record of an entity by key.",
+      input: (entity) => args({ entity, key }, ["entity", "key"]),
+      hints: HINTS.get,
+    },
+    {
+      action: "create",
+      entities: withMode("create"),
+      description: "Create a record of an entity.",
+      input: (entity) => args({ entity, data: record }, ["entity", "data"]),
+      hints: HINTS.create,
+    },
+    {
+      action: "update",
+      entities: withMode("update"),
+      description: "Update a record of an entity by key; only the fields in data change.",
+      input: (entity) => args({ entity, key, data: record }, ["entity", "key", "data"]),
+      hints: HINTS.update,
+    },
+    {
+      action: "delete",
+      entities: withMode("delete"),
+      description: "Delete a record of an entity by key.",
+      input: (entity) => args({ entity, key }, ["entity", "key"]),
+      hints: HINTS.delete,
+    },
   ];
-  const tools = candidates
-    .filter(([action, names]) => action === "list_entities" || (names?.length ?? 0) > 0)
-    .map(([action, , description, inputSchema, annotations]) =>
-      compactTool(service, action, description, inputSchema, annotations),
-    );
+  const tools = [
+    compactTool(
+      service,
+      "list_entities",
+      "List the entities this service exposes.",
+      args({}, []),
+      READ,
+    ),
+    ...generic
+      .filter((g) => g.entities.length > 0)
+      .map((g) =>
+        compactTool(service, g.action, g.description, g.input({ enum: g.entities }), g.hints),
+      ),
+  ];
   if (ops.length) {
-    const readOnly = ops.every((op) => op.kind === "function");
     tools.push(
       compactTool(
         service,
         "call_operation",
-        "Call one of this service's operations with its arguments (see describe_entity / the service description).",
-        object({ operation: { enum: ops.map((op) => op.name) }, args: OBJECT }, ["operation"]),
-        readOnly ? READ : ACTION,
+        `Call an operation of ${service.title} with its parameters in args: ${ops.map(signature).join("; ")}.`,
+        args({ operation: { enum: ops.map((op) => op.name) }, args: { type: "object" } }, [
+          "operation",
+        ]),
+        ops.every((op) => op.kind === "function") ? READ : ACTION,
       ),
     );
   }
   return tools;
+}
+
+/** `C.stock(genre: Integer, region: String required)`, so call_operation's args can be found. */
+function signature(op: OperationSpec): string {
+  const params = op.params.map((p) => {
+    const type = p.cdsType.replace(/^cds\./, "");
+    return `${p.name}: ${p.many ? `array of ${type}` : type}${p.mandatory ? " required" : ""}`;
+  });
+  return `${op.name}(${params.join(", ")})`;
 }
 
 function compactTool(

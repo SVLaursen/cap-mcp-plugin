@@ -98,8 +98,20 @@ export interface SchemaOptions {
   entities?: (name: string) => EntitySpec | undefined;
 }
 
-const DEFAULT_LIMITS: Limits = { maxRows: 200, defaultRows: 25 };
-const OPERATORS = ["eq", "ne", "gt", "ge", "lt", "le", "in", "contains", "startswith", "endswith"];
+export const DEFAULT_LIMITS: Limits = { maxRows: 200, defaultRows: 25 };
+/** Comparison operators of the query tools' `where`. */
+export const OPERATORS = [
+  "eq",
+  "ne",
+  "gt",
+  "ge",
+  "lt",
+  "le",
+  "in",
+  "contains",
+  "startswith",
+  "endswith",
+];
 
 export function entityInputSchema(
   entity: EntitySpec,
