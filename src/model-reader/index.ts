@@ -121,7 +121,51 @@ export function readModel(csn: unknown): ModelReadResult {
     .filter(([, def]) => def.kind === "service")
     .map(([name, def]) => readService(name, def, ctx))
     .filter((s): s is ServiceSpec => s !== undefined);
+  checkUnused(ctx, services);
   return { spec: { services }, diagnostics: ctx.diagnostics };
+}
+
+/**
+ * Feature annotations (@mcp.*) on a service, entity or operation that ends up not exposed have
+ * no effect; say so instead of failing silently. Definitions excluded on purpose (@mcp: false,
+ * @cds.api.ignore) and ones already reported as errors are skipped.
+ */
+function checkUnused(ctx: Context, services: ServiceSpec[]): void {
+  const exposed = new Set(
+    services.flatMap((s) => [
+      s.name,
+      ...s.entities.map((e) => e.name),
+      ...s.operations.map((o) => o.name),
+    ]),
+  );
+  const reported = new Set(ctx.diagnostics.filter((d) => d.level === "error").map((d) => d.target));
+  const report = (target: string, def: Definition) => {
+    if (exposed.has(target) || reported.has(target) || isExcluded(def)) return;
+    const keys = Object.keys(def).filter((key) => key.startsWith("@mcp.") && KNOWN.has(key));
+    if (keys.length === 0) return;
+    ctx.diagnostics.push({
+      level: "warn",
+      code: "UNUSED_ANNOTATION",
+      target,
+      message: `${keys.join(", ")} on ${target} has no effect: ${target} is not exposed over MCP`,
+    });
+  };
+  const serviceNames = Object.entries(ctx.definitions)
+    .filter(([, def]) => def.kind === "service")
+    .map(([name]) => name);
+  for (const [name, def] of Object.entries(ctx.definitions)) {
+    if (def.kind === "service") {
+      report(name, def);
+      continue;
+    }
+    const service = serviceNames.find((s) => name.startsWith(`${s}.`));
+    if (!service || isExcluded(ctx.definitions[service] ?? {})) continue;
+    if (def.kind === "function" || def.kind === "action") report(name, def);
+    if (def.kind !== "entity" || isExcluded(def)) continue;
+    if (isGenerated(name, def, ctx.definitions) && !isOptedIn(def)) continue;
+    report(name, def);
+    for (const [action, op] of Object.entries(def.actions ?? {})) report(`${name}.${action}`, op);
+  }
 }
 
 function readService(service: string, def: Definition, ctx: Context): ServiceSpec | undefined {
@@ -179,7 +223,7 @@ function readService(service: string, def: Definition, ctx: Context): ServiceSpe
     describe: def["@mcp.describe"] === true,
     entities,
     operations,
-    prompts: readPrompts(service, def),
+    prompts: readPrompts(service, def, ctx),
   };
 }
 
@@ -365,23 +409,42 @@ function readUi(name: string, def: Definition, ctx: Context): string | undefined
   return undefined;
 }
 
-function readPrompts(service: string, def: Definition): PromptSpec[] {
+function readPrompts(service: string, def: Definition, ctx: Context): PromptSpec[] {
   const prompts = def["@mcp.prompts"];
-  if (!Array.isArray(prompts)) return [];
-  return prompts.map((prompt: Record<string, unknown>) => ({
-    name: str(prompt.name) ?? "",
-    service,
-    title: str(prompt.title),
-    description: str(prompt.description),
-    template: str(prompt.template) ?? "",
-    role: prompt.role === "assistant" ? "assistant" : "user",
-    inputs: Array.isArray(prompt.inputs)
-      ? prompt.inputs.map((input: Record<string, unknown>) => ({
-          key: str(input.key) ?? "",
-          type: str(input.type) ?? "",
-        }))
-      : [],
-  }));
+  if (prompts === undefined) return [];
+  if (!Array.isArray(prompts)) {
+    invalid(ctx, service, "@mcp.prompts must be a list of prompt objects");
+    return [];
+  }
+  return prompts.flatMap((prompt: Record<string, unknown>) => {
+    const name = str(prompt.name);
+    const template = str(prompt.template);
+    const role = prompt.role ?? "user";
+    if (!name || !template || (role !== "user" && role !== "assistant")) {
+      invalid(
+        ctx,
+        service,
+        `@mcp.prompts entry ${JSON.stringify(prompt.name ?? null)} needs a name, a template and role 'user' or 'assistant'`,
+      );
+      return [];
+    }
+    return [
+      {
+        name,
+        service,
+        title: str(prompt.title),
+        description: str(prompt.description),
+        template,
+        role,
+        inputs: Array.isArray(prompt.inputs)
+          ? prompt.inputs.map((input: Record<string, unknown>) => ({
+              key: str(input.key) ?? "",
+              type: str(input.type) ?? "",
+            }))
+          : [],
+      },
+    ];
+  });
 }
 
 /**

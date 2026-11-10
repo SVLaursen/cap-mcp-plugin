@@ -952,6 +952,50 @@ describe("model-reader: diagnostics", () => {
     expect(onlyService(spec).operations.map((o) => o.name)).toEqual(["S.Orders.close"]);
   });
 
+  test("feature annotations on definitions that are never exposed yield UNUSED_ANNOTATION", () => {
+    const csn = compileSnippet(`
+      @mcp.describe @mcp.prompts: [{ name: 'p', template: 't' }]
+      service S {
+        @mcp.wrap.modes: ['create'] @mcp.resource entity Books { key ID: Integer; }
+        @mcp.ui: 'ui://x/y.html' function card() returns Integer;
+        @mcp.elicit: ['confirm'] action go();
+      }
+      @mcp service T {
+        @mcp.name: 'Hidden' @mcp: false entity Hidden { key ID: Integer; }
+        @mcp.elicit: ['confirm'] action stay();
+      }
+    `);
+    const { spec, diagnostics } = readModel(csn);
+    expect(spec.services.map((x) => x.name)).toEqual(["T"]);
+    expect(codes(diagnostics)).toEqual([
+      { level: "warn", code: "UNUSED_ANNOTATION", target: "S" },
+      { level: "warn", code: "UNUSED_ANNOTATION", target: "S.Books" },
+      { level: "warn", code: "UNUSED_ANNOTATION", target: "S.card" },
+      { level: "warn", code: "UNUSED_ANNOTATION", target: "S.go" },
+      { level: "warn", code: "UNUSED_ANNOTATION", target: "T.stay" },
+    ]);
+    expect(diagnostics[1]?.message).toContain("@mcp.wrap.modes");
+  });
+
+  test("an @mcp.prompts entry without name or template, or with an unknown role, is a diagnostic", () => {
+    const csn = compileSnippet(`
+      @mcp @mcp.prompts: [
+        { name: 'ok', template: 'Hi' },
+        { template: 'no name' },
+        { name: 'no-template' },
+        { name: 'bad-role', template: 'x', role: 'system' }
+      ]
+      service S {}
+    `);
+    const { spec, diagnostics } = readModel(csn);
+    expect(onlyService(spec).prompts.map((p) => p.name)).toEqual(["ok"]);
+    expect(codes(diagnostics)).toEqual([
+      { level: "error", code: "INVALID_ANNOTATION_VALUE", target: "S" },
+      { level: "error", code: "INVALID_ANNOTATION_VALUE", target: "S" },
+      { level: "error", code: "INVALID_ANNOTATION_VALUE", target: "S" },
+    ]);
+  });
+
   test("the demo model reads with zero error-level diagnostics", async () => {
     const { diagnostics } = readModel(await compileDemo());
     expect(diagnostics.filter((d) => d.level === "error")).toEqual([]);

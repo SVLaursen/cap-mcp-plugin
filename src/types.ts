@@ -141,6 +141,8 @@ export type DiagnosticCode =
   | "UNKNOWN_ANNOTATION"
   | "INVALID_ANNOTATION_VALUE"
   | "BOUND_OPERATION_WITHOUT_KEYS"
+  /** An @mcp.* feature annotation on a definition that is not exposed, so it has no effect. */
+  | "UNUSED_ANNOTATION"
   /** A bound operation parameter with the name of one of its entity's keys. */
   | "PARAMETER_SHADOWS_KEY"
   /** An element or parameter type with no JSON Schema mapping; agents see it as "any value". */
