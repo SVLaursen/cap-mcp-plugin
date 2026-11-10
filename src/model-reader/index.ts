@@ -1,9 +1,11 @@
 import type {
+  Diagnostic,
   EntityMode,
   EntitySpec,
   FieldSpec,
   ModelReadResult,
   OperationSpec,
+  PromptSpec,
   ServiceSpec,
 } from "../types";
 
@@ -36,6 +38,8 @@ interface Definition {
   doc?: string;
   elements?: Record<string, Definition>;
   actions?: Record<string, Definition>;
+  params?: Record<string, Definition>;
+  drafts?: Definition;
   [annotation: `@${string}`]: unknown;
 }
 
@@ -43,38 +47,49 @@ interface Csn {
   definitions?: Record<string, Definition>;
 }
 
-const ASSOCIATION = new Set(["cds.Association", "cds.Composition"]);
-const BASELINE: ReadonlySet<EntityMode> = new Set(["query", "get"]);
-
-export function readModel(csn: unknown): ModelReadResult {
-  const definitions = (csn as Csn).definitions ?? {};
-  const services = Object.entries(definitions)
-    .filter(([, def]) => def.kind === "service")
-    .map(([name, def]) => readService(name, def, definitions))
-    .filter((s): s is ServiceSpec => s !== undefined);
-  return { spec: { services }, diagnostics: [] };
+/** What every read step needs: the whole model, and somewhere to report problems. */
+interface Context {
+  definitions: Record<string, Definition>;
+  diagnostics: Diagnostic[];
 }
 
-function readService(
-  service: string,
-  def: Definition,
-  definitions: Record<string, Definition>,
-): ServiceSpec | undefined {
+const ASSOCIATION = new Set(["cds.Association", "cds.Composition"]);
+const BASELINE: readonly EntityMode[] = ["query", "get"];
+const MODES: ReadonlySet<string> = new Set<EntityMode>([
+  "query",
+  "get",
+  "create",
+  "update",
+  "delete",
+]);
+
+export function readModel(csn: unknown): ModelReadResult {
+  const ctx: Context = { definitions: (csn as Csn).definitions ?? {}, diagnostics: [] };
+  const services = Object.entries(ctx.definitions)
+    .filter(([, def]) => def.kind === "service")
+    .map(([name, def]) => readService(name, def, ctx))
+    .filter((s): s is ServiceSpec => s !== undefined);
+  return { spec: { services }, diagnostics: ctx.diagnostics };
+}
+
+function readService(service: string, def: Definition, ctx: Context): ServiceSpec | undefined {
   const optedIn = isOptedIn(def);
   const entities: EntitySpec[] = [];
   const operations: OperationSpec[] = [];
 
-  for (const [name, member] of Object.entries(definitions)) {
+  for (const [name, member] of Object.entries(ctx.definitions)) {
     if (!name.startsWith(`${service}.`) || isExcluded(member)) continue;
-    if (member.kind === "entity" && !isGenerated(name, member, definitions)) {
-      if (optedIn || isOptedIn(member)) entities.push(readEntity(name, service, member));
+    if (member.kind === "entity" && !isGenerated(name, member, ctx.definitions)) {
+      if (optedIn || isOptedIn(member)) entities.push(readEntity(name, service, member, ctx));
       for (const [action, op] of Object.entries(member.actions ?? {})) {
         if (exposesOperation(op, optedIn)) {
-          operations.push(readOperation(`${name}.${action}`, service, op, name));
+          operations.push(readOperation(`${name}.${action}`, service, op, ctx, name));
         }
       }
     } else if (member.kind === "function" || member.kind === "action") {
-      if (exposesOperation(member, optedIn)) operations.push(readOperation(name, service, member));
+      if (exposesOperation(member, optedIn)) {
+        operations.push(readOperation(name, service, member, ctx));
+      }
     }
   }
 
@@ -83,16 +98,17 @@ function readService(
     name: service,
     title: str(def["@title"]) ?? service,
     description: describe(def),
-    compact: false,
-    describe: false,
+    compact: def["@mcp.compact"] === true,
+    describe: def["@mcp.describe"] === true,
     entities,
     operations,
-    prompts: [],
+    prompts: readPrompts(service, def),
   };
 }
 
-function readEntity(name: string, service: string, def: Definition): EntitySpec {
-  const fields = Object.entries(def.elements ?? {})
+function readEntity(name: string, service: string, def: Definition, ctx: Context): EntitySpec {
+  const elements = Object.entries(def.elements ?? {});
+  const fields = elements
     .filter(([, el]) => !ASSOCIATION.has(el.type ?? "") && !isExcluded(el) && !isOmitted(el))
     .map(([field, el]) => readField(field, el));
   return {
@@ -102,18 +118,41 @@ function readEntity(name: string, service: string, def: Definition): EntitySpec 
     description: describe(def),
     keys: fields.filter((f) => f.key),
     fields,
-    modes: BASELINE,
-    resource: false,
-    draft: false,
-    deepInsert: [],
+    modes: readModes(name, def, ctx),
+    resource: def["@mcp.resource"] === true,
+    // Linked CSN gives draft roots and the compositions inside them a `drafts` entity.
+    draft: def["@odata.draft.enabled"] === true || def.drafts !== undefined,
+    deepInsert: elements
+      .filter(([, el]) => el.type === "cds.Composition" && el["@mcp.deepInsert"] === true)
+      .map(([element]) => element),
     searchable: false,
   };
+}
+
+/** Baseline query + get, plus whatever @mcp.wrap.modes lists. Unknown modes are reported. */
+function readModes(name: string, def: Definition, ctx: Context): ReadonlySet<EntityMode> {
+  const listed = def["@mcp.wrap.modes"];
+  if (listed === undefined) return new Set(BASELINE);
+  const values: unknown[] = Array.isArray(listed) ? listed : [listed];
+  const modes = new Set<EntityMode>(BASELINE);
+  for (const value of values) {
+    if (typeof value === "string" && MODES.has(value)) modes.add(value as EntityMode);
+    else {
+      invalid(
+        ctx,
+        name,
+        `@mcp.wrap.modes: unknown mode ${JSON.stringify(value)} (allowed: create, update, delete)`,
+      );
+    }
+  }
+  return modes;
 }
 
 function readOperation(
   name: string,
   service: string,
   def: Definition,
+  ctx: Context,
   boundTo?: string,
 ): OperationSpec {
   return {
@@ -122,8 +161,38 @@ function readOperation(
     kind: def.kind === "function" ? "function" : "action",
     boundTo,
     description: describe(def),
-    params: [],
+    params: Object.entries(def.params ?? {}).map(([param, p]) => readField(param, p)),
+    elicit: strings(def["@mcp.elicit"]),
+    ui: readUi(name, def, ctx),
   };
+}
+
+/** MCP Apps UI resources live under ui:// (issue #133); anything else is a mistake. */
+function readUi(name: string, def: Definition, ctx: Context): string | undefined {
+  const ui = def["@mcp.ui"];
+  if (ui === undefined) return undefined;
+  if (typeof ui === "string" && ui.startsWith("ui://")) return ui;
+  invalid(ctx, name, `@mcp.ui must be a ui:// resource URI, got ${JSON.stringify(ui)}`);
+  return undefined;
+}
+
+function readPrompts(service: string, def: Definition): PromptSpec[] {
+  const prompts = def["@mcp.prompts"];
+  if (!Array.isArray(prompts)) return [];
+  return prompts.map((prompt: Record<string, unknown>) => ({
+    name: str(prompt.name) ?? "",
+    service,
+    title: str(prompt.title),
+    description: str(prompt.description),
+    template: str(prompt.template) ?? "",
+    role: prompt.role === "assistant" ? "assistant" : "user",
+    inputs: Array.isArray(prompt.inputs)
+      ? prompt.inputs.map((input: Record<string, unknown>) => ({
+          key: str(input.key) ?? "",
+          type: str(input.type) ?? "",
+        }))
+      : [],
+  }));
 }
 
 function readField(name: string, def: Definition): FieldSpec {
@@ -133,8 +202,12 @@ function readField(name: string, def: Definition): FieldSpec {
     key: def.key === true,
     mandatory: false,
     readonly: false,
-    completion: false,
+    completion: def["@mcp.completion"] === true,
   };
+}
+
+function invalid(ctx: Context, target: string, message: string): void {
+  ctx.diagnostics.push({ level: "error", code: "INVALID_ANNOTATION_VALUE", target, message });
 }
 
 /** Actions need their own @mcp; functions come with the service baseline (ADR 0004). */
@@ -169,6 +242,10 @@ function isGenerated(
 
 function describe(def: Definition): string | undefined {
   return def.doc ?? str(def["@title"]);
+}
+
+function strings(value: unknown): string[] | undefined {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : undefined;
 }
 
 function str(value: unknown): string | undefined {

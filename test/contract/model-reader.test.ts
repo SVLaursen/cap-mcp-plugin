@@ -193,18 +193,190 @@ describe("model-reader: opt-in", () => {
       ["S.Listings", ["ID"], ["ID", "title"]],
     ]);
   });
-  test.todo(
-    "@mcp.wrap.modes adds the listed write modes to query/get; unknown modes are diagnostics",
-  );
-  test.todo("@mcp.resource marks the entity as resource; no other annotation does");
-  test.todo("@mcp.prompts on a service produces PromptSpecs; prompts are not created otherwise");
-  test.todo("@mcp.ui on an operation sets ui to the ui:// URI; a non-ui:// value is a diagnostic");
-  test.todo("@mcp.elicit on an operation sets elicit");
-  test.todo("@mcp.completion on an element or parameter sets completion: true");
-  test.todo("@mcp.describe on a service sets describe: true; default is false");
-  test.todo("@mcp.compact on a service sets compact: true; default is false");
-  test.todo("@mcp.deepInsert on a composition element lists it in deepInsert");
-  test.todo("draft-enabled entities have draft: true");
+  test("@mcp.wrap.modes adds the listed write modes to query/get; unknown modes are diagnostics", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        @mcp.wrap.modes: ['create', 'upsert'] entity Books { key ID: Integer; }
+        entity Authors { key ID: Integer; }
+      }
+    `);
+    const { spec, diagnostics } = readModel(csn);
+    expect(exposed(spec).S?.entities).toEqual({
+      "S.Books": ["create", "get", "query"],
+      "S.Authors": ["get", "query"],
+    });
+    expect(diagnostics).toEqual([
+      {
+        level: "error",
+        code: "INVALID_ANNOTATION_VALUE",
+        target: "S.Books",
+        message: expect.stringContaining('"upsert"'),
+      },
+    ]);
+  });
+
+  test("@mcp.resource marks the entity as resource; no other annotation does", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        @mcp.resource entity Authors { key ID: Integer; }
+        @mcp.wrap.modes: ['create', 'update', 'delete'] entity Books { key ID: Integer; }
+      }
+    `);
+    const { entities } = onlyService(readModel(csn).spec);
+    expect(entities.map((e) => [e.name, e.resource])).toEqual([
+      ["S.Authors", true],
+      ["S.Books", false],
+    ]);
+  });
+
+  test("@mcp.prompts on a service produces PromptSpecs; prompts are not created otherwise", () => {
+    const csn = compileSnippet(`
+      @mcp
+      @mcp.prompts: [{
+        name: 'restock-plan', title: 'Restock plan', description: 'Suggest restocks',
+        template: 'Books below {{threshold}}', role: 'user',
+        inputs: [{ key: 'threshold', type: 'Integer' }]
+      }]
+      service S {}
+      @mcp service T {}
+    `);
+    const { services } = readModel(csn).spec;
+    expect(services.map((s) => [s.name, s.prompts])).toEqual([
+      [
+        "S",
+        [
+          {
+            name: "restock-plan",
+            service: "S",
+            title: "Restock plan",
+            description: "Suggest restocks",
+            template: "Books below {{threshold}}",
+            role: "user",
+            inputs: [{ key: "threshold", type: "Integer" }],
+          },
+        ],
+      ],
+      ["T", []],
+    ]);
+  });
+
+  test("@mcp.ui on an operation sets ui to the ui:// URI; a non-ui:// value is a diagnostic", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        @mcp.ui: 'ui://shop/card.html' function card() returns Integer;
+        @mcp.ui: 'https://example.com/card.html' function page() returns Integer;
+        function plain() returns Integer;
+      }
+    `);
+    const { spec, diagnostics } = readModel(csn);
+    expect(onlyService(spec).operations.map((o) => [o.name, o.ui])).toEqual([
+      ["S.card", "ui://shop/card.html"],
+      ["S.page", undefined],
+      ["S.plain", undefined],
+    ]);
+    expect(diagnostics).toEqual([
+      {
+        level: "error",
+        code: "INVALID_ANNOTATION_VALUE",
+        target: "S.page",
+        message: expect.stringContaining("ui://"),
+      },
+    ]);
+  });
+
+  test("@mcp.elicit on an operation sets elicit", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        entity Orders { key ID: Integer; } actions {
+          @mcp @mcp.elicit: ['confirm'] action cancel(reason: String);
+        }
+        @mcp action order();
+      }
+    `);
+    expect(onlyService(readModel(csn).spec).operations.map((o) => [o.name, o.elicit])).toEqual([
+      ["S.Orders.cancel", ["confirm"]],
+      ["S.order", undefined],
+    ]);
+  });
+
+  test("@mcp.completion on an element or parameter sets completion: true", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        entity Books { key ID: Integer; @mcp.completion genre: String; title: String; }
+        @mcp action order(@mcp.completion book: Integer, quantity: Integer);
+      }
+    `);
+    const service = onlyService(readModel(csn).spec);
+    const completion = (fields: FieldSpec[]) => fields.map((f) => [f.name, f.completion]);
+    expect(service.entities.map((e) => completion(e.fields))).toEqual([
+      [
+        ["ID", false],
+        ["genre", true],
+        ["title", false],
+      ],
+    ]);
+    expect(service.operations.map((o) => completion(o.params))).toEqual([
+      [
+        ["book", true],
+        ["quantity", false],
+      ],
+    ]);
+  });
+
+  test("@mcp.describe on a service sets describe: true; default is false", () => {
+    const csn = compileSnippet(`@mcp @mcp.describe service S {} @mcp service T {}`);
+    expect(readModel(csn).spec.services.map((s) => [s.name, s.describe])).toEqual([
+      ["S", true],
+      ["T", false],
+    ]);
+  });
+
+  test("@mcp.compact on a service sets compact: true; default is false", () => {
+    const csn = compileSnippet(`@mcp @mcp.compact service S {} @mcp service T {}`);
+    expect(readModel(csn).spec.services.map((s) => [s.name, s.compact])).toEqual([
+      ["S", true],
+      ["T", false],
+    ]);
+  });
+
+  test("@mcp.deepInsert on a composition element lists it in deepInsert", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        entity Orders {
+          key ID: Integer;
+          @mcp.deepInsert items: Composition of many Items on items.up_ = $self;
+          notes: Composition of many Notes on notes.up_ = $self;
+        }
+        entity Items { key ID: Integer; up_: Association to Orders; }
+        entity Notes { key ID: Integer; up_: Association to Orders; }
+      }
+    `);
+    const { entities } = onlyService(readModel(csn).spec);
+    expect(entities.map((e) => [e.name, e.deepInsert])).toEqual([
+      ["S.Orders", ["items"]],
+      ["S.Items", []],
+      ["S.Notes", []],
+    ]);
+  });
+
+  test("draft-enabled entities, and the compositions inside them, have draft: true", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        @odata.draft.enabled entity Orders {
+          key ID: UUID;
+          items: Composition of many Items on items.up_ = $self;
+        }
+        entity Items { key ID: UUID; up_: Association to Orders; }
+        entity Books { key ID: Integer; }
+      }
+    `);
+    const { entities } = onlyService(readModel(csn).spec);
+    expect(entities.map((e) => [e.name, e.draft])).toEqual([
+      ["S.Orders", true],
+      ["S.Items", true],
+      ["S.Books", false],
+    ]);
+  });
 });
 
 describe("model-reader: names and descriptions", () => {

@@ -45,7 +45,7 @@ export interface EntitySpec {
   modes: ReadonlySet<EntityMode>;
   /** Opted in with @mcp.resource: one record by key at cap://<Service>/<Entity>/<key>. */
   resource: boolean;
-  /** @odata.draft.enabled. Writes must go through the draft API (or be refused). */
+  /** @odata.draft.enabled, or a composition inside such an entity. Writes must go through the draft API (or be refused). */
   draft: boolean;
   /** Composition/association element names opted in with @mcp.deepInsert. */
   deepInsert: string[];
