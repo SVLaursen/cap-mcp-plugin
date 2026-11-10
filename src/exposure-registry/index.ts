@@ -107,6 +107,11 @@ export class ExposureRegistry {
     this.build();
   }
 
+  /** The limits the tools advertise; the executor must enforce the same. */
+  get limits(): Limits {
+    return this.options.limits ?? DEFAULT_LIMITS;
+  }
+
   /** Read a compiled model and build its registry; diagnostics cover both steps. */
   static fromModel(model: unknown, options: RegistryOptions = {}): ExposureRegistry {
     const { spec, diagnostics } = readModel(model);

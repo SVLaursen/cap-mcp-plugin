@@ -48,6 +48,8 @@ export interface RpcOptions {
   headers?: Record<string, string | undefined>;
   /** Extra `_meta` entries (a key set to undefined is dropped). */
   meta?: Record<string, unknown>;
+  /** The endpoint, if not /mcp (cds.env.mcp.path). */
+  path?: string;
 }
 
 let nextId = 1;
@@ -119,7 +121,7 @@ export async function rpc(
     },
   };
   const name = nameOf(method, params);
-  const res = await post("/mcp", body, {
+  const res = await post(options.path ?? "/mcp", body, {
     ...credentials(caller),
     // Parsed here: the body is JSON or an SSE stream, depending on era and response mode.
     responseType: "text",

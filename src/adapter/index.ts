@@ -60,20 +60,28 @@ export interface AdapterOptions {
   log: { error(...args: unknown[]): void };
 }
 
-/** Executors per spec, and validators per tool: both are built once and shared. */
-const executors = new WeakMap<ExposureSpec, Executor>();
-const schemas = new WeakMap<object, ReturnType<typeof fromJsonSchema>>();
-
-function executorFor(spec: ExposureSpec): Executor {
-  let executor = executors.get(spec);
-  if (!executor) executors.set(spec, (executor = new Executor(spec)));
-  return executor;
-}
-
-function schemaFor(schema: object) {
-  let standard = schemas.get(schema);
-  if (!standard) schemas.set(schema, (standard = fromJsonSchema(schema)));
-  return standard;
+/**
+ * Executors per registry (with the registry's limits) and validators per schema object, built
+ * once per activation: the caches live in the factory, not the module (ADR 0005).
+ */
+function caches() {
+  const executors = new WeakMap<ExposureRegistry, Executor>();
+  const schemas = new WeakMap<object, ReturnType<typeof fromJsonSchema>>();
+  return {
+    executorFor(registry: ExposureRegistry): Executor {
+      let executor = executors.get(registry);
+      if (!executor) {
+        executor = new Executor(registry.spec, { limits: registry.limits });
+        executors.set(registry, executor);
+      }
+      return executor;
+    },
+    schemaFor(schema: object) {
+      let standard = schemas.get(schema);
+      if (!standard) schemas.set(schema, (standard = fromJsonSchema(schema)));
+      return standard;
+    },
+  };
 }
 
 /** The name of the CAP service a tool acts on. */
@@ -144,13 +152,14 @@ function forLegacy(error: unknown): unknown {
 
 /** The per-request server factory: one McpServer with the caller's tools. */
 export function serverFactory(options: AdapterOptions): McpServerFactory {
+  const { executorFor, schemaFor } = caches();
   return ({ era }) => {
     const context = options.context();
     if (!context)
       throw new Error("cap-mcp: no cds.context; is /mcp mounted behind CAP's middlewares?");
     const user = context.user;
     const registry = options.registryFor(context.model ?? options.model());
-    const executor = executorFor(registry.spec);
+    const executor = executorFor(registry);
     const server = new McpServer(options.serverInfo, {
       // Registering tools defaults listChanged to true; we never send that notification.
       capabilities: { tools: { listChanged: false } },

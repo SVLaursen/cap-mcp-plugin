@@ -11,6 +11,7 @@ import {
   type AuthConfig,
 } from "./adapter/auth";
 import { registryCache } from "./exposure-registry";
+import { DEFAULT_LIMITS, type Limits } from "./schema-mapper";
 
 /** The parts of the `cds` facade the plugin uses. Passed in, never read from a global (ADR 0005). */
 export interface CdsLike {
@@ -27,8 +28,17 @@ export interface CdsLike {
   readonly services: Record<string, unknown>;
   readonly middlewares: { before: RequestHandler[] };
   readonly requires: { auth?: AuthConfig };
-  readonly env: { mcp?: { allowedOrigins?: string[] } };
+  readonly env: { mcp?: McpConfig };
   readonly i18n: { messages: { at(key: string, locale?: string, args?: unknown): unknown } };
+}
+
+/** `cds.env.mcp` (docs/annotations.md, Configuration). No key turns a feature on. */
+export interface McpConfig {
+  path?: string;
+  name?: string;
+  version?: string;
+  allowedOrigins?: string[];
+  limits?: Partial<Limits>;
 }
 
 export const MCP_PATH = "/mcp";
@@ -47,10 +57,16 @@ function packageVersion(): string {
  */
 export function activate(cds: CdsLike): void {
   const log = cds.log("mcp");
-  const registryFor = registryCache();
   cds.on("served", () => {
+    // Read once the app's env is complete (profiles applied).
+    const config = cds.env.mcp ?? {};
+    const mcpPath = config.path ?? MCP_PATH;
+    const registryFor = registryCache({ limits: { ...DEFAULT_LIMITS, ...config.limits } });
     const handler = mcpHandler({
-      serverInfo: { name: "@gavdi/cap-mcp", version: packageVersion() },
+      serverInfo: {
+        name: config.name ?? "@gavdi/cap-mcp",
+        version: config.version ?? packageVersion(),
+      },
       context: () => cds.context,
       model: () => cds.model as object,
       registryFor,
@@ -61,12 +77,12 @@ export function activate(cds: CdsLike): void {
       },
       log,
     });
-    const auth = { path: MCP_PATH, auth: () => cds.requires.auth };
+    const auth = { path: mcpPath, auth: () => cds.requires.auth };
     // RFC 9728 metadata is public: clients read it to find out how to authenticate.
-    cds.app.get(metadataPath(MCP_PATH), metadataHandler(auth));
+    cds.app.get(metadataPath(mcpPath), metadataHandler(auth));
     // All methods: the SDK answers GET/DELETE (2025 session operations) with 405.
     cds.app.all(
-      MCP_PATH,
+      mcpPath,
       checkOrigin(() => cds.env.mcp?.allowedOrigins),
       ...cds.middlewares.before,
       requireUser({ ...auth, user: () => cds.context?.user }),
@@ -74,6 +90,6 @@ export function activate(cds: CdsLike): void {
       handler,
       authErrors(auth),
     );
-    log.debug(`MCP endpoint mounted at ${MCP_PATH}`);
+    log.debug(`MCP endpoint mounted at ${mcpPath}`);
   });
 }
