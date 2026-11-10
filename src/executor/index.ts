@@ -214,7 +214,7 @@ export class Executor {
         data: entry,
       })) as Args[];
       const key = pick(draft ?? {}, entity);
-      await service.send({ event: "SAVE", entity: `${entity.name}.drafts`, data: key });
+      await service.send(activate(entity, key));
       return this.get(entity, key, service);
     }
     const written = (await service.run({
@@ -276,15 +276,42 @@ export class Executor {
   ): Promise<ToolResult> {
     refuseDraftChild(entity);
     const address = keyOf(entity, key);
-    // On a draft root this is CAP's update of the active record: for non-OData callers it runs
-    // the activation (SAVE) handlers and is refused while someone holds a draft.
     const changes = this.writable(entity, data, "update");
+    if (entity.draftRoot) return this.updateDraft(entity, address, changes, service);
     // req.data = changes plus keys, as with OData's PATCH /Books(201).
     const done = (await service.send({
       query: { UPDATE: { entity: addressed(entity, address), data: changes } },
       data: { ...changes, ...address },
     })) as Affected;
     if (affected(done) === 0) throw notFound(entity, address);
+    return this.get(entity, address, service);
+  }
+
+  /**
+   * EDIT → patch → SAVE, as a Fiori client does over OData, so SAVE handlers see the whole
+   * record. (CAP's direct update of an active draft record gives them only the changed fields.)
+   * EDIT is refused while someone else holds a draft; a failure rolls the draft back with the call.
+   */
+  private async updateDraft(
+    entity: EntitySpec,
+    address: Args,
+    changes: Args,
+    service: ServiceLike,
+  ): Promise<ToolResult> {
+    const version = (active: boolean) => ({
+      ref: [{ id: entity.name, where: keyWhere({ ...address, IsActiveEntity: active }) }],
+    });
+    // An explicit query: CAP's @restrict-where check runs before the draft handler sets one.
+    await service.send({
+      event: "EDIT",
+      query: { SELECT: { from: version(true) } },
+      data: { ...address, IsActiveEntity: true },
+    });
+    await service.send({
+      query: { UPDATE: { entity: version(false), data: changes } },
+      data: { ...changes, ...address, IsActiveEntity: false },
+    });
+    await service.send(activate(entity, address));
     return this.get(entity, address, service);
   }
 
@@ -519,13 +546,25 @@ const notFound = (entity: EntitySpec, key: Args) =>
  * One record, addressed like OData's `Books(201)`: the key as a filter on the entity reference.
  * CAP then puts the key into req.data, which custom handlers rely on (req.data.ID).
  */
-const addressed = (entity: EntitySpec, key: Args) => ({
-  ref: [
-    {
-      id: entity.name,
-      where: and(...Object.entries(key).map(([name, val]) => [ref(name), "=", { val }])),
+const keyWhere = (key: Args) =>
+  and(...Object.entries(key).map(([name, val]) => [ref(name), "=", { val }]));
+
+/**
+ * SAVE as OData's draftActivate on the draft: CAP loads the whole draft into req.data for the
+ * SAVE handlers (sending the key as data would make req.data just the key).
+ */
+const activate = (entity: EntitySpec, key: Args) => ({
+  event: "draftActivate",
+  query: {
+    SELECT: {
+      from: { ref: [{ id: entity.name, where: keyWhere({ ...key, IsActiveEntity: false }) }] },
     },
-  ],
+  },
+  data: {},
+});
+
+const addressed = (entity: EntitySpec, key: Args) => ({
+  ref: [{ id: entity.name, where: keyWhere(key) }],
 });
 
 const pick = (row: Args, entity: EntitySpec) =>

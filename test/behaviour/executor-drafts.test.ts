@@ -1,8 +1,7 @@
 /**
- * M3 — writes to draft-enabled entities, in the caller's one transaction. Create goes through
- * CAP's draft API (NEW → SAVE): a plain CREATE would only leave a draft. Update uses CAP's own
- * update of the active record, which for non-OData callers runs the activation (SAVE) handlers
- * and refuses while someone holds a draft.
+ * M3 — writes to draft-enabled entities go through CAP's draft API, in the caller's one
+ * transaction: create is NEW → SAVE, update is EDIT → patch → SAVE, so the app's draft handlers
+ * see what they see over OData. A failure anywhere rolls back, leaving no draft.
  */
 import cds from "@sap/cds";
 import { as, bootDemo } from "../helpers/demo";
@@ -64,14 +63,15 @@ describe("executor: drafts and deep insert", () => {
     }
   });
 
-  test("update on draft-enabled Orders changes the active order and leaves no draft", async () => {
+  test("update on draft-enabled Orders goes EDIT → patch → SAVE and leaves no draft", async () => {
     const result = await callTool("bob", "OrdersService_Orders_update", {
       ID: ORDER,
       reason: "updated",
     });
     expect(result.isError).toBeFalsy();
+    // SAVE handlers see the whole order, as with OData's draftActivate: the number stays.
     expect(result.structuredContent).toEqual(
-      expect.objectContaining({ ID: ORDER, reason: "updated" }),
+      expect.objectContaining({ ID: ORDER, reason: "updated", orderNo: "ORD-1001" }),
     );
     const odata = await demo.GET(
       `/orders/Orders(ID=${ORDER},IsActiveEntity=true)?$select=reason`,
