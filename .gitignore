@@ -1,0 +1,10 @@
+node_modules/
+lib/
+coverage/
+gen/
+*.sqlite
+*.db
+.env
+.DS_Store
+_out/
+_spike/

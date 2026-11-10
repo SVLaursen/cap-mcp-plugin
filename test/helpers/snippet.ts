@@ -1,0 +1,23 @@
+import cds from "@sap/cds";
+
+/** The slice of cds.compile used here; cds-types does not model the options argument. */
+type Compile = ((source: string, options?: { docs?: boolean }) => unknown) & {
+  for: { nodejs(csn: unknown): unknown };
+};
+
+/**
+ * Compile a CDS source string into the linked, Node.js-flavoured CSN the plugin reads at
+ * runtime. Doc comments are kept (`/** … *\/` becomes `doc`), as they are in the demo app.
+ *
+ * Use this for contract tests: given this CDS, the model reader / schema mapper / registry
+ * must produce exactly this output. No server, no database, no mocks.
+ *
+ * @example
+ *   const csn = compileSnippet(`@mcp service S { entity Books { key ID: Integer; } }`);
+ *   expect(readModel(csn).spec.services[0].entities[0].name).toBe("S.Books");
+ */
+export function compileSnippet(source: string): cds.linked.LinkedCSN {
+  const compile = cds.compile as unknown as Compile;
+  const nodejs = compile.for.nodejs(compile(source, { docs: true }));
+  return cds.linked(nodejs as cds.csn.CSN);
+}

@@ -1,0 +1,46 @@
+{
+  "name": "cap-mcp-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bookshop demo app for @gavdi/cap-mcp v2. Every v2 feature has an annotated target here.",
+  "dependencies": {
+    "@gavdi/cap-mcp": "file:..",
+    "@sap/cds": "^10.2.2",
+    "express": "^5.3.0"
+  },
+  "devDependencies": {
+    "@cap-js/sqlite": "^3.1.2"
+  },
+  "scripts": {
+    "start": "cds-serve",
+    "watch": "cds watch"
+  },
+  "cds": {
+    "requires": {
+      "auth": {
+        "kind": "mocked",
+        "users": {
+          "alice": {
+            "password": "alice",
+            "roles": [
+              "admin"
+            ]
+          },
+          "bob": {
+            "password": "bob",
+            "roles": []
+          },
+          "carol": {
+            "password": "carol",
+            "roles": [
+              "support"
+            ]
+          }
+        }
+      }
+    },
+    "cdsc": {
+      "docs": true
+    }
+  }
+}

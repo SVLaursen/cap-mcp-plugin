@@ -1,0 +1,150 @@
+/**
+ * Shared shapes that flow between the v2 modules.
+ *
+ *   model-reader  ──ExposureSpec──▶  exposure-registry  ──ToolSpec[]──▶  adapter
+ *                                                       ──ToolCall────▶  executor
+ *
+ * These types ARE the contract between modules. Change them deliberately, test-first,
+ * and update docs/architecture.md in the same commit.
+ */
+
+/** Entity-level capabilities an MCP client can be given. `query` and `get` are baseline. */
+export type EntityMode = "query" | "get" | "create" | "update" | "delete";
+
+/** A scalar or structured element as the agent sees it. Never contains @mcp.omit fields. */
+export interface FieldSpec {
+  name: string;
+  /** Resolved CDS builtin, e.g. "cds.String", "cds.Integer", "cds.Decimal". */
+  cdsType: string;
+  key: boolean;
+  /** From @mandatory / not null. */
+  mandatory: boolean;
+  /** From @readonly, @Core.Computed, or the projection. Never accepted as input. */
+  readonly: boolean;
+  description?: string;
+  enum?: ReadonlyArray<string | number>;
+  length?: number;
+  precision?: number;
+  scale?: number;
+  /** From @assert.range: [min, max]. */
+  range?: readonly [number | undefined, number | undefined];
+  /** Association/composition target (fully qualified), when this is a managed FK or nav. */
+  target?: string;
+  /** Opted in with @mcp.completion. */
+  completion: boolean;
+}
+
+export interface EntitySpec {
+  /** Fully qualified, e.g. "CatalogService.Books". */
+  name: string;
+  service: string;
+  title: string;
+  description?: string;
+  keys: FieldSpec[];
+  fields: FieldSpec[];
+  modes: ReadonlySet<EntityMode>;
+  /** Opted in with @mcp.resource: one record by key at cap://<Service>/<Entity>/<key>. */
+  resource: boolean;
+  /** @odata.draft.enabled. Writes must go through the draft API (or be refused). */
+  draft: boolean;
+  /** Composition/association element names opted in with @mcp.deepInsert. */
+  deepInsert: string[];
+  /** Search fields from @cds.search (resolved by CAP at runtime; listed for the description). */
+  searchable: boolean;
+}
+
+export interface OperationSpec {
+  /** Fully qualified, e.g. "CatalogService.submitOrder" or "OrdersService.Orders.cancel". */
+  name: string;
+  service: string;
+  kind: "function" | "action";
+  /** Fully qualified entity for bound operations. */
+  boundTo?: string;
+  description?: string;
+  params: FieldSpec[];
+  /** CDS return type name, if any. Drives outputSchema. */
+  returns?: string;
+  /** Opted in with @mcp.elicit. */
+  elicit?: string[];
+  /** Opted in with @mcp.ui (MCP Apps, issue #133): a ui:// resource URI. */
+  ui?: string;
+}
+
+export interface PromptSpec {
+  name: string;
+  service: string;
+  title?: string;
+  description?: string;
+  template: string;
+  role: "user" | "assistant";
+  inputs: { key: string; type: string }[];
+}
+
+export interface ServiceSpec {
+  name: string;
+  title: string;
+  description?: string;
+  /** @requires on the service, if any. Used only to hide tools; CAP still enforces. */
+  requires?: string[];
+  /** Opted in with @mcp.compact. */
+  compact: boolean;
+  /** Opted in with @mcp.describe. */
+  describe: boolean;
+  entities: EntitySpec[];
+  operations: OperationSpec[];
+  prompts: PromptSpec[];
+}
+
+export interface ExposureSpec {
+  services: ServiceSpec[];
+}
+
+export type DiagnosticCode =
+  | "UNKNOWN_ANNOTATION"
+  | "INVALID_ANNOTATION_VALUE"
+  | "BOUND_OPERATION_WITHOUT_KEYS"
+  | "DRAFT_WRITE_NOT_SUPPORTED"
+  | "V1_ANNOTATION"
+  | "V1_DEFAULT_CHANGED";
+
+/** Reported at startup so developers see why something is (not) exposed. */
+export interface Diagnostic {
+  level: "info" | "warn" | "error";
+  code: DiagnosticCode;
+  /** The CSN definition (and element) the diagnostic is about. */
+  target: string;
+  message: string;
+}
+
+export interface ModelReadResult {
+  spec: ExposureSpec;
+  diagnostics: Diagnostic[];
+}
+
+/** JSON Schema 2020-12 object, as MCP 2026-07-28 accepts for inputSchema / outputSchema. */
+export type JsonSchema = Record<string, unknown>;
+
+/** What tools/list publishes for one tool. */
+export interface ToolSpec {
+  name: string;
+  title?: string;
+  description: string;
+  inputSchema: JsonSchema;
+  outputSchema?: JsonSchema;
+  annotations: {
+    readOnlyHint: boolean;
+    destructiveHint: boolean;
+    idempotentHint: boolean;
+  };
+  /** Back-reference used by the executor. */
+  target:
+    | { kind: "entity"; entity: string; mode: EntityMode }
+    | { kind: "operation"; operation: string }
+    | { kind: "describe"; service: string };
+}
+
+/** The roles/identity the registry filters by. A structural subset of cds.User. */
+export interface UserLike {
+  id: string;
+  is(role: string): boolean;
+}

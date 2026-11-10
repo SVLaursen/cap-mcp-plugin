@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Book card</title>
+    <style>
+      body {
+        font:
+          14px/1.4 system-ui,
+          sans-serif;
+        margin: 0;
+        padding: 16px;
+      }
+      .card {
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        padding: 16px;
+        max-width: 360px;
+      }
+      h1 {
+        font-size: 18px;
+        margin: 0 0 4px;
+      }
+      .meta {
+        color: #666;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      MCP App UI for CatalogService.bookCard (@mcp.ui: 'ui://bookshop/book-card.html').
+      Milestone M5 wires this up through @modelcontextprotocol/ext-apps. The host passes the
+      tool result in; this page only renders it.
+    -->
+    <div class="card">
+      <h1 id="title">…</h1>
+      <div class="meta"><span id="author"></span> · <span id="price"></span></div>
+      <p id="descr"></p>
+      <div class="meta">In stock: <span id="stock"></span></div>
+    </div>
+  </body>
+</html>
