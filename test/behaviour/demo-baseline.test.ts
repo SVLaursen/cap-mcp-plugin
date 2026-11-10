@@ -34,7 +34,11 @@ describe("demo baseline (OData)", () => {
       as("bob"),
     );
     expect(status).toBe(409);
-    expect(data.error).toMatchObject({ message: "ORDER_EXCEEDS_STOCK", target: "quantity" });
+    expect(data.error).toMatchObject({
+      code: "ORDER_EXCEEDS_STOCK",
+      message: "Only 12 in stock; 5000 ordered",
+      target: "quantity",
+    });
   });
 
   test("custom handlers validate writes (negative price is rejected)", async () => {

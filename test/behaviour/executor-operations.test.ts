@@ -1,10 +1,10 @@
 /**
  * M3 — operations through srv.send, so the app's handlers run and their errors reach the agent.
  */
-import { bootDemo } from "../helpers/demo";
+import { as, bootDemo } from "../helpers/demo";
 import { callTool, executeDirectly, expectInvalidArgument } from "../helpers/tools";
 
-bootDemo();
+const demo = bootDemo();
 
 const ORDER = "7e2f9c58-1c1d-4c0b-9a7a-6d1f0b5e0a01"; // ORD-1001, bob's
 
@@ -28,6 +28,49 @@ describe("executor: operations", () => {
     expect(result.structuredContent).toEqual({
       error: expect.objectContaining({ code: "ORDER_EXCEEDS_STOCK", target: "quantity" }),
     });
+  });
+
+  test("CAP error messages are translated as over OData, in the caller's language", async () => {
+    const seen: string[] = [];
+    for (const language of ["en", "de"]) {
+      const headers = { "accept-language": language };
+      const odataOrder = await demo.POST(
+        "/browse/submitOrder",
+        { book: 201, quantity: 5000 },
+        { ...as("bob"), headers },
+      );
+      const mcpOrder = await callTool(
+        "bob",
+        "CatalogService_submitOrder",
+        { book: 201, quantity: 5000 },
+        { headers },
+      );
+      expect(mcpOrder.structuredContent).toEqual({
+        error: expect.objectContaining({
+          code: "ORDER_EXCEEDS_STOCK",
+          message: odataOrder.data.error.message,
+        }),
+      });
+      seen.push(odataOrder.data.error.message);
+      // CAP's own messages too (author is @mandatory).
+      const data = { ID: 940, title: "No author" };
+      const odataBook = await demo.POST("/admin/Books", data, { ...as("alice"), headers });
+      const mcpBook = await callTool(
+        "alice",
+        "AdminService_create",
+        { entity: "AdminService.Books", data },
+        { headers },
+      );
+      expect(mcpBook.structuredContent).toEqual({
+        error: expect.objectContaining({
+          code: "ASSERT_MANDATORY",
+          message: odataBook.data.error.message,
+        }),
+      });
+      seen.push(odataBook.data.error.message);
+    }
+    // The two languages really differ, so the check above is not vacuous.
+    expect(new Set(seen).size).toBe(4);
   });
 
   test("an app's own 404 keeps its code; CAP's bare 404 becomes NOT_FOUND", async () => {

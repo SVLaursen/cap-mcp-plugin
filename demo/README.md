@@ -36,6 +36,7 @@ you can also run it with `npm run demo` from the repo root (OData at http://loca
 | `@restrict` with `where`                                  | `OrdersService.Orders` (own orders only; support reads all)                                                    |
 | Custom handler validation                                 | `AdminService` rejects negative prices                                                                         |
 | Structured CAP errors                                     | `CatalogService.submitOrder` (`ORDER_EXCEEDS_STOCK`, target `quantity`)                                        |
+| Translated error messages (`_i18n/messages*.properties`)  | `ORDER_EXCEEDS_STOCK` in English and German, with arguments; CAP's own `ASSERT_MANDATORY`                      |
 | Failed commit surfaces as error                           | `AdminService` DELETE of Books ID 207 fails at commit                                                          |
 
 When you add a feature to the plugin, add its target here first.

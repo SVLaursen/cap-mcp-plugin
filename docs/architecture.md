@@ -62,8 +62,9 @@ The data passed between them is defined in `src/types.ts`.
    `srv.tx(tx => executor.execute(tool, args, tx, user, { confirmed }))` (the service's own root
    transaction, inheriting `cds.context`) →
    `srv.run(cqn)` / `srv.send(...)`. CAP runs handlers, enforces `@restrict`, and commits or
-   rolls back. `execute` throws on any error, so CAP rolls back; only then does the adapter turn
-   it into a tool result with `errorResult(error)` (bad arguments, CAP 4xx) or report it as an
+   rolls back. `execute` throws on any error, so CAP rolls back; only then does the adapter
+   translate it as CAP's protocol adapters do (`cds.i18n.messages`, the caller's locale, the
+   error's `args`) and turn it into a tool result with `errorResult(error)` (bad arguments, CAP 4xx) or report it as an
    error (failed commits, bugs).
 5. The result goes back as `structuredContent` plus one text block, or as a tool error that
    keeps CAP's `code`, `target` and `details`.

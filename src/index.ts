@@ -27,6 +27,7 @@ export interface CdsLike {
   readonly middlewares: { before: RequestHandler[] };
   readonly env: { production?: boolean };
   readonly requires: { auth?: AuthConfig };
+  readonly i18n: { messages: { at(key: string, locale?: string, args?: unknown): unknown } };
 }
 
 export const MCP_PATH = "/mcp";
@@ -54,6 +55,10 @@ export function activate(cds: CdsLike): void {
       registryFor,
       services: cds.services,
       production: cds.env.production,
+      translate: (key, locale, args) => {
+        const text = cds.i18n.messages.at(key, locale, args);
+        return typeof text === "string" ? text : undefined;
+      },
       log,
     });
     const auth = { path: MCP_PATH, auth: () => cds.requires.auth };

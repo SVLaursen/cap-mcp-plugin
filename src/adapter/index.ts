@@ -32,7 +32,11 @@ export const TOOLS_TTL_MS = 60_000;
 export interface RequestContext {
   user: UserLike;
   model?: object;
+  locale?: string;
 }
+
+/** A message bundle lookup, as `cds.i18n.messages.at(key, locale, args)`. */
+export type Translate = (key: string, locale?: string, args?: unknown) => string | undefined;
 
 /** A CAP service as the adapter uses it: the executor's view, plus its own root transaction. */
 export interface TxService extends ServiceLike {
@@ -52,6 +56,8 @@ export interface AdapterOptions {
   services: Record<string, unknown>;
   /** Hide messages of unexpected errors from clients (CAP does the same in production). */
   production?: boolean;
+  /** CAP's messages (cds.i18n.messages.at), so errors read as they do over OData. */
+  translate?: Translate;
   log: { error(...args: unknown[]): void };
 }
 
@@ -93,6 +99,35 @@ function toCallToolResult(result: ToolResult): CallToolResult {
       : { structuredContent: result.structuredContent as Record<string, unknown> }),
     ...(result.isError ? { isError: true } : {}),
   };
+}
+
+/**
+ * Translate a CAP error and its details as CAP's protocol adapters do (HttpAdapter.normalized
+ * + localized): the message, or `{i18n>key}`, or the code is a key into the app's and CAP's
+ * message bundles, filled with the error's `args`, in the caller's locale. An untranslated key
+ * stays as it was; the key becomes the code if the error has none. Bare statuses are left to
+ * the executor's own names.
+ */
+function localized(error: unknown, translate: Translate | undefined, locale?: string): unknown {
+  if (!translate || !error || typeof error !== "object" || error instanceof ToolError) return error;
+  const e = error as Record<string, unknown>;
+  const all = [e, ...(Array.isArray(e.details) ? (e.details as Record<string, unknown>[]) : [])];
+  for (const x of all) {
+    const message = typeof x.message === "string" ? x.message : undefined;
+    const unwrapped = message?.startsWith("{i18n>") ? message.slice(6, -1) : message;
+    const key = unwrapped || (typeof x.code === "string" ? x.code : undefined);
+    if (!key || /^\d+$/.test(key)) continue;
+    const text = translate(key, locale, x.args);
+    if (!text) continue;
+    const status = x.status ?? x.statusCode ?? (typeof x.code === "number" ? x.code : undefined);
+    if (!x.code || x.code == status) {
+      // The numeric code was the status (CAP's req.error(409, key, …)); keep it as one.
+      if (status !== undefined) x.status = status;
+      x.code = key;
+    }
+    x.message = text;
+  }
+  return error;
 }
 
 /**
@@ -149,7 +184,8 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
             );
             return toCallToolResult(result);
           } catch (error) {
-            const result = errorResult(era === "legacy" ? forLegacy(error) : error);
+            const translated = localized(error, options.translate, context.locale);
+            const result = errorResult(era === "legacy" ? forLegacy(translated) : translated);
             if (result) return toCallToolResult(result);
             options.log.error(`${tool.name} failed:`, error);
             const message =
