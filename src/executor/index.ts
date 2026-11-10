@@ -828,7 +828,7 @@ function decodeCursor(cursor: unknown): number {
     const { offset } = JSON.parse(Buffer.from(String(cursor), "base64url").toString()) as {
       offset: unknown;
     };
-    if (Number.isInteger(offset) && (offset as number) >= 0) return offset as number;
+    if (Number.isSafeInteger(offset) && (offset as number) >= 0) return offset as number;
   } catch {
     // fall through
   }

@@ -115,6 +115,16 @@ describe("executor: drafts and deep insert", () => {
     await demo.DELETE(`/orders/Orders(ID=${ORDER},IsActiveEntity=false)`, as("bob"));
   });
 
+  test("delete on a draft root removes the active order", async () => {
+    const created = await callTool("bob", "OrdersService_Orders_create", { reason: "to delete" });
+    const { ID } = created.structuredContent as { ID: string };
+    const deleted = await callTool("bob", "OrdersService_Orders_delete", { ID });
+    expect(deleted.structuredContent).toEqual({ deleted: { ID } });
+    const odata = await demo.GET(`/orders/Orders(ID=${ID},IsActiveEntity=true)`, as("bob"));
+    expect(odata.status).toBe(404);
+    expect(await drafts()).toEqual([]);
+  });
+
   test("a draft write CAP refuses is a tool error and leaves no draft behind", async () => {
     // Carol can read every order (support) but may only write her own (@restrict where).
     const result = await callTool("carol", "OrdersService_Orders_update", {

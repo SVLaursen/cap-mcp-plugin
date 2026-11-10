@@ -20,7 +20,7 @@ you can also run it with `npm run demo` from the repo root (OData at http://loca
 | `@mcp.omit`                                               | `Books.costPrice`, `Authors.email` in both Catalog and Admin                                                   |
 | `@mcp: false` / `@cds.api.ignore`                         | `AdminService.AuditNotes`, `AdminService.Genres.parent`                                                        |
 | `@cds.search`                                             | `CatalogService.Books` (title, descr, authorName)                                                              |
-| `@mcp.wrap.modes`                                         | `AdminService.Books` (create, update, delete), `OrdersService.Orders` (create, update)                         |
+| `@mcp.wrap.modes`                                         | `AdminService.Books` (create, update, delete), `OrdersService.Orders` (create, update, delete)                 |
 | Entity without keys (create, no read-back)                | `CatalogService.Feedback` (create only; seeded with one row from someone else)                                 |
 | Draft-enabled writes                                      | `OrdersService.Orders`                                                                                         |
 | Draft activation handler (`before SAVE`)                  | `OrdersService.Orders`: numbers new orders (`orderNo`); `REASON_TOO_LONG` when `reason` exceeds 200 characters |

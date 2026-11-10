@@ -1,7 +1,7 @@
 using {sap.capire.bookshop as my} from '../db/schema';
 
 // MCP exposure (v2): baseline from `@mcp`, plus:
-//   - draft-enabled Orders with create/update opted in (writes must go through the draft API)
+//   - draft-enabled Orders with create/update/delete opted in (writes go through the draft API)
 //   - @mcp.deepInsert on Orders.items
 //   - a bound action `cancel` with @mcp.elicit (confirmation via MRTR input_required)
 // Authorization is pure CAP: @restrict with a `where` clause. Bob sees only Bob's orders,
@@ -14,7 +14,8 @@ service OrdersService @(path: '/orders') {
   @odata.draft.enabled
   @mcp.wrap.modes: [
     'create',
-    'update'
+    'update',
+    'delete'
   ]
   @restrict: [
     {

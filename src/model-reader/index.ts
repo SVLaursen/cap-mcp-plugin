@@ -266,7 +266,7 @@ function readEntity(name: string, service: string, def: Definition, ctx: Context
     description: describe(def),
     keys: fields.filter((f) => f.key),
     fields,
-    modes: readModes(name, def, ctx, isAddressable(def)),
+    modes: readModes(name, def, ctx, isAddressable(def), draft && !def["@odata.draft.enabled"]),
     ...entityAccess(def, ctx),
     resource: def["@mcp.resource"] === true,
     // Linked CSN gives draft roots and the compositions inside them a `drafts` entity.
@@ -293,6 +293,7 @@ function readModes(
   def: Definition,
   ctx: Context,
   addressable: boolean,
+  draftChild = false,
 ): ReadonlySet<EntityMode> {
   const modes = new Set<EntityMode>(addressable ? BASELINE : ["query"]);
   const listed = def["@mcp.wrap.modes"];
@@ -307,6 +308,17 @@ function readModes(
       );
     } else if (!addressable && ADDRESSED.has(value)) refused.push(value);
     else modes.add(value as EntityMode);
+  }
+  // A draft's children are written through their root (deep insert), never on their own.
+  const writes = [...modes].filter((m) => m === "create" || m === "update" || m === "delete");
+  if (draftChild && writes.length) {
+    for (const m of writes) modes.delete(m);
+    ctx.diagnostics.push({
+      level: "error",
+      code: "DRAFT_WRITE_NOT_SUPPORTED",
+      target: name,
+      message: `${name} is part of a draft: ${writes.join(", ")} must go through its root (@mcp.deepInsert); not offered`,
+    });
   }
   if (refused.length) {
     invalid(

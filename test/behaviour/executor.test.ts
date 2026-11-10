@@ -67,6 +67,10 @@ describe("executor: reads", () => {
       { orderby: [{ field: "costPrice" }] },
       { select: ["costPrice"] },
       { select: ["nope"] },
+      { select: [] },
+      { select: ["ID", "ID"] },
+      { cursor: Buffer.from(JSON.stringify({ offset: 1e300 })).toString("base64url") },
+      { cursor: "not-a-cursor" },
     ]) {
       const result = await call("bob", "CatalogService_Books_query", args);
       expect(result.isError).toBe(true);

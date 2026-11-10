@@ -1085,6 +1085,23 @@ describe("model-reader: diagnostics", () => {
     ]);
   });
 
+  test("write modes on a draft's child yield DRAFT_WRITE_NOT_SUPPORTED and are not offered", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        @odata.draft.enabled entity Orders {
+          key ID: UUID;
+          items: Composition of many Items on items.up_ = $self;
+        }
+        @mcp.wrap.modes: ['create', 'update'] entity Items { key ID: UUID; up_: Association to Orders; }
+      }
+    `);
+    const { spec, diagnostics } = readModel(csn);
+    expect(exposed(spec).S?.entities["S.Items"]).toEqual(["get", "query"]);
+    expect(codes(diagnostics)).toEqual([
+      { level: "error", code: "DRAFT_WRITE_NOT_SUPPORTED", target: "S.Items" },
+    ]);
+  });
+
   test("the demo model reads with zero error-level diagnostics", async () => {
     const { diagnostics } = readModel(await compileDemo());
     expect(diagnostics.filter((d) => d.level === "error")).toEqual([]);
