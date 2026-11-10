@@ -40,8 +40,11 @@ The data passed between them is defined in `src/types.ts`.
    dispatches the JSON-RPC method.
 3. `tools/list` → `registry.toolsFor(cds.context.user)` for `cds.context.model`.
 4. `tools/call` → validate args against the tool's input schema →
-   `executor.execute(tool, args, srv)` → `srv.run(cqn)` / `srv.send(...)`. CAP runs handlers,
-   enforces `@restrict`, and commits or rolls back.
+   `srv.tx(ctx, tx => executor.execute(tool, args, tx, user, { confirmed }))` →
+   `srv.run(cqn)` / `srv.send(...)`. CAP runs handlers, enforces `@restrict`, and commits or
+   rolls back. `execute` throws on any error, so CAP rolls back; only then does the adapter turn
+   it into a tool result with `errorResult(error)` (bad arguments, CAP 4xx) or report it as an
+   error (failed commits, bugs).
 5. The result goes back as `structuredContent` plus one text block, or as a tool error that
    keeps CAP's `code`, `target` and `details`.
 

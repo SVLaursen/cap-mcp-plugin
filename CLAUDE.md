@@ -114,6 +114,13 @@ docs/                   plan, architecture, annotation spec, backlog, testing, A
   even with the key as a ref filter, so handlers checking `req.data.ID` silently skip (the demo's
   failed-commit hook did). Use `srv.send({ query, data: key })` like OData does. A missing record
   then comes back as CAP's own 404.
+- **Run a call in `srv.tx(ctx, fn)`, not `cds.tx(ctx, fn)`**: `cds.tx` is the database's
+  transaction; with it, a draft SAVE that fails inside the same transaction as NEW never
+  releases the SQLite pool (the test hangs). The service's own root transaction is what CAP's
+  protocol adapters use.
+- **Errors must leave the transaction**: map them to `isError` results only after rollback
+  (`errorResult`), or CAP commits whatever ran before the error.
+- **Drafts are visible only to their owner** over OData; check leftovers through `cds.db`.
 - **Draft reads add columns**: SELECT on a draft-enabled entity returns `IsActiveEntity` and the
   keys even when not selected; project rows to what was asked for.
 - **`@restrict where`** already works over OData in the demo (bob sees only ORD-1001). MCP tests

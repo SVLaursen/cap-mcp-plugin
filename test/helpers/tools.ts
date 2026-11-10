@@ -1,5 +1,5 @@
 import cds from "@sap/cds";
-import { Executor, type ServiceLike, type ToolResult } from "../../src/executor";
+import { Executor, errorResult, type ServiceLike, type ToolResult } from "../../src/executor";
 import { ExposureRegistry } from "../../src/exposure-registry";
 import type { DemoUser } from "./demo";
 
@@ -27,11 +27,22 @@ export async function callTool(
   const lister = options.listedFor ? demoUser(options.listedFor) : user;
   const tool = registry.toolsFor(lister).find((t) => t.name === name);
   if (!tool) throw new Error(`${name} is not listed for ${options.listedFor ?? who}`);
-  const service = cds.services[name.split("_")[0] ?? ""] as unknown as ServiceLike;
+  const service = cds.services[name.split("_")[0] ?? ""] as cds.Service;
   const executor = new Executor(registry.spec);
-  return cds.tx({ user }, () =>
-    executor.execute(tool, args, service, user, { confirmed: options.confirmed }),
-  );
+  try {
+    // The service's own root transaction, as CAP's protocol adapters (and our adapter in M4)
+    // use. (cds.tx is the database's: with it, a failing draft SAVE never releases the pool.)
+    return await service.tx({ user }, (tx: cds.Transaction) =>
+      executor.execute(tool, args, tx as unknown as ServiceLike, user, {
+        confirmed: options.confirmed,
+      }),
+    );
+  } catch (error) {
+    // As the adapter will: the transaction has rolled back; tell the agent what went wrong.
+    const result = errorResult(error);
+    if (result) return result;
+    throw error;
+  }
 }
 
 export type Page = { rows: Record<string, unknown>[]; total: number; nextCursor?: string };

@@ -4,6 +4,7 @@
  * update of the active record, which for non-OData callers runs the activation (SAVE) handlers
  * and refuses while someone holds a draft.
  */
+import cds from "@sap/cds";
 import { as, bootDemo } from "../helpers/demo";
 import { callTool, page } from "../helpers/tools";
 
@@ -11,12 +12,11 @@ const demo = bootDemo();
 
 const ORDER = "7e2f9c58-1c1d-4c0b-9a7a-6d1f0b5e0a01"; // ORD-1001, bob's
 
+/** Every draft of Orders, whoever owns it (OData only shows a user their own drafts). */
 async function drafts() {
-  const { data } = await demo.GET(
-    "/orders/Orders?$filter=IsActiveEntity eq false&$select=ID",
-    as("carol"),
-  );
-  return data.value as unknown[];
+  return (await cds.db.run({
+    SELECT: { from: { ref: ["OrdersService.Orders.drafts"] }, columns: [{ ref: ["ID"] }] },
+  } as never)) as unknown[];
 }
 
 describe("executor: drafts and deep insert", () => {

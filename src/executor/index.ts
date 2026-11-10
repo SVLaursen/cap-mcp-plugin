@@ -45,6 +45,17 @@ export interface CallOptions {
 }
 
 /**
+ * Map an error from execute() to an `isError` tool result, or undefined if it is not one the agent
+ * can act on (bugs, 5xx, failed commits: the caller reports those as errors). Call it only AFTER
+ * the transaction has rolled back: execute() throws so that CAP never commits partial work.
+ */
+export function errorResult(error: unknown): ToolResult | undefined {
+  if (error instanceof ToolError) return toolError(error);
+  const cap = capError(error);
+  return cap && toolError(cap);
+}
+
+/**
  * A tool call the agent can fix: a bad argument, a missing record. Becomes an `isError` result,
  * never a protocol error, so the agent sees what went wrong.
  */
@@ -101,47 +112,42 @@ export class Executor {
     user: UserLike,
     options: CallOptions = {},
   ): Promise<ToolResult> {
-    try {
-      const target = tool.target;
-      if (target.kind === "describe")
-        return await this.describe(target.service, args, user, "describe");
-      if (target.kind === "compact" && target.action === "describe_entity") {
-        return await this.describe(target.service, args, user, "describe_entity");
-      }
-      if (target.kind === "compact" && target.action === "list_entities") {
-        allowOnly(args, []);
-        const reachable = this.reachable(target.service, user);
-        return result({
-          entities: reachable.entities.map((e) =>
-            clean({
-              name: e.name,
-              title: e.title,
-              description: e.description,
-              modes: [...e.modes].sort(),
-            }),
-          ),
-        });
-      }
-      if (target.kind === "operation") {
-        return await this.call(this.operation(target.operation), args, service, options);
-      }
-      if (target.kind === "compact" && target.action === "call_operation") {
-        allowOnly(args, ["operation", "args"]);
-        const op = this.operation(String(args.operation), target.service);
-        return await this.call(
-          op,
-          args.args === undefined ? {} : object(args.args, "args"),
-          service,
-          options,
-        );
-      }
-      return await this.dispatch(tool, args, service);
-    } catch (error) {
-      if (error instanceof ToolError) return toolError(error);
-      const cap = capError(error);
-      if (cap) return toolError(cap);
-      throw error;
+    // Errors propagate, so the caller's transaction rolls back; the caller maps them with
+    // errorResult() afterwards. Catching them here would let CAP commit partial work.
+    const target = tool.target;
+    if (target.kind === "describe")
+      return await this.describe(target.service, args, user, "describe");
+    if (target.kind === "compact" && target.action === "describe_entity") {
+      return await this.describe(target.service, args, user, "describe_entity");
     }
+    if (target.kind === "compact" && target.action === "list_entities") {
+      allowOnly(args, []);
+      const reachable = this.reachable(target.service, user);
+      return result({
+        entities: reachable.entities.map((e) =>
+          clean({
+            name: e.name,
+            title: e.title,
+            description: e.description,
+            modes: [...e.modes].sort(),
+          }),
+        ),
+      });
+    }
+    if (target.kind === "operation") {
+      return await this.call(this.operation(target.operation), args, service, options);
+    }
+    if (target.kind === "compact" && target.action === "call_operation") {
+      allowOnly(args, ["operation", "args"]);
+      const op = this.operation(String(args.operation), target.service);
+      return await this.call(
+        op,
+        args.args === undefined ? {} : object(args.args, "args"),
+        service,
+        options,
+      );
+    }
+    return await this.dispatch(tool, args, service);
   }
 
   private dispatch(tool: ToolSpec, args: Args, service: ServiceLike): Promise<ToolResult> {

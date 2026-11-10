@@ -2,7 +2,7 @@
  * M3 — describe tools need no database: they describe the spec, as the caller can reach it.
  */
 import cds from "@sap/cds";
-import { Executor, type ServiceLike } from "../../src/executor";
+import { Executor, errorResult, type ServiceLike, type ToolResult } from "../../src/executor";
 import { ExposureRegistry } from "../../src/exposure-registry";
 import { compileSnippet } from "../helpers/snippet";
 
@@ -25,10 +25,14 @@ const noService = {} as ServiceLike; // describing never touches the service
 const bob = new cds.User({ id: "bob", roles: [], attr: {} });
 const alice = new cds.User({ id: "alice", roles: ["admin"], attr: {} });
 
+/** As the adapter does: errors become tool results once the call is over. */
+const settle = (call: Promise<ToolResult>) =>
+  call.catch((error: unknown) => errorResult(error) ?? Promise.reject(error));
+
 async function describe_(user: cds.User, name: string, args: Record<string, unknown> = {}) {
   const tool = registry.toolsFor(user).find((t) => t.name === name);
   if (!tool) throw new Error(`${name} not listed`);
-  return executor.execute(tool, args, noService, user);
+  return settle(executor.execute(tool, args, noService, user));
 }
 
 describe("executor: compact call_operation", () => {
@@ -46,7 +50,7 @@ describe("executor: compact call_operation", () => {
     if (!tool) throw new Error("A_call_operation not listed");
     const ex = new Executor(r.spec);
     for (const operation of ["B.other", "A.card", "A.nope"]) {
-      const result = await ex.execute(tool, { operation }, noService, bob);
+      const result = await settle(ex.execute(tool, { operation }, noService, bob));
       expect(result.structuredContent).toEqual({
         error: expect.objectContaining({ code: "INVALID_ARGUMENT", target: "operation" }),
       });
