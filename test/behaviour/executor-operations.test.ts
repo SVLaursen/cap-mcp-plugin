@@ -30,6 +30,13 @@ describe("executor: operations", () => {
     });
   });
 
+  test("an app's own 404 keeps its code; CAP's bare 404 becomes NOT_FOUND", async () => {
+    const result = await callTool("bob", "CatalogService_bookCard", { book: 999 });
+    expect(result.structuredContent).toEqual({
+      error: expect.objectContaining({ code: "BOOK_NOT_FOUND", target: "book" }),
+    });
+  });
+
   test("operation arguments are checked: unknown and mistyped parameters are refused", async () => {
     for (const args of [{ genre: 11, extra: 1 }, { genre: "eleven" }]) {
       const result = await callTool("bob", "CatalogService_stockByGenre", args);

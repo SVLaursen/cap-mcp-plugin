@@ -2,10 +2,10 @@
  * M3 — executor, exercised end to end over /mcp against the demo app (cds.test).
  * Every call goes through srv.run / srv.send in the request's cds.context.
  */
-import { bootDemo } from "../helpers/demo";
+import { as, bootDemo } from "../helpers/demo";
 import { callTool as call, page } from "../helpers/tools";
 
-bootDemo();
+const demo = bootDemo();
 
 describe("executor: reads", () => {
   test("query returns { rows, total, nextCursor } and rows never contain costPrice", async () => {
@@ -182,6 +182,33 @@ describe("executor: reads", () => {
 });
 
 describe("executor: authorization is CAP's", () => {
-  test.todo("bob's Orders query over MCP returns exactly what OData returns for bob");
-  test.todo("bob calling an AdminService tool gets a 403-equivalent tool error from CAP");
+  test.each(["bob", "carol", "alice"] as const)(
+    "%s's Orders query over MCP returns exactly what OData returns for them",
+    async (who) => {
+      const odata = await demo.GET("/orders/Orders?$select=ID,orderNo&$orderby=ID", as(who));
+      const mcp = page(
+        await call(who, "OrdersService_Orders_query", {
+          select: ["ID", "orderNo"],
+          orderby: [{ field: "ID" }],
+        }),
+      );
+      expect(mcp.rows).toEqual(
+        odata.data.value.map(({ ID, orderNo }: Record<string, unknown>) => ({ ID, orderNo })),
+      );
+    },
+  );
+
+  test("bob calling an AdminService tool gets a 403-equivalent tool error from CAP", async () => {
+    // The registry hides it from bob; call it anyway (as if a client cached alice's list).
+    const result = await call(
+      "bob",
+      "AdminService_query",
+      { entity: "AdminService.Books" },
+      { listedFor: "alice" },
+    );
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toEqual({
+      error: expect.objectContaining({ code: "FORBIDDEN" }),
+    });
+  });
 });

@@ -19,15 +19,19 @@ export async function callTool(
   who: DemoUser,
   name: string,
   args: Record<string, unknown> = {},
-  options: { confirmed?: boolean } = {},
+  options: { confirmed?: boolean; listedFor?: DemoUser } = {},
 ): Promise<ToolResult> {
   const registry = ExposureRegistry.fromModel(cds.model as unknown as object);
   const user = demoUser(who);
-  const tool = registry.toolsFor(user).find((t) => t.name === name);
-  if (!tool) throw new Error(`${name} is not listed for ${who}`);
+  // listedFor: take the tool from another user's list, to prove CAP refuses the call itself.
+  const lister = options.listedFor ? demoUser(options.listedFor) : user;
+  const tool = registry.toolsFor(lister).find((t) => t.name === name);
+  if (!tool) throw new Error(`${name} is not listed for ${options.listedFor ?? who}`);
   const service = cds.services[name.split("_")[0] ?? ""] as unknown as ServiceLike;
   const executor = new Executor(registry.spec);
-  return cds.tx({ user }, () => executor.execute(tool, args, service, user, options));
+  return cds.tx({ user }, () =>
+    executor.execute(tool, args, service, user, { confirmed: options.confirmed }),
+  );
 }
 
 export type Page = { rows: Record<string, unknown>[]; total: number; nextCursor?: string };

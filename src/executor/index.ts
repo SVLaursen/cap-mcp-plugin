@@ -535,6 +535,12 @@ function refuseDraftChild(entity: EntitySpec): void {
   }
 }
 
+const BARE_STATUS: Record<number, { code: string; message: string }> = {
+  401: { code: "UNAUTHORIZED", message: "Authentication required" },
+  403: { code: "FORBIDDEN", message: "Not allowed for this user" },
+  404: { code: "NOT_FOUND", message: "Not found" },
+};
+
 interface ToolErrorLike {
   code: string;
   message: string;
@@ -553,8 +559,14 @@ function capError(error: unknown): ToolErrorLike | undefined {
   const status = Number(e.status ?? e.statusCode ?? numeric ?? NaN);
   if (!(status >= 400 && status < 500)) return undefined;
   const message = typeof e.message === "string" ? e.message : "";
-  if (status === 404) {
-    return { code: "NOT_FOUND", message: message && message !== "404" ? message : "Not found" };
+  // CAP's bare status errors (req.reject(403), a missing record) get readable codes.
+  const named = BARE_STATUS[status];
+  if (
+    named &&
+    (typeof e.code !== "string" || /^\d+$/.test(e.code)) &&
+    (!message || /^\d+$/.test(message))
+  ) {
+    return { code: named.code, message: named.message };
   }
   return {
     code: typeof e.code === "string" ? e.code : message || String(status),
