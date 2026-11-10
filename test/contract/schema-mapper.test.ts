@@ -2,7 +2,13 @@
  * M1 — schema-mapper: FieldSpec / EntitySpec / OperationSpec → JSON Schema 2020-12.
  */
 import { readModel } from "../../src/model-reader";
-import { entityInputSchema, fieldToSchema, operationInputSchema } from "../../src/schema-mapper";
+import {
+  entityInputSchema,
+  entityOutputSchema,
+  fieldToSchema,
+  operationInputSchema,
+  operationOutputSchema,
+} from "../../src/schema-mapper";
 import type { EntitySpec, FieldSpec, ServiceSpec } from "../../src/types";
 import { compileSnippet } from "../helpers/snippet";
 
@@ -295,7 +301,73 @@ describe("schema-mapper: tool input schemas", () => {
 });
 
 describe("schema-mapper: tool output schemas", () => {
-  test.todo("query output is { rows: Entity[], total: integer, nextCursor?: string }");
-  test.todo("get output is the entity object without omitted fields");
-  test.todo("operation output follows the CDS return type (scalar wrapped as { value })");
+  // Non-key, non-mandatory fields may come back as null; Decimal comes back as a string.
+  const row = {
+    type: "object",
+    properties: {
+      ID,
+      title: { type: "string", maxLength: 100 },
+      stock: { ...ID, type: ["integer", "null"] },
+      price: { ...decimal, type: ["string", "null"] },
+    },
+  };
+
+  test("query output is { rows: Entity[], total: integer, nextCursor?: string }", () => {
+    expect(entityOutputSchema(Books, "query")).toEqual({
+      type: "object",
+      properties: {
+        rows: { type: "array", items: row },
+        total: { type: "integer", minimum: 0 },
+        nextCursor: { type: "string" },
+      },
+      required: ["rows", "total"],
+    });
+  });
+
+  test("get output is the entity object without omitted fields", () => {
+    expect(entityOutputSchema(Books, "get")).toEqual(row);
+  });
+
+  test("create and update return the written record; delete returns nothing", () => {
+    expect(entityOutputSchema(Books, "create")).toEqual(row);
+    expect(entityOutputSchema(Books, "update")).toEqual(row);
+    expect(entityOutputSchema(Books, "delete")).toBeUndefined();
+  });
+
+  test("a nullable enum allows null among its values", () => {
+    const status = field("cds.String", { name: "status", enum: ["O", "C"] });
+    const schema = entityOutputSchema({ ...Books, fields: [status] }, "get");
+    expect(schema).toEqual({
+      type: "object",
+      properties: { status: { type: ["string", "null"], enum: ["O", "C", null] } },
+    });
+  });
+
+  test("operation output follows the CDS return type (scalar wrapped as { value })", () => {
+    const service = serviceOf(`
+      @mcp service S {
+        entity Books { key ID: Integer; @mcp.omit costPrice: Decimal; }
+        function count() returns Integer;
+        function counts() returns array of Integer;
+        function book() returns Books;
+        function books() returns array of Books;
+        function stock() returns { stock: Integer; };
+        @mcp action run();
+      }
+    `);
+    const out = Object.fromEntries(
+      service.operations.map((o) => [o.name, operationOutputSchema(o)]),
+    );
+    const nullableInt = { ...ID, type: ["integer", "null"] };
+    const book = { type: "object", properties: { ID } };
+    expect(out).toEqual({
+      "S.count": { type: "object", properties: { value: nullableInt } },
+      "S.counts": { type: "object", properties: { value: { type: "array", items: nullableInt } } },
+      "S.book": book,
+      // structuredContent must be an object, so lists are wrapped too.
+      "S.books": { type: "object", properties: { value: { type: "array", items: book } } },
+      "S.stock": { type: "object", properties: { stock: nullableInt } },
+      "S.run": undefined,
+    });
+  });
 });

@@ -633,6 +633,52 @@ describe("model-reader: field shapes", () => {
   });
 });
 
+describe("model-reader: return types", () => {
+  test("operations carry their return type: scalar, entity, inline structure, or many of them", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        entity Books { key ID: Integer; title: String; @mcp.omit costPrice: Decimal; }
+        function count() returns Integer;
+        function counts() returns array of Integer;
+        function book() returns Books;
+        function books() returns array of Books;
+        function stock() returns { stock: Integer; };
+        function nothing() returns Integer;
+        @mcp action run();
+      }
+    `);
+    const value = {
+      name: "value",
+      cdsType: "cds.Integer",
+      key: false,
+      mandatory: false,
+      readonly: false,
+      completion: false,
+    };
+    const plain = (name: string, cdsType: string, key = false) => ({
+      name,
+      cdsType,
+      key,
+      mandatory: false,
+      readonly: false,
+      completion: false,
+    });
+    const bookFields = [plain("ID", "cds.Integer", true), plain("title", "cds.String")];
+    const returns = Object.fromEntries(
+      onlyService(readModel(csn).spec).operations.map((o) => [o.name, o.returns]),
+    );
+    expect(returns).toEqual({
+      "S.count": { many: false, scalar: value },
+      "S.counts": { many: true, scalar: value },
+      "S.book": { many: false, entity: "S.Books", fields: bookFields },
+      "S.books": { many: true, entity: "S.Books", fields: bookFields },
+      "S.stock": { many: false, fields: [plain("stock", "cds.Integer")] },
+      "S.nothing": { many: false, scalar: value },
+      "S.run": undefined,
+    });
+  });
+});
+
 describe("model-reader: diagnostics", () => {
   const codes = (diagnostics: Diagnostic[]) =>
     diagnostics.map(({ level, code, target }) => ({ level, code, target }));

@@ -6,6 +6,7 @@ import type {
   ModelReadResult,
   OperationSpec,
   PromptSpec,
+  ReturnSpec,
   ServiceSpec,
 } from "../types";
 
@@ -45,6 +46,8 @@ interface Definition {
   actions?: Record<string, Definition>;
   params?: Record<string, Definition>;
   drafts?: Definition;
+  returns?: Definition;
+  items?: Definition;
   [annotation: `@${string}`]: unknown;
 }
 
@@ -158,9 +161,7 @@ function readEntity(name: string, service: string, def: Definition, ctx: Context
       });
     }
   }
-  const fields = elements
-    .filter(([, el]) => !ASSOCIATION.has(el.type ?? "") && !isExcluded(el) && !isOmitted(el))
-    .map(([field, el]) => readField(field, el, def.elements));
+  const fields = readFields(def.elements);
   return {
     name,
     service,
@@ -213,9 +214,30 @@ function readOperation(
     boundTo,
     description: describe(def),
     params: Object.entries(def.params ?? {}).map(([param, p]) => readField(param, p)),
+    returns: readReturns(def.returns, ctx),
     elicit: strings(def["@mcp.elicit"]),
     ui: readUi(name, def, ctx),
   };
+}
+
+/** The scalar, non-ignored, non-omitted elements an agent may see. */
+function readFields(elements: Record<string, Definition> = {}): FieldSpec[] {
+  return Object.entries(elements)
+    .filter(([, el]) => !ASSOCIATION.has(el.type ?? "") && !isExcluded(el) && !isOmitted(el))
+    .map(([field, el]) => readField(field, el, elements));
+}
+
+/** `returns X`, `returns array of X`, with X a builtin, an entity or an inline structure. */
+function readReturns(returns: Definition | undefined, ctx: Context): ReturnSpec | undefined {
+  if (!returns) return undefined;
+  const many = returns.items !== undefined;
+  const type = returns.items ?? returns;
+  const entity = type.type ? ctx.definitions[type.type] : undefined;
+  if (entity?.kind === "entity" && type.type) {
+    return { many, entity: type.type, fields: readFields(entity.elements) };
+  }
+  if (type.elements) return { many, fields: readFields(type.elements) };
+  return { many, scalar: readField("value", type) };
 }
 
 /** MCP Apps UI resources live under ui:// (issue #133); anything else is a mistake. */

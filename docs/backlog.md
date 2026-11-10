@@ -27,7 +27,7 @@ Fast loop: `npm run test:contract`.
 - [x] Diagnostics: unknown keys, v1 annotations, bound op without keys, `@mcp.omit` on a key (warn); demo reads with zero errors _(diagnostics)_
 - [x] Schema mapper: scalar types _(`schema-mapper.test.ts` › scalar types)_
 - [x] Schema mapper: tool input schemas per mode and for operations _(input)_
-- [ ] Schema mapper: output schemas _(output)_
+- [x] Schema mapper: output schemas _(output)_
 - [ ] Review: run the `reviewer` agent on M1
 
 ## M2 — Exposure registry

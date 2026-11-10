@@ -1,4 +1,3 @@
-import { NotImplementedError } from "../errors";
 import type { EntityMode, EntitySpec, FieldSpec, JsonSchema, OperationSpec } from "../types";
 
 /**
@@ -163,6 +162,56 @@ function object(fields: FieldSpec[], required: FieldSpec[]): JsonSchema {
   return schema;
 }
 
-export function entityOutputSchema(_entity: EntitySpec, _mode: EntityMode): JsonSchema {
-  throw new NotImplementedError("entityOutputSchema", "M1");
+/** What the executor returns as structuredContent for an entity tool. */
+export function entityOutputSchema(entity: EntitySpec, mode: EntityMode): JsonSchema | undefined {
+  const row = record(entity.fields);
+  switch (mode) {
+    case "query":
+      return {
+        type: "object",
+        properties: {
+          rows: { type: "array", items: row },
+          total: { type: "integer", minimum: 0 },
+          nextCursor: { type: "string" },
+        },
+        required: ["rows", "total"],
+      };
+    case "get":
+    case "create":
+    case "update":
+      return row;
+    case "delete":
+      return undefined;
+  }
+}
+
+/** structuredContent must be an object, so scalars and lists are wrapped as { value }. */
+export function operationOutputSchema(op: OperationSpec): JsonSchema | undefined {
+  const returns = op.returns;
+  if (!returns) return undefined;
+  const one = returns.scalar ? outputField(returns.scalar) : record(returns.fields ?? []);
+  if (returns.many) {
+    return { type: "object", properties: { value: { type: "array", items: one } } };
+  }
+  return returns.scalar ? { type: "object", properties: { value: one } } : one;
+}
+
+/**
+ * A record as CAP returns it. No `required`: `select` may leave fields out. No
+ * `additionalProperties: false`: the executor strips anything not exposed.
+ */
+function record(fields: FieldSpec[]): JsonSchema {
+  return {
+    type: "object",
+    properties: Object.fromEntries(fields.map((f) => [f.name, outputField(f)])),
+  };
+}
+
+/** Outputs may be null unless the field is a key or mandatory. */
+function outputField(field: FieldSpec): JsonSchema {
+  const schema = fieldToSchema(field);
+  if (field.key || field.mandatory) return schema;
+  if (typeof schema.type === "string") schema.type = [schema.type, "null"];
+  if (Array.isArray(schema.enum)) schema.enum = [...schema.enum, null];
+  return schema;
 }

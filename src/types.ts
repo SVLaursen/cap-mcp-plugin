@@ -64,12 +64,24 @@ export interface OperationSpec {
   boundTo?: string;
   description?: string;
   params: FieldSpec[];
-  /** CDS return type name, if any. Drives outputSchema. */
-  returns?: string;
+  /** The CDS return type, if any. Drives outputSchema. */
+  returns?: ReturnSpec;
   /** Opted in with @mcp.elicit. */
   elicit?: string[];
   /** Opted in with @mcp.ui (MCP Apps, issue #133): a ui:// resource URI. */
   ui?: string;
+}
+
+/** An operation's return type: one scalar, or records (an entity or an inline structure). */
+export interface ReturnSpec {
+  /** `array of` / `many`. */
+  many: boolean;
+  /** Scalar return: its builtin type, as a FieldSpec named "value". */
+  scalar?: FieldSpec;
+  /** Structured return: its fields, never with @mcp.omit ones. */
+  fields?: FieldSpec[];
+  /** Fully qualified entity, when the return type is one. */
+  entity?: string;
 }
 
 export interface PromptSpec {

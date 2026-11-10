@@ -62,6 +62,14 @@ JSON Schema enums). `additionalProperties` is always `false`.
 `op` is one of `eq ne gt ge lt le in contains startswith endswith`. Readonly fields never appear in
 write inputs; in a deep insert, the child's back link to its parent is left to CAP.
 
+## Tool output shapes
+
+`structuredContent` is always an object: query → `{ rows, total, nextCursor? }`; get, create and
+update → the record; operations → the record, or `{ value }` for scalars and lists; delete and
+operations without a return type → no output schema. Values are as CAP returns them (Decimal and
+Int64 as strings); fields other than keys and mandatory ones may be `null`. Omitted fields are
+never in an output schema, including in records an operation returns.
+
 ## Division of labour
 
 | Concern        | CAP does it                                  | The plugin does it                                                    |
