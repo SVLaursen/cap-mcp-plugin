@@ -4,6 +4,7 @@ import type { Application, RequestHandler } from "express";
 import { mcpHandler, type RequestContext } from "./adapter";
 import {
   authErrors,
+  checkOrigin,
   metadataHandler,
   metadataPath,
   requireUser,
@@ -26,6 +27,7 @@ export interface CdsLike {
   readonly services: Record<string, unknown>;
   readonly middlewares: { before: RequestHandler[] };
   readonly requires: { auth?: AuthConfig };
+  readonly env: { mcp?: { allowedOrigins?: string[] } };
   readonly i18n: { messages: { at(key: string, locale?: string, args?: unknown): unknown } };
 }
 
@@ -65,6 +67,7 @@ export function activate(cds: CdsLike): void {
     // All methods: the SDK answers GET/DELETE (2025 session operations) with 405.
     cds.app.all(
       MCP_PATH,
+      checkOrigin(() => cds.env.mcp?.allowedOrigins),
       ...cds.middlewares.before,
       requireUser({ ...auth, user: () => cds.context?.user }),
       // No body parser: the SDK reads the body itself (4 MiB) and answers JSON-RPC errors.

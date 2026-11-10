@@ -118,3 +118,19 @@ export function metadataHandler(options: AuthOptions): RequestHandler {
     else res.json(metadata);
   };
 }
+
+/**
+ * Streamable HTTP: servers MUST validate Origin (DNS rebinding). A request without Origin (a
+ * native client) passes; with one, it must be the app's own origin or explicitly allowed.
+ */
+export function checkOrigin(allowed: () => string[] | undefined): RequestHandler {
+  return (req, res, next) => {
+    const from = req.get("origin");
+    if (from === undefined || from === origin(req) || allowed()?.includes(from)) return next();
+    res.status(403).json({
+      jsonrpc: "2.0",
+      id: null,
+      error: { code: -32000, message: `Origin ${from} is not allowed` },
+    });
+  };
+}

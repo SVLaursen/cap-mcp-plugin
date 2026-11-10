@@ -184,6 +184,33 @@ describe("protocol: older clients (2025-era, stateless; ADR 0010)", () => {
   });
 });
 
+describe("protocol: Origin (DNS rebinding protection)", () => {
+  const origin = (value: string) => ({ headers: { origin: value } });
+
+  test("a request from a foreign Origin is refused with 403", async () => {
+    const res = await listTools(demo.POST, "bob", origin("http://evil.example"));
+    expect(res.status).toBe(403);
+  });
+
+  test("no Origin (native clients) and the app's own origin are fine", async () => {
+    const own = (demo as unknown as { url: string }).url;
+    expect((await listTools(demo.POST, "bob")).status).toBe(200);
+    expect((await listTools(demo.POST, "bob", origin(own))).status).toBe(200);
+  });
+
+  test("origins listed in cds.env.mcp.allowedOrigins are accepted", async () => {
+    const env = cds.env as unknown as { mcp?: { allowedOrigins?: string[] } };
+    const saved = env.mcp;
+    env.mcp = { ...saved, allowedOrigins: ["http://localhost:6274"] };
+    try {
+      expect((await listTools(demo.POST, "bob", origin("http://localhost:6274"))).status).toBe(200);
+      expect((await listTools(demo.POST, "bob", origin("http://localhost:6275"))).status).toBe(403);
+    } finally {
+      env.mcp = saved;
+    }
+  });
+});
+
 describe("protocol: production default (CAP's restrict_all_services)", () => {
   test("in production, anonymous callers must log in, as CAP's protocol adapters demand", async () => {
     const res = await inProduction(() => listTools(demo.POST, "anonymous"), {

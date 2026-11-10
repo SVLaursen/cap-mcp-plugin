@@ -110,13 +110,14 @@ The model reader and the exposure registry report these; the startup report (M6)
 
 camelCase, read through `cds.env` only (profiles work as usual). No key turns a feature on.
 
-| Key                  | Default             | Meaning                              |
-| -------------------- | ------------------- | ------------------------------------ |
-| `path`               | `/mcp`              | Endpoint path                        |
-| `name`, `version`    | from `package.json` | Server identity in `server/discover` |
-| `instructions`       | none                | String, or `{ file }`                |
-| `limits.maxRows`     | `200`               | Upper bound for `top`                |
-| `limits.defaultRows` | `25`                | Default page size                    |
+| Key                  | Default             | Meaning                                                                        |
+| -------------------- | ------------------- | ------------------------------------------------------------------------------ |
+| `path`               | `/mcp`              | Endpoint path                                                                  |
+| `allowedOrigins`     | none                | Browser origins other than the app's own that may call `/mcp` (others get 403) |
+| `name`, `version`    | from `package.json` | Server identity in `server/discover`                                           |
+| `instructions`       | none                | String, or `{ file }`                                                          |
+| `limits.maxRows`     | `200`               | Upper bound for `top`                                                          |
+| `limits.defaultRows` | `25`                | Default page size                                                              |
 
 Final key list is settled in M6; add keys only with a test and a row here.
 

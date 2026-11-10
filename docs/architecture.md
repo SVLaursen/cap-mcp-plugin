@@ -33,8 +33,9 @@ The data passed between them is defined in `src/types.ts`.
 
 ## Request lifecycle
 
-1. `activate(cds)` mounts one `/mcp` route (all methods) on `served`, behind `cds.middlewares.before`
-   (ADR 0009). That chain authenticates the request and sets `cds.context` (user, tenant,
+1. `activate(cds)` mounts one `/mcp` route (all methods) on `served`. A request whose `Origin`
+   is neither the app's own nor in `cds.env.mcp.allowedOrigins` gets 403 (DNS rebinding); the
+   rest go through `cds.middlewares.before` (ADR 0009). That chain authenticates the request and sets `cds.context` (user, tenant,
    locale, model). Other plugins' middleware (e.g. `@sap/ams`) runs here too, with no special
    code in the plugin. CAP's production default (`restrict_all_services`) lives only in its
    protocol adapters, so `/mcp` applies it itself: with `NODE_ENV=production` and
