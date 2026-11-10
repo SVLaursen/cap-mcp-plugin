@@ -359,6 +359,26 @@ describe("model-reader: opt-in", () => {
     ]);
   });
 
+  test("draft entities never expose CAP's draft bookkeeping elements as fields or keys", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        @odata.draft.enabled entity Orders {
+          key ID: UUID;
+          note: String;
+          items: Composition of many Items on items.up_ = $self;
+        }
+        entity Items { key ID: UUID; up_: Association to Orders; qty: Integer; }
+      }
+    `);
+    const { entities } = onlyService(readModel(csn).spec);
+    expect(
+      entities.map((e) => [e.name, e.keys.map((k) => k.name), e.fields.map((f) => f.name)]),
+    ).toEqual([
+      ["S.Orders", ["ID"], ["ID", "note"]],
+      ["S.Items", ["ID"], ["ID", "up__ID", "qty"]],
+    ]);
+  });
+
   test("draft-enabled entities, and the compositions inside them, have draft: true", () => {
     const csn = compileSnippet(`
       @mcp service S {

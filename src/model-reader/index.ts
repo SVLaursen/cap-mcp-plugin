@@ -62,6 +62,17 @@ interface Context {
 }
 
 const ASSOCIATION = new Set(["cds.Association", "cds.Composition"]);
+
+/** Elements CAP adds to draft-enabled entities. The executor drives drafts; agents never see them. */
+const DRAFT_ELEMENTS = new Set([
+  "IsActiveEntity",
+  "HasActiveEntity",
+  "HasDraftEntity",
+  "DraftAdministrativeData",
+  "DraftAdministrativeData_DraftUUID",
+  "DraftMessages",
+  "SiblingEntity",
+]);
 const BASELINE: readonly EntityMode[] = ["query", "get"];
 const MODES: ReadonlySet<string> = new Set<EntityMode>([
   "query",
@@ -161,7 +172,8 @@ function readEntity(name: string, service: string, def: Definition, ctx: Context
       });
     }
   }
-  const fields = readFields(def.elements);
+  const draft = def["@odata.draft.enabled"] === true || def.drafts !== undefined;
+  const fields = readFields(def.elements).filter((f) => !draft || !DRAFT_ELEMENTS.has(f.name));
   return {
     name,
     service,
@@ -172,7 +184,7 @@ function readEntity(name: string, service: string, def: Definition, ctx: Context
     modes: readModes(name, def, ctx),
     resource: def["@mcp.resource"] === true,
     // Linked CSN gives draft roots and the compositions inside them a `drafts` entity.
-    draft: def["@odata.draft.enabled"] === true || def.drafts !== undefined,
+    draft,
     deepInsert: elements
       .filter(([, el]) => el.type === "cds.Composition" && el["@mcp.deepInsert"] === true)
       .map(([element, el]) => ({ element, target: el.target ?? "" })),
