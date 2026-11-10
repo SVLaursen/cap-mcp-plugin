@@ -176,6 +176,20 @@ describe("executor: reads", () => {
       { uri: "cap://AdminService/Authors/101", name: "AdminService.Authors 101" },
       { uri: "cap://AdminService/Authors/107", name: "AdminService.Authors 107" },
     ]);
+    // Keys are read even when select leaves them out, so links always point somewhere.
+    const names = await call("alice", "AdminService_query", {
+      entity: "AdminService.Authors",
+      select: ["name"],
+      top: 1,
+    });
+    expect(names.structuredContent).toEqual({
+      rows: [{ name: "Emily Brontë" }],
+      total: 4,
+      nextCursor: expect.any(String),
+    });
+    expect(names.links).toEqual([
+      { uri: "cap://AdminService/Authors/101", name: "AdminService.Authors 101" },
+    ]);
     const books = await call("bob", "CatalogService_Books_query", { top: 1 });
     expect(books.links).toBeUndefined();
   });

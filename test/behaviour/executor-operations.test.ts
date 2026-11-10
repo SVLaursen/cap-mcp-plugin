@@ -37,6 +37,13 @@ describe("executor: operations", () => {
     });
   });
 
+  test("records an operation returns never carry @mcp.omit fields", async () => {
+    const result = await callTool("bob", "CatalogService_bookCard", { book: 201 });
+    const value = (result.structuredContent as { value: Record<string, unknown> }).value;
+    expect(value).toEqual(expect.objectContaining({ ID: 201, title: "Wuthering Heights" }));
+    expect(value).not.toHaveProperty("costPrice");
+  });
+
   test("operation arguments are checked: unknown and mistyped parameters are refused", async () => {
     for (const args of [{ genre: 11, extra: 1 }, { genre: "eleven" }]) {
       const result = await callTool("bob", "CatalogService_stockByGenre", args);

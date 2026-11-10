@@ -204,7 +204,7 @@ export class Executor {
 
   private async create(entity: EntitySpec, data: Args, service: ServiceLike): Promise<ToolResult> {
     refuseDraftChild(entity);
-    const entry = this.writable(entity, data, "create");
+    const entry = this.writable(entity, structuredClone(data), "create");
     if (entity.draftRoot) {
       // A plain CREATE would only start a draft: NEW it, then SAVE (activate) it, so the app's
       // NEW and SAVE handlers run. One transaction: if SAVE fails, no draft is left behind.
@@ -220,6 +220,14 @@ export class Executor {
     const written = (await service.run({
       INSERT: { into: { ref: [entity.name] }, entries: [entry] },
     })) as Args[];
+    // Without an address (no keys, or an omitted one) a read-back could find another record.
+    if (!entity.modes.has("get"))
+      return result(
+        project(
+          entry,
+          entity.fields.map((f) => f.name),
+        ),
+      );
     // CAP returns the written keys, generated ones included.
     return this.get(entity, pick(written[0] ?? entry, entity), service);
   }
@@ -276,7 +284,7 @@ export class Executor {
   ): Promise<ToolResult> {
     refuseDraftChild(entity);
     const address = keyOf(entity, key);
-    const changes = this.writable(entity, data, "update");
+    const changes = this.writable(entity, structuredClone(data), "update");
     if (entity.draftRoot) return this.updateDraft(entity, address, changes, service);
     // req.data = changes plus keys, as with OData's PATCH /Books(201).
     const done = (await service.send({
@@ -407,8 +415,10 @@ export class Executor {
     const fields = op.returns.fields?.map((f) => f.name);
     const shape = (v: unknown) =>
       fields && v && typeof v === "object" ? project(v as Args, fields) : v;
-    const value_ =
-      op.returns.many && Array.isArray(returned) ? returned.map(shape) : shape(returned ?? null);
+    // A list operation whose handler returns nothing returned an empty list (the schema says array).
+    const value_ = op.returns.many
+      ? (Array.isArray(returned) ? returned : []).map(shape)
+      : shape(returned ?? null);
     return result({ value: value_ });
   }
 
@@ -424,9 +434,20 @@ export class Executor {
   private async query(entity: EntitySpec, args: Args, service: ServiceLike): Promise<ToolResult> {
     allowOnly(args, ["q", "where", "orderby", "select", "top", "cursor"]);
     const fields = byName(entity.fields);
-    const columns = (list(args.select, "select") ?? [...fields.keys()]).map((name) =>
+    const wanted = list(args.select, "select");
+    if (wanted && (wanted.length === 0 || new Set(wanted).size !== wanted.length)) {
+      throw new ToolError("INVALID_ARGUMENT", "select needs distinct field names", "select");
+    }
+    const columns = (wanted ?? [...fields.keys()]).map((name) =>
       ref(field(fields, String(name), "select").name),
     );
+    // Keys are always read (resource links need them) and dropped again by project().
+    const read = [
+      ...columns,
+      ...entity.keys
+        .filter((k) => !columns.some((c) => c.ref[0] === k.name))
+        .map((k) => ref(k.name)),
+    ];
     const where = and(conditions(fields, args.where), search(entity, args.q));
     const orderBy = [
       ...(list(args.orderby, "orderby") ?? []).map((o) => sortBy(fields, o)),
@@ -439,7 +460,7 @@ export class Executor {
     const rows = (await service.run({
       SELECT: {
         from,
-        columns,
+        columns: read,
         ...(where.length && { where }),
         orderBy,
         limit: { rows: { val: top }, offset: { val: offset } },
@@ -601,7 +622,12 @@ function capError(error: unknown): ToolErrorLike | undefined {
   if (!error || typeof error !== "object") return undefined;
   const e = error as Record<string, unknown>;
   const numeric = typeof e.code === "number" ? e.code : undefined;
-  const status = Number(e.status ?? e.statusCode ?? numeric ?? NaN);
+  const details = Array.isArray(e.details) ? (e.details as Record<string, unknown>[]) : undefined;
+  // CAP's MULTIPLE_ERRORS carries no status of its own, only its details' (all 4xx for input).
+  const fromDetails = details?.length
+    ? Math.max(...details.map((d) => Number(d.status ?? d.statusCode ?? d.code ?? 400) || 400))
+    : undefined;
+  const status = Number(e.status ?? e.statusCode ?? numeric ?? fromDetails ?? NaN);
   if (!(status >= 400 && status < 500)) return undefined;
   const message = typeof e.message === "string" ? e.message : "";
   // CAP's bare status errors (req.reject(403), a missing record) get readable codes.
@@ -617,9 +643,10 @@ function capError(error: unknown): ToolErrorLike | undefined {
     code: typeof e.code === "string" ? e.code : message || String(status),
     message: message || String(e.code),
     target: typeof e.target === "string" ? e.target : undefined,
-    details: Array.isArray(e.details)
-      ? e.details.map((d: unknown) => capError({ status, ...(d as object) }) ?? d)
-      : undefined,
+    // An error's message is not enumerable, so read each field rather than spreading it.
+    details: details?.map((d) =>
+      capError({ status: d.status ?? status, code: d.code, message: d.message, target: d.target }),
+    ),
   };
 }
 

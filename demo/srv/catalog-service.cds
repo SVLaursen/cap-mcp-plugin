@@ -27,6 +27,10 @@ service CatalogService @(path: '/browse') {
   @readonly
   entity Genres  as projection on my.Genres;
 
+  /** Leave feedback. No key: MCP offers query and create only. */
+  @mcp.wrap.modes: ['create']
+  entity Feedback as projection on my.Feedback;
+
   /** Number of books in stock for a genre. Baseline: functions are exposed by `@mcp` on the service. */
   function stockByGenre(genre : Integer) returns Integer;
 

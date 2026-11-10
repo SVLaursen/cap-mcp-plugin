@@ -32,6 +32,30 @@ describe("executor: writes", () => {
     expect(missing.structuredContent).toEqual(error("ASSERT_MANDATORY", { target: "author_ID" }));
   });
 
+  test("several input errors at once come back as one tool error with every target", async () => {
+    const result = await callTool("alice", "AdminService_create", {
+      entity: "AdminService.Books",
+      data: { ID: 930, title: "Too much", stock: 5000 },
+    });
+    expect(result.isError).toBe(true);
+    const error = (
+      result.structuredContent as {
+        error: { code: string; details: { target?: string; code: string }[] };
+      }
+    ).error;
+    expect(error.code).toBe("MULTIPLE_ERRORS");
+    expect(error.details.map((d) => d.target).sort()).toEqual(["author_ID", "stock"]);
+    expect(error.details.every((d) => typeof d.code === "string" && d.code.length > 0)).toBe(true);
+  });
+
+  test("create on an entity without keys returns what was written, not some other record", async () => {
+    const args = { message: "mine", rating: 5 };
+    const result = await callTool("bob", "CatalogService_Feedback_create", args);
+    expect(result.structuredContent).toEqual({ message: "mine", rating: 5 });
+    // The agent's arguments are not changed by the call.
+    expect(args).toEqual({ message: "mine", rating: 5 });
+  });
+
   test("a negative price is rejected by the demo handler with code PRICE_NEGATIVE, target price", async () => {
     const result = await callTool("alice", "AdminService_update", {
       entity: "AdminService.Books",

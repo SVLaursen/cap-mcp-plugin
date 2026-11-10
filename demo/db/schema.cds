@@ -64,3 +64,9 @@ entity AuditNotes : cuid, managed {
   subject : String;
   note    : String;
 }
+
+/** Anonymous feedback: no key, so records cannot be addressed (create-only over MCP). */
+entity Feedback {
+  message : String;
+  rating  : Integer;
+}
