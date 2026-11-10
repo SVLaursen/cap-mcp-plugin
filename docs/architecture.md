@@ -31,16 +31,20 @@ flowchart LR
 
 The data passed between them is defined in `src/types.ts`.
 
-## Request lifecycle (target, M4)
+## Request lifecycle
 
-1. CAP's middleware chain authenticates the request and sets `cds.context` (user, tenant,
-   locale). Other plugins' middleware (e.g. `@sap/ams`) runs here too, with no special code in
-   the plugin. How we mount inside that chain is the M4 spike (ADR 0002).
-2. The adapter reads the protocol version from `_meta`, rejects unsupported versions, and
-   dispatches the JSON-RPC method.
+1. `activate(cds)` mounts one `POST /mcp` route on `served`, behind `cds.middlewares.before`
+   (ADR 0009). That chain authenticates the request and sets `cds.context` (user, tenant,
+   locale, model). Other plugins' middleware (e.g. `@sap/ams`) runs here too, with no special
+   code in the plugin. Then `express.json()` and one `createMcpHandler(factory)` (ADR 0010).
+2. The SDK classifies the request (2026-07-28 envelope or 2025 era), rejects unsupported
+   versions, and calls the factory, which builds a fresh `McpServer` with the caller's tools
+   (registry for `cds.context.model ?? cds.model`, `toolsFor(cds.context.user)`); the server
+   dispatches the JSON-RPC method. Only `tools` is advertised, with `listChanged: false`.
 3. `tools/list` → `registry.toolsFor(cds.context.user)` for `cds.context.model`.
-4. `tools/call` → validate args against the tool's input schema →
-   `srv.tx(ctx, tx => executor.execute(tool, args, tx, user, { confirmed }))` →
+4. `tools/call` → the SDK validates args against the tool's input schema →
+   `srv.tx(tx => executor.execute(tool, args, tx, user, { confirmed }))` (the service's own root
+   transaction, inheriting `cds.context`) →
    `srv.run(cqn)` / `srv.send(...)`. CAP runs handlers, enforces `@restrict`, and commits or
    rolls back. `execute` throws on any error, so CAP rolls back; only then does the adapter turn
    it into a tool result with `errorResult(error)` (bad arguments, CAP 4xx) or report it as an

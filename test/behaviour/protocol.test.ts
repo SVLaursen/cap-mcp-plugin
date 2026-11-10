@@ -1,6 +1,17 @@
+import cds from "@sap/cds";
+import { ExposureRegistry } from "../../src/exposure-registry";
+import type { ToolSpec } from "../../src/types";
+import { bootDemo } from "../helpers/demo";
+import { listTools, rpc } from "../helpers/mcp";
+import { demoUser } from "../helpers/tools";
+
 /**
  * M4 — adapter: MCP 2026-07-28 over Streamable HTTP, stateless.
  */
+const demo = bootDemo();
+
+/** What tools/list publishes for a tool: the spec without the executor's back-reference. */
+const listed = ({ target: _target, ...tool }: ToolSpec) => tool;
 describe("protocol: stateless 2026-07-28", () => {
   test.todo("tools/list works without any initialize handshake");
   test.todo("no Mcp-Session-Id header is ever set");
@@ -24,6 +35,20 @@ describe("protocol: auth metadata", () => {
 });
 
 describe("protocol: mounting inside CAP", () => {
+  test("/mcp lists the caller's tools from the registry, exactly as specified", async () => {
+    const registry = ExposureRegistry.fromModel(cds.model as unknown as object);
+    for (const who of ["alice", "bob"] as const) {
+      const res = await listTools(demo.POST, who);
+      expect(res.status).toBe(200);
+      expect(res.message?.result?.tools).toEqual(registry.toolsFor(demoUser(who)).map(listed));
+    }
+  });
+
+  test("only implemented capabilities are advertised (tools, listChanged off)", async () => {
+    const res = await rpc(demo.POST, "bob", "server/discover");
+    expect(res.message?.result?.capabilities).toEqual({ tools: { listChanged: false } });
+  });
+
   test.todo(
     "activate() leaves cds.env.cdsc untouched, so doc comments stay the app's choice (ADR 0011)",
   );

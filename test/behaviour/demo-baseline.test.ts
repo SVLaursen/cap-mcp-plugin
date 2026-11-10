@@ -50,12 +50,3 @@ describe("demo baseline (OData)", () => {
     expect(after.status).toBe(200);
   });
 });
-
-describe("plugin placeholder", () => {
-  // Replaced in milestone M4: delete this test when the adapter lands.
-  test("POST /mcp answers with a not-implemented JSON-RPC error until M4", async () => {
-    const { status, data } = await demo.POST("/mcp", {}, as("alice"));
-    expect(status).toBe(501);
-    expect(data.error.code).toBe(-32601);
-  });
-});
