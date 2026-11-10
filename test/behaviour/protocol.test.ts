@@ -3,7 +3,7 @@ import pkg from "../../package.json";
 import { ExposureRegistry } from "../../src/exposure-registry";
 import type { ToolSpec } from "../../src/types";
 import type { Request } from "express";
-import { as, bootDemo } from "../helpers/demo";
+import { DEMO_DIR, as, bootDemo } from "../helpers/demo";
 import { PROTOCOL_VERSION, callTool, listTools, rpc } from "../helpers/mcp";
 import { TOOLS_TTL_MS } from "../../src/adapter";
 import { demoUser } from "../helpers/tools";
@@ -153,9 +153,11 @@ describe("protocol: mounting inside CAP", () => {
     expect(res.message?.result?.capabilities).toEqual({ tools: { listChanged: false } });
   });
 
-  test.todo(
-    "activate() leaves cds.env.cdsc untouched, so doc comments stay the app's choice (ADR 0011)",
-  );
+  test("activate() leaves cds.env.cdsc untouched, so doc comments stay the app's choice (ADR 0011)", () => {
+    // A fresh env for the demo is read without any plugin activation.
+    const fresh = cds.env.for("cds", DEMO_DIR) as unknown as { cdsc: unknown };
+    expect(cds.env.cdsc).toEqual(fresh.cdsc);
+  });
   test("cds.context.user inside a tool handler is the authenticated user (not privileged)", async () => {
     // @restrict where createdBy = $user: a privileged or technical user would see every order.
     for (const who of ["bob", "carol"] as const) {
