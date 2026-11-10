@@ -1,6 +1,7 @@
 /**
  * M2 — exposure-registry: ExposureSpec → ToolSpec[], filtered per user.
  */
+import cds from "@sap/cds";
 import { ExposureRegistry, registryCache } from "../../src/exposure-registry";
 import { readModel } from "../../src/model-reader";
 import type { ToolSpec, UserLike } from "../../src/types";
@@ -13,6 +14,11 @@ function user(...roles: string[]): UserLike {
 
 function registry(source: string): ExposureRegistry {
   return new ExposureRegistry(readModel(compileSnippet(source)).spec);
+}
+
+/** A real cds.User (not a mock), for CAP's own role checks incl. pseudo roles. */
+function capUser(id: string, ...roles: string[]): cds.User {
+  return new cds.User({ id, roles, attr: {} });
 }
 
 const names = (tools: ToolSpec[]) => tools.map((t) => t.name);
@@ -241,6 +247,41 @@ describe("exposure-registry: per-user filtering (advertising only; CAP enforces)
       "S_Tickets_query",
     ]);
     expect(names(r.toolsFor(user("admin")))).toContain("S_audit");
+  });
+
+  test("a bound operation's own @requires replaces its entity's, as CAP checks it", () => {
+    const r = registry(`
+      @mcp service S {
+        @requires: 'admin' entity Tickets { key ID: Integer; } actions {
+          @requires: 'support' function age() returns Integer;
+          function count() returns Integer;
+        }
+      }
+    `);
+    const support = capUser("carol", "support");
+    const admin = capUser("alice", "admin");
+    expect(names(r.toolsFor(support))).toEqual(["S_Tickets_age"]);
+    expect(names(r.toolsFor(admin))).toEqual([
+      "S_Tickets_count",
+      "S_Tickets_get",
+      "S_Tickets_query",
+    ]);
+  });
+
+  test("CAP's pseudo roles work through a real cds.User", () => {
+    const r = registry(`
+      @mcp service S {
+        @requires: 'authenticated-user' entity Mine { key ID: Integer; }
+        @requires: 'any' entity Open { key ID: Integer; }
+      }
+    `);
+    expect(names(r.toolsFor(cds.User.anonymous))).toEqual(["S_Open_get", "S_Open_query"]);
+    expect(names(r.toolsFor(capUser("bob")))).toEqual([
+      "S_Mine_get",
+      "S_Mine_query",
+      "S_Open_get",
+      "S_Open_query",
+    ]);
   });
 
   test("@restrict with only `where` conditions does NOT hide tools (CAP filters rows)", () => {

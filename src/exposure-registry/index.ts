@@ -78,7 +78,10 @@ export class ExposureRegistry {
   /** Problems found while building tools (e.g. name clashes). Reported at startup. */
   readonly diagnostics: Diagnostic[] = [];
   private readonly tools: ToolSpec[];
-  /** Per tool: every @requires on its path (service, entity, operation). Each needs one role. */
+  /**
+   * Per tool: the @requires CAP checks for it, each met by any one of its roles. The service's
+   * always applies; a bound operation uses its own, else its entity's (CAP's requires.js).
+   */
   private readonly requires = new WeakMap<ToolSpec, string[][]>();
 
   constructor(
@@ -149,7 +152,7 @@ export class ExposureRegistry {
       tools.push(...compactTools(service, rest, limits?.maxRows).map((tool) => tag(tool)));
       for (const op of ui) {
         const bound = lookup(op.boundTo ?? "");
-        tools.push(tag(operationTool(service, op, bound), bound?.requires, op.requires));
+        tools.push(tag(operationTool(service, op, bound), op.requires ?? bound?.requires));
       }
       return tools;
     }
@@ -169,7 +172,7 @@ export class ExposureRegistry {
     }
     for (const op of service.operations) {
       const bound = op.boundTo ? entities.get(op.boundTo) : undefined;
-      tools.push(tag(operationTool(service, op, bound), bound?.requires, op.requires));
+      tools.push(tag(operationTool(service, op, bound), op.requires ?? bound?.requires));
     }
     return tools;
   }
