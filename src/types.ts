@@ -40,6 +40,14 @@ export interface FieldSpec {
   completion: boolean;
 }
 
+/** One @restrict grant, normalized as CAP does: a single event (or `*`) and its roles. */
+export interface GrantSpec {
+  /** READ, CREATE, UPDATE, DELETE, `*`, or an operation's local name. */
+  grant: string;
+  /** Roles; `any` when the grant has no `to`. */
+  to: string[];
+}
+
 export interface DeepInsertSpec {
   /** The composition element. */
   element: string;
@@ -66,8 +74,10 @@ export interface EntitySpec {
   draft: boolean;
   /** Compositions opted in with @mcp.deepInsert. */
   deepInsert: DeepInsertSpec[];
-  /** @requires on the entity, if any. Used only to hide tools; CAP still enforces. */
+  /** @requires on the entity (or its composition ancestor), if any. Only hides tools; CAP enforces. */
   requires?: string[];
+  /** @restrict grants (own or a composition ancestor's), if any. Only hides tools; CAP enforces. */
+  restrict?: GrantSpec[];
   /**
    * Columns `q` searches: CAP's @cds.search rules, minus @mcp.omit fields. Paths for
    * associations ("author.name"). Empty → no `q`. The executor passes these to CAP explicitly.
@@ -90,6 +100,8 @@ export interface OperationSpec {
   returns?: ReturnSpec;
   /** @requires on the operation, if any. Used only to hide tools; CAP still enforces. */
   requires?: string[];
+  /** The operation's own @restrict grants (grant is its local name), if any. */
+  restrict?: GrantSpec[];
   /** Opted in with @mcp.elicit. */
   elicit?: string[];
   /** Opted in with @mcp.ui (MCP Apps, issue #133): a ui:// resource URI. */
@@ -122,7 +134,10 @@ export interface ServiceSpec {
   name: string;
   title: string;
   description?: string;
-  /** @requires on the service, if any. Used only to hide tools; CAP still enforces. */
+  /**
+   * Roles CAP's protocol check demands: @requires, else every `to` of the service's @restrict.
+   * Used only to hide tools; CAP still enforces.
+   */
   requires?: string[];
   /** Opted in with @mcp.compact. */
   compact: boolean;

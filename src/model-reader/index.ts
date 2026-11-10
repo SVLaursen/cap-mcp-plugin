@@ -3,6 +3,7 @@ import type {
   EntityMode,
   EntitySpec,
   FieldSpec,
+  GrantSpec,
   ModelReadResult,
   OperationSpec,
   PromptSpec,
@@ -227,7 +228,7 @@ function readService(service: string, def: Definition, ctx: Context): ServiceSpe
     name: service,
     title: title(service, def),
     description: describe(def),
-    requires: roles(def),
+    requires: roles(def) ?? restrictRoles(def),
     compact: def["@mcp.compact"] === true,
     describe: def["@mcp.describe"] === true,
     entities,
@@ -266,7 +267,7 @@ function readEntity(name: string, service: string, def: Definition, ctx: Context
     keys: fields.filter((f) => f.key),
     fields,
     modes: readModes(name, def, ctx, isAddressable(def)),
-    requires: entityRoles(def, ctx),
+    ...entityAccess(def, ctx),
     resource: def["@mcp.resource"] === true,
     // Linked CSN gives draft roots and the compositions inside them a `drafts` entity.
     draft,
@@ -407,6 +408,7 @@ function readOperation(
     params,
     returns: readReturns(def.returns, ctx),
     requires: roles(def),
+    restrict: grants(def)?.map(({ to }) => ({ grant: name.slice(name.lastIndexOf(".") + 1), to })),
     elicit: strings(def["@mcp.elicit"]),
     ui: readUi(name, def, ctx),
   };
@@ -638,20 +640,52 @@ function describe(def: Definition): string | undefined {
 }
 
 /**
- * An entity's @requires as CAP applies it: its own, or, for a composition child (`up_`) with
- * neither @requires nor @restrict, the nearest ancestor's (CAP's `_auth_depends_on`).
+ * An entity's @requires / @restrict as CAP applies them: its own, or, for a composition child
+ * (`up_`) with neither, the nearest ancestor's (CAP's `_auth_depends_on`).
  */
-function entityRoles(def: Definition, ctx: Context): string[] | undefined {
+function entityAccess(
+  def: Definition,
+  ctx: Context,
+): { requires?: string[]; restrict?: GrantSpec[] } {
   let current: Definition | undefined = def;
   const seen = new Set<Definition>();
   while (current && !seen.has(current)) {
     seen.add(current);
-    if (current["@requires"] !== undefined || current["@restrict"] !== undefined)
-      return roles(current);
+    if (current["@requires"] !== undefined || current["@restrict"] !== undefined) {
+      return { requires: roles(current), restrict: grants(current) };
+    }
     const parent: string | undefined = current.elements?.up_?.target;
     current = parent ? ctx.definitions[parent] : undefined;
   }
-  return undefined;
+  return {};
+}
+
+/**
+ * @restrict as CAP normalizes it (generic/auth/restrictions.js): one grant per event, WRITE as
+ * CREATE + UPDATE + DELETE, `grant` defaulting to `*` and `to` to `any`. `where` only filters
+ * rows, so it is not kept.
+ */
+function grants(def: Definition): GrantSpec[] | undefined {
+  const restrict = def["@restrict"];
+  if (!Array.isArray(restrict)) return undefined;
+  return restrict.flatMap((r: { grant?: unknown; to?: unknown }) => {
+    const to = list(r.to) ?? ["any"];
+    return (list(r.grant) ?? ["*"]).flatMap((grant) =>
+      (grant === "WRITE" ? ["CREATE", "UPDATE", "DELETE"] : [grant]).map((g) => ({ grant: g, to })),
+    );
+  });
+}
+
+/** The roles of a service-level @restrict, which CAP's protocol check treats like @requires. */
+function restrictRoles(def: Definition): string[] | undefined {
+  const restrict = def["@restrict"];
+  if (!Array.isArray(restrict)) return undefined;
+  const roles = restrict.flatMap((r: { to?: unknown }) => list(r.to) ?? []);
+  return roles.length ? roles : undefined;
+}
+
+function list(value: unknown): string[] | undefined {
+  return typeof value === "string" ? [value] : strings(value);
 }
 
 /** @requires: 'role' or ['a', 'b']. Only for hiding tools; CAP enforces it on every request. */

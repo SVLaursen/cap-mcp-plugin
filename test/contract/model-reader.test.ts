@@ -774,6 +774,41 @@ describe("model-reader: search columns", () => {
   });
 });
 
+describe("model-reader: @restrict grants", () => {
+  test("grants are normalized as CAP does: one event each, WRITE expanded, to defaulting to any", () => {
+    const csn = compileSnippet(`
+      @restrict: [{ grant: '*', to: 'admin' }, { grant: 'READ', to: ['support', 'auditor'] }]
+      @mcp service S {
+        @restrict: [
+          { grant: ['READ', 'WRITE'], to: 'admin' },
+          { grant: 'READ', where: 'createdBy = $user' },
+          { grant: 'cancel', to: 'support' }
+        ]
+        entity Orders { key ID: Integer; createdBy: String; } actions {
+          @mcp @restrict: [{ to: 'support' }] action cancel();
+        }
+        @restrict: [{ grant: '*', to: 'admin' }] function audit() returns Integer;
+      }
+    `);
+    const service = onlyService(readModel(csn).spec);
+    // A service-level @restrict acts like @requires with all its roles (CAP's protocol check).
+    expect(service.requires).toEqual(["admin", "support", "auditor"]);
+    expect(service.entities[0]?.restrict).toEqual([
+      { grant: "READ", to: ["admin"] },
+      { grant: "CREATE", to: ["admin"] },
+      { grant: "UPDATE", to: ["admin"] },
+      { grant: "DELETE", to: ["admin"] },
+      { grant: "READ", to: ["any"] },
+      { grant: "cancel", to: ["support"] },
+    ]);
+    // On an operation, a grant is always for the operation itself.
+    expect(service.operations.map((o) => [o.name, o.restrict])).toEqual([
+      ["S.Orders.cancel", [{ grant: "cancel", to: ["support"] }]],
+      ["S.audit", [{ grant: "audit", to: ["admin"] }]],
+    ]);
+  });
+});
+
 describe("model-reader: return types", () => {
   test("operations carry their return type: scalar, entity, inline structure, or many of them", () => {
     const csn = compileSnippet(`
