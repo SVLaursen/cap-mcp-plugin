@@ -374,7 +374,7 @@ describe("model-reader: opt-in", () => {
     `);
     const { entities } = onlyService(readModel(csn).spec);
     expect(entities.map((e) => [e.name, e.deepInsert])).toEqual([
-      ["S.Orders", [{ element: "items", target: "S.Items" }]],
+      ["S.Orders", [{ element: "items", target: "S.Items", many: true, backlink: "up_" }]],
       ["S.Items", []],
       ["S.Notes", []],
     ]);

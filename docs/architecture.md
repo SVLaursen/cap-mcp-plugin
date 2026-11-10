@@ -60,7 +60,9 @@ JSON Schema enums). `additionalProperties` is always `false`.
 | operation   | Parameters (mandatory ones required); bound operations also take their entity's keys                                                       |
 
 `op` is one of `eq ne gt ge lt le in contains startswith endswith`. Readonly fields never appear in
-write inputs; in a deep insert, the child's back link to its parent is left to CAP.
+write inputs; in a deep insert, the child's back link to its parent (from the composition's
+`on` condition) is left to CAP, and a to-one composition's foreign key is replaced by the nested
+object. A self-composition nests one level.
 
 ## Tool output shapes
 

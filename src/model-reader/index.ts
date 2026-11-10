@@ -51,6 +51,8 @@ interface Definition {
   items?: Definition;
   virtual?: boolean;
   value?: unknown;
+  cardinality?: { max?: number | string };
+  on?: unknown;
   [annotation: `@${string}`]: unknown;
 }
 
@@ -210,7 +212,12 @@ function readEntity(name: string, service: string, def: Definition, ctx: Context
     draft,
     deepInsert: elements
       .filter(([, el]) => el.type === "cds.Composition" && el["@mcp.deepInsert"] === true)
-      .map(([element, el]) => ({ element, target: el.target ?? "" })),
+      .map(([element, el]) => ({
+        element,
+        target: el.target ?? "",
+        many: el.cardinality?.max === "*",
+        backlink: backlinkOf(element, el.on),
+      })),
     search: searchColumns(def, ctx),
   };
 }
@@ -285,6 +292,16 @@ function searchColumns(def: Definition, ctx: Context, depth = 0): string[] {
       : searchColumns(target, ctx, depth + 1);
     return nested.map((column) => `${head}.${column}`);
   });
+}
+
+/** `on items.up_ = $self` → "up_": the child's association that CAP fills on deep insert. */
+function backlinkOf(element: string, on: unknown): string | undefined {
+  if (!Array.isArray(on)) return undefined;
+  for (const term of on) {
+    const ref = (term as { ref?: unknown[] })?.ref;
+    if (Array.isArray(ref) && ref.length === 2 && ref[0] === element) return String(ref[1]);
+  }
+  return undefined;
 }
 
 /** An entity's records can be addressed when it has keys and none of them is @mcp.omit. */
@@ -401,6 +418,7 @@ function readField(
     scale: def.scale,
     range: Array.isArray(range) ? [bound(range[0]), bound(range[1])] : undefined,
     target: association ? siblings[association]?.target : undefined,
+    association,
     completion: def["@mcp.completion"] === true,
   };
 }

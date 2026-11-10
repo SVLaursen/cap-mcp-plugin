@@ -32,8 +32,21 @@ export interface FieldSpec {
   range?: readonly [number | undefined, number | undefined];
   /** Association/composition target (fully qualified), when this is a managed FK or nav. */
   target?: string;
+  /** For a managed foreign key: the association it belongs to (author_ID → author). */
+  association?: string;
   /** Opted in with @mcp.completion. */
   completion: boolean;
+}
+
+export interface DeepInsertSpec {
+  /** The composition element. */
+  element: string;
+  /** Fully qualified target entity. */
+  target: string;
+  /** Composition of many (an array) or of one (an object). */
+  many: boolean;
+  /** The child's association back to the parent (from the on-condition), which CAP fills. */
+  backlink?: string;
 }
 
 export interface EntitySpec {
@@ -49,8 +62,8 @@ export interface EntitySpec {
   resource: boolean;
   /** @odata.draft.enabled, or a composition inside such an entity. Writes must go through the draft API (or be refused). */
   draft: boolean;
-  /** Compositions opted in with @mcp.deepInsert, with their fully qualified target entity. */
-  deepInsert: { element: string; target: string }[];
+  /** Compositions opted in with @mcp.deepInsert. */
+  deepInsert: DeepInsertSpec[];
   /** @requires on the entity, if any. Used only to hide tools; CAP still enforces. */
   requires?: string[];
   /**

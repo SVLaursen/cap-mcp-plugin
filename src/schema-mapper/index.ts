@@ -112,12 +112,14 @@ export function entityInputSchema(
       return object(entity.keys, entity.keys);
     case "update":
       // Keys are the record's address, so they stay even when read-only.
-      return object(
-        [...entity.keys, ...writable(entity.fields).filter((f) => !f.key)],
-        entity.keys,
+      return withChildren(
+        object([...entity.keys, ...ownFields(entity).filter((f) => !f.key)], entity.keys),
+        entity,
+        options,
+        [entity.name],
       );
     case "create":
-      return createSchema(entity, options);
+      return createSchema(entity, options, [entity.name]);
     case "query":
       return querySchema(entity, options.limits ?? DEFAULT_LIMITS);
   }
@@ -129,19 +131,47 @@ export function operationInputSchema(op: OperationSpec, boundEntity?: EntitySpec
   return object([...keys, ...op.params], [...keys, ...op.params.filter((p) => p.mandatory)]);
 }
 
-function createSchema(entity: EntitySpec, options: SchemaOptions, parent?: string): JsonSchema {
+/**
+ * `path` is the chain of entities above this one. An entity may appear twice in it (a
+ * self-composition nests once), never more, so recursive compositions stay finite.
+ */
+function createSchema(
+  entity: EntitySpec,
+  options: SchemaOptions,
+  path: string[],
+  backlink?: string,
+): JsonSchema {
   // In a deep insert, CAP fills the child's back link to its parent.
-  const fields = writable(entity.fields).filter((f) => !parent || f.target !== parent);
-  const schema = object(
-    fields,
-    fields.filter((f) => f.mandatory),
+  const fields = ownFields(entity).filter((f) => !backlink || f.association !== backlink);
+  return withChildren(
+    object(
+      fields,
+      fields.filter((f) => f.mandatory),
+    ),
+    entity,
+    options,
+    path,
   );
+}
+
+/** Writable fields, minus foreign keys of to-one compositions offered as nested objects. */
+function ownFields(entity: EntitySpec): FieldSpec[] {
+  const nested = new Set(entity.deepInsert.map((d) => d.element));
+  return writable(entity.fields).filter((f) => !f.association || !nested.has(f.association));
+}
+
+function withChildren(
+  schema: JsonSchema,
+  entity: EntitySpec,
+  options: SchemaOptions,
+  path: string[],
+): JsonSchema {
   const properties = schema.properties as Record<string, JsonSchema>;
-  for (const { element, target } of entity.deepInsert) {
+  for (const { element, target, many, backlink } of entity.deepInsert) {
     const child = options.entities?.(target);
-    if (child) {
-      properties[element] = { type: "array", items: createSchema(child, options, entity.name) };
-    }
+    if (!child || path.filter((name) => name === target).length >= 2) continue;
+    const item = createSchema(child, options, [...path, target], backlink);
+    properties[element] = many ? { type: "array", items: item } : item;
   }
   return schema;
 }

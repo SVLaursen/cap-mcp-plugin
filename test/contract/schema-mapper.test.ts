@@ -9,7 +9,7 @@ import {
   operationInputSchema,
   operationOutputSchema,
 } from "../../src/schema-mapper";
-import type { EntitySpec, FieldSpec, ServiceSpec } from "../../src/types";
+import type { EntitySpec, FieldSpec, JsonSchema, ServiceSpec } from "../../src/types";
 import { compileSnippet } from "../helpers/snippet";
 import { schemaError } from "../helpers/validate";
 
@@ -336,6 +336,104 @@ describe("schema-mapper: tool input schemas", () => {
     expect(operationInputSchema(cancel!, entityOf(service, "S.Orders"))).toEqual({
       type: "object",
       properties: { ID, reason: { type: "string" } },
+      required: ["ID"],
+      additionalProperties: false,
+    });
+  });
+
+  test("deep insert: a composition of one is an object, and its foreign key is not writable", () => {
+    const service = serviceOf(`
+      @mcp service S {
+        @mcp.wrap.modes: ['create']
+        entity Orders { key ID: Integer; @mcp.deepInsert address: Composition of one Addresses; }
+        entity Addresses { key ID: Integer; city: String; }
+      }
+    `);
+    const lookup = (name: string) => service.entities.find((e) => e.name === name);
+    const schema = entityInputSchema(entityOf(service, "S.Orders"), "create", { entities: lookup });
+    expect(schema).toEqual({
+      type: "object",
+      properties: {
+        ID,
+        address: {
+          type: "object",
+          properties: { ID, city: { type: "string" } },
+          additionalProperties: false,
+        },
+      },
+      additionalProperties: false,
+    });
+  });
+
+  test("deep insert: a self-composition nests once, then stops", () => {
+    const service = serviceOf(`
+      @mcp service S {
+        @mcp.wrap.modes: ['create']
+        entity Nodes {
+          key ID: Integer;
+          parent: Association to Nodes;
+          @mcp.deepInsert children: Composition of many Nodes on children.parent = $self;
+        }
+      }
+    `);
+    const lookup = (name: string) => service.entities.find((e) => e.name === name);
+    const schema = entityInputSchema(entityOf(service, "S.Nodes"), "create", { entities: lookup });
+    expect(schema).toEqual({
+      type: "object",
+      properties: {
+        ID,
+        parent_ID: ID,
+        children: {
+          type: "array",
+          items: { type: "object", properties: { ID }, additionalProperties: false },
+        },
+      },
+      additionalProperties: false,
+    });
+  });
+
+  test("deep insert: only the back link is left to CAP, not other links to the parent type", () => {
+    const service = serviceOf(`
+      @mcp service S {
+        @mcp.wrap.modes: ['create']
+        entity Orders {
+          key ID: Integer;
+          @mcp.deepInsert items: Composition of many Items on items.up_ = $self;
+        }
+        entity Items { key ID: Integer; up_: Association to Orders; replaces: Association to Orders; }
+      }
+    `);
+    const lookup = (name: string) => service.entities.find((e) => e.name === name);
+    const schema = entityInputSchema(entityOf(service, "S.Orders"), "create", { entities: lookup });
+    const items = (schema.properties as Record<string, JsonSchema>).items as JsonSchema;
+    expect(Object.keys((items.items as JsonSchema).properties as object)).toEqual([
+      "ID",
+      "replaces_ID",
+    ]);
+  });
+
+  test("deep insert: update accepts the same nested children as create", () => {
+    const service = serviceOf(`
+      @mcp service S {
+        @mcp.wrap.modes: ['update']
+        entity Orders {
+          key ID: Integer;
+          @mcp.deepInsert items: Composition of many Items on items.up_ = $self;
+        }
+        entity Items { key ID: Integer; up_: Association to Orders; qty: Integer; }
+      }
+    `);
+    const lookup = (name: string) => service.entities.find((e) => e.name === name);
+    const schema = entityInputSchema(entityOf(service, "S.Orders"), "update", { entities: lookup });
+    expect(schema).toEqual({
+      type: "object",
+      properties: {
+        ID,
+        items: {
+          type: "array",
+          items: { type: "object", properties: { ID, qty: ID }, additionalProperties: false },
+        },
+      },
       required: ["ID"],
       additionalProperties: false,
     });
