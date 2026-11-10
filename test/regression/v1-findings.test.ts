@@ -2,7 +2,7 @@
  * One test per correctness/security issue found in v1 (docs/v1-reference.md).
  * Each must be written red against the v2 code path FIRST, then made green.
  */
-import { as, bootDemo } from "../helpers/demo";
+import { as, bootDemo, withEnv } from "../helpers/demo";
 import { listTools } from "../helpers/mcp";
 import { callTool, page } from "../helpers/tools";
 
@@ -17,6 +17,20 @@ describe("v1 regressions", () => {
       key: { ID: 207 },
     });
     expect(result).toEqual({ text: "SIMULATED_COMMIT_FAILURE", isError: true });
+    // In production (as CAP decides it: NODE_ENV or CDS_ENV), the message stays on the server.
+    const envs: Record<string, string>[] = [
+      { NODE_ENV: "production" },
+      { NODE_ENV: "test", CDS_ENV: "prod" },
+    ];
+    for (const env of envs) {
+      const hidden = await withEnv(env, () =>
+        callTool("alice", "AdminService_delete", {
+          entity: "AdminService.Books",
+          key: { ID: 207 },
+        }),
+      );
+      expect(hidden).toEqual({ text: "Internal error", isError: true });
+    }
     expect((await demo.GET("/admin/Books(207)?$select=ID", as("alice"))).status).toBe(200);
   });
   test("#2 q search never matches on @mcp.omit fields (an omitted email is not searchable)", async () => {

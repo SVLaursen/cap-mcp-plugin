@@ -40,6 +40,20 @@ export function as(user: DemoUser) {
   return { auth: USERS[user], validateStatus: () => true };
 }
 
+/** Run `fn` with these environment variables set, restoring them afterwards. */
+export async function withEnv<T>(vars: Record<string, string>, fn: () => Promise<T>): Promise<T> {
+  const saved = Object.fromEntries(Object.keys(vars).map((k) => [k, process.env[k]]));
+  Object.assign(process.env, vars);
+  try {
+    return await fn();
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+}
+
 /**
  * Run `fn` as if the app ran in production (NODE_ENV=production), as CAP's protocol adapters
  * and the plugin decide per request. Restores NODE_ENV and the given auth settings afterwards.

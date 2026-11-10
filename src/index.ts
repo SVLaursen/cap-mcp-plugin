@@ -25,7 +25,6 @@ export interface CdsLike {
   readonly model?: unknown;
   readonly services: Record<string, unknown>;
   readonly middlewares: { before: RequestHandler[] };
-  readonly env: { production?: boolean };
   readonly requires: { auth?: AuthConfig };
   readonly i18n: { messages: { at(key: string, locale?: string, args?: unknown): unknown } };
 }
@@ -54,7 +53,6 @@ export function activate(cds: CdsLike): void {
       model: () => cds.model as object,
       registryFor,
       services: cds.services,
-      production: cds.env.production,
       translate: (key, locale, args) => {
         const text = cds.i18n.messages.at(key, locale, args);
         return typeof text === "string" ? text : undefined;

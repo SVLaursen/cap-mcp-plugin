@@ -7,6 +7,11 @@ import type { ErrorRequestHandler, Request, RequestHandler, Response } from "exp
  * the app's authorization server. No authorization server endpoints, no fake DCR.
  */
 
+/** Production, as CAP's protocol adapters decide it per request (lib/srv/protocols/http.js). */
+export function isProduction(): boolean {
+  return process.env.NODE_ENV === "production" || process.env.CDS_ENV === "prod";
+}
+
 /** The parts of `cds.requires.auth` the plugin reads. */
 export interface AuthConfig {
   kind?: string;
@@ -61,8 +66,7 @@ export interface GateOptions extends AuthOptions {
  */
 export function requireUser(options: GateOptions): RequestHandler {
   return (req, res, next) => {
-    const restricted =
-      process.env.NODE_ENV === "production" && options.auth()?.restrict_all_services !== false;
+    const restricted = isProduction() && options.auth()?.restrict_all_services !== false;
     if (restricted && !options.user()?.is("authenticated-user")) challenge(req, res, options);
     else next();
   };

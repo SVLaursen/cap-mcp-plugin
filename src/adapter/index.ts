@@ -2,6 +2,7 @@ import { McpServer, createMcpHandler, fromJsonSchema } from "@modelcontextprotoc
 import type { CallToolResult, McpServerFactory } from "@modelcontextprotocol/server";
 import { toNodeHandler } from "@modelcontextprotocol/node";
 import type { RequestHandler } from "express";
+import { isProduction } from "./auth";
 import { Executor, ToolError, errorResult, type ServiceLike, type ToolResult } from "../executor";
 import type { ExposureRegistry } from "../exposure-registry";
 import type { ExposureSpec, ToolSpec, UserLike } from "../types";
@@ -54,8 +55,6 @@ export interface AdapterOptions {
   registryFor(model: object): ExposureRegistry;
   /** CAP services by name (cds.services). */
   services: Record<string, unknown>;
-  /** Hide messages of unexpected errors from clients (CAP does the same in production). */
-  production?: boolean;
   /** CAP's messages (cds.i18n.messages.at), so errors read as they do over OData. */
   translate?: Translate;
   log: { error(...args: unknown[]): void };
@@ -189,7 +188,7 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
             if (result) return toCallToolResult(result);
             options.log.error(`${tool.name} failed:`, error);
             const message =
-              !options.production && error instanceof Error ? error.message : "Internal error";
+              !isProduction() && error instanceof Error ? error.message : "Internal error";
             return toCallToolResult({ text: message, isError: true });
           }
         },
