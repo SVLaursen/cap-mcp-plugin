@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { readModel } from "../../src/model-reader";
-import type { ExposureSpec, ServiceSpec } from "../../src/types";
+import type { ExposureSpec, FieldSpec, ServiceSpec } from "../../src/types";
 import { compileSnippet } from "../helpers/snippet";
 
 describe("model-reader: doc comments (ADR 0011)", () => {
@@ -170,7 +170,29 @@ describe("model-reader: opt-in", () => {
     ]);
   });
 
-  test.todo("@mcp.omit elements never appear in fields or keys");
+  test("@mcp.omit elements never appear in fields or keys", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        entity Books {
+          key ID: Integer;
+          @mcp.omit key edition: Integer;
+          title: String;
+          @mcp.omit costPrice: Decimal;
+          @mcp.omit author: Association to Authors;
+        }
+        entity Authors { key ID: Integer; }
+        entity Listings as projection on Books;
+      }
+    `);
+    const names = (fields: FieldSpec[]) => fields.map((f) => f.name);
+    const { entities } = onlyService(readModel(csn).spec);
+    // CAP carries @mcp.omit to the generated foreign key (author_ID) and through projections.
+    expect(entities.map((e) => [e.name, names(e.keys), names(e.fields)])).toEqual([
+      ["S.Books", ["ID"], ["ID", "title"]],
+      ["S.Authors", ["ID"], ["ID"]],
+      ["S.Listings", ["ID"], ["ID", "title"]],
+    ]);
+  });
   test.todo(
     "@mcp.wrap.modes adds the listed write modes to query/get; unknown modes are diagnostics",
   );

@@ -20,7 +20,7 @@ Fast loop: `npm run test:contract`.
 
 - [x] Decide doc comment handling: does the plugin set `cdsc.docs` via its `package.json` `cds` section? Test both paths. → no, ADR 0011 _(`model-reader.test.ts`)_
 - [x] Opt-in rules: empty model, service baseline, functions vs. actions, single-entity opt-in, `@mcp: false`, `@cds.api.ignore` _(`model-reader.test.ts` › opt-in)_
-- [ ] `@mcp.omit` never reaches FieldSpecs _(opt-in)_
+- [x] `@mcp.omit` never reaches FieldSpecs _(opt-in)_
 - [ ] Write modes, resource, prompts, ui, elicit, completion, describe, compact, deepInsert, draft flags _(opt-in)_
 - [ ] Names and descriptions fallback chain _(names and descriptions)_
 - [ ] Field shapes: keys, mandatory, readonly, enum, length/precision/scale, range, FK targets, `Entity:element` params _(field shapes)_

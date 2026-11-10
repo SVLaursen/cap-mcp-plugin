@@ -93,7 +93,7 @@ function readService(
 
 function readEntity(name: string, service: string, def: Definition): EntitySpec {
   const fields = Object.entries(def.elements ?? {})
-    .filter(([, el]) => !ASSOCIATION.has(el.type ?? "") && !isExcluded(el))
+    .filter(([, el]) => !ASSOCIATION.has(el.type ?? "") && !isExcluded(el) && !isOmitted(el))
     .map(([field, el]) => readField(field, el));
   return {
     name,
@@ -145,6 +145,11 @@ function exposesOperation(op: Definition, serviceOptedIn: boolean): boolean {
 
 function isOptedIn(def: Definition): boolean {
   return def["@mcp"] === true;
+}
+
+/** CAP propagates @mcp.omit to generated foreign keys and through projections. */
+function isOmitted(element: Definition): boolean {
+  return element["@mcp.omit"] === true;
 }
 
 function isExcluded(def: Definition): boolean {
