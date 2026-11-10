@@ -1,7 +1,7 @@
 /**
  * M2 — exposure-registry: ExposureSpec → ToolSpec[], filtered per user.
  */
-import { ExposureRegistry } from "../../src/exposure-registry";
+import { ExposureRegistry, registryCache } from "../../src/exposure-registry";
 import { readModel } from "../../src/model-reader";
 import type { ToolSpec, UserLike } from "../../src/types";
 import { compileSnippet } from "../helpers/snippet";
@@ -265,6 +265,32 @@ describe("exposure-registry: per-user filtering (advertising only; CAP enforces)
 });
 
 describe("exposure-registry: caching", () => {
-  test.todo("tools are built once per model object, not per request");
-  test.todo("a different (extended tenant) model object gets its own tool list");
+  const source = `@mcp service S { entity Books { key ID: Integer; } @mcp.foo entity X { key ID: Integer; } }`;
+
+  test("tools are built once per model object, not per request", () => {
+    const forModel = registryCache();
+    const model = compileSnippet(source);
+    const first = forModel(model);
+    expect(forModel(model)).toBe(first);
+    // Same tool objects on every request: nothing is rebuilt.
+    const [a] = first.toolsFor(user());
+    const [b] = forModel(model).toolsFor(user("admin"));
+    expect(b).toBe(a);
+  });
+
+  test("a different (extended tenant) model object gets its own tool list", () => {
+    const forModel = registryCache();
+    const base = compileSnippet(source);
+    const extended = compileSnippet(
+      `${source} extend service S with { entity Notes { key ID: Integer; } }`,
+    );
+    expect(names(forModel(base).toolsFor(user()))).not.toContain("S_Notes_query");
+    expect(names(forModel(extended).toolsFor(user()))).toContain("S_Notes_query");
+    expect(forModel(extended)).not.toBe(forModel(base));
+  });
+
+  test("the registry reports the model reader's diagnostics as well as its own", () => {
+    const r = registryCache()(compileSnippet(source));
+    expect(r.diagnostics.map((d) => d.code)).toEqual(["UNKNOWN_ANNOTATION"]);
+  });
 });

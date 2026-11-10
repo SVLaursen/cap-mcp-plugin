@@ -35,7 +35,7 @@ Fast loop: `npm run test:contract`.
 - [x] Tool names, deterministic order, read-only/destructive hints _(`exposure-registry.test.ts` › tool list)_
 - [x] Describe tool scoped to its service; compact tool set; `@mcp.ui` metadata _(tool list)_
 - [x] Per-user filtering by `@requires` only; `@restrict where` never hides tools _(per-user)_
-- [ ] Cache per model object _(caching)_
+- [x] Cache per model object _(caching)_
 - [ ] Review: run the `reviewer` agent on M2
 
 ## M3 — Executor on CAP

@@ -1,3 +1,4 @@
+import { readModel } from "../model-reader";
 import {
   entityInputSchema,
   entityOutputSchema,
@@ -38,6 +39,23 @@ export interface RegistryOptions {
 
 type Hints = ToolSpec["annotations"];
 
+/**
+ * One registry per model object, built on first use. Keyed weakly, so a tenant's extended model
+ * (a new object) gets its own tools and an unused one can be collected. Create one cache per
+ * plugin activation and pass it where it is needed (no module-level state, ADR 0005).
+ */
+export function registryCache(options: RegistryOptions = {}): (model: object) => ExposureRegistry {
+  const cache = new WeakMap<object, ExposureRegistry>();
+  return (model) => {
+    let registry = cache.get(model);
+    if (!registry) {
+      registry = ExposureRegistry.fromModel(model, options);
+      cache.set(model, registry);
+    }
+    return registry;
+  };
+}
+
 const READ: Hints = { readOnlyHint: true, destructiveHint: false, idempotentHint: true };
 const HINTS: Record<EntityMode, Hints> = {
   query: READ,
@@ -66,8 +84,16 @@ export class ExposureRegistry {
   constructor(
     private readonly spec: ExposureSpec,
     private readonly options: RegistryOptions = {},
+    readDiagnostics: Diagnostic[] = [],
   ) {
+    this.diagnostics.push(...readDiagnostics);
     this.tools = this.build();
+  }
+
+  /** Read a compiled model and build its registry; diagnostics cover both steps. */
+  static fromModel(model: unknown, options: RegistryOptions = {}): ExposureRegistry {
+    const { spec, diagnostics } = readModel(model);
+    return new ExposureRegistry(spec, options, diagnostics);
   }
 
   /**
