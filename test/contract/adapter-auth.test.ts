@@ -1,4 +1,5 @@
 import {
+  authErrors,
   authorizationServer,
   metadataPath,
   protectedResourceMetadata,
@@ -30,5 +31,12 @@ describe("adapter: auth metadata", () => {
       authorization_servers: ["https://tenant.example.com"],
       bearer_methods_supported: ["header"],
     });
+  });
+
+  test("only 401s become a challenge; every other error goes on to express unchanged", () => {
+    const next = jest.fn();
+    const error = { status: 500, message: "boom" };
+    authErrors({ path: "/mcp", auth: () => undefined })(error, {} as never, {} as never, next);
+    expect(next).toHaveBeenCalledWith(error);
   });
 });
