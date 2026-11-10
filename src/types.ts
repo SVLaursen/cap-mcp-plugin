@@ -172,6 +172,17 @@ export interface ModelReadResult {
 /** JSON Schema 2020-12 object, as MCP 2026-07-28 accepts for inputSchema / outputSchema. */
 export type JsonSchema = Record<string, unknown>;
 
+/** The generic tools of an @mcp.compact service; the entity or operation is an argument. */
+export type CompactAction =
+  | "list_entities"
+  | "describe_entity"
+  | "query"
+  | "get"
+  | "create"
+  | "update"
+  | "delete"
+  | "call_operation";
+
 /** What tools/list publishes for one tool. */
 export interface ToolSpec {
   name: string;
@@ -184,11 +195,14 @@ export interface ToolSpec {
     destructiveHint: boolean;
     idempotentHint: boolean;
   };
+  /** Tool `_meta`, e.g. the MCP Apps UI resource for @mcp.ui operations. */
+  _meta?: Record<string, unknown>;
   /** Back-reference used by the executor. */
   target:
     | { kind: "entity"; entity: string; mode: EntityMode }
     | { kind: "operation"; operation: string }
-    | { kind: "describe"; service: string };
+    | { kind: "describe"; service: string }
+    | { kind: "compact"; service: string; action: CompactAction };
 }
 
 /** The roles/identity the registry filters by. A structural subset of cds.User. */

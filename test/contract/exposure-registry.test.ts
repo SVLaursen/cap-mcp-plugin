@@ -124,11 +124,87 @@ describe("exposure-registry: tool list", () => {
     ]);
   });
 
-  test.todo(
-    "an @mcp.describe service adds one <Service>_describe tool scoped to that service only",
-  );
-  test.todo("an @mcp.compact service publishes the generic tool set instead of per-entity tools");
-  test.todo("@mcp.ui operations carry the ui resource link in the tool's _meta");
+  test("an @mcp.describe service adds one <Service>_describe tool scoped to that service only", () => {
+    const tools = registry(`
+      @mcp @mcp.describe service A { entity Books { key ID: Integer; } entity Authors { key ID: Integer; } }
+      @mcp service B { entity Secrets { key ID: Integer; } }
+    `).toolsFor(user());
+    const describe = tools.find((t) => t.name === "A_describe");
+    expect(describe).toEqual({
+      name: "A_describe",
+      title: "A: describe",
+      description: expect.any(String),
+      inputSchema: {
+        type: "object",
+        properties: { entity: { enum: ["A.Books", "A.Authors"] } },
+        additionalProperties: false,
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+      target: { kind: "describe", service: "A" },
+    });
+    expect(names(tools).filter((n) => n.endsWith("_describe"))).toEqual(["A_describe"]);
+  });
+
+  test("an @mcp.compact service publishes the generic tool set instead of per-entity tools", () => {
+    const tools = registry(`
+      @mcp @mcp.compact service C {
+        @mcp.wrap.modes: ['create'] entity Books { key ID: Integer; title: String; }
+        entity Log { message: String; }
+        function count() returns Integer;
+      }
+    `).toolsFor(user());
+    expect(names(tools)).toEqual([
+      "C_call_operation",
+      "C_create",
+      "C_describe_entity",
+      "C_get",
+      "C_list_entities",
+      "C_query",
+    ]);
+    const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
+    expect(byName.C_query?.target).toEqual({ kind: "compact", service: "C", action: "query" });
+    // Each generic tool only offers the entities (or operations) it can act on.
+    const prop = (name: string, key: string) =>
+      (byName[name]?.inputSchema.properties as Record<string, unknown>)[key];
+    expect(prop("C_query", "entity")).toEqual({ enum: ["C.Books", "C.Log"] });
+    expect(prop("C_get", "entity")).toEqual({ enum: ["C.Books"] });
+    expect(prop("C_create", "entity")).toEqual({ enum: ["C.Books"] });
+    expect(prop("C_call_operation", "operation")).toEqual({ enum: ["C.count"] });
+    // All operations are functions, so calling one is read-only.
+    expect(byName.C_call_operation?.annotations.readOnlyHint).toBe(true);
+    expect(byName.C_create?.annotations).toEqual({
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+    });
+  });
+
+  test("@mcp.ui operations carry the ui resource link in the tool's _meta", () => {
+    const tools = registry(`
+      @mcp service S {
+        @mcp.ui: 'ui://shop/card.html' function card() returns Integer;
+        function plain() returns Integer;
+      }
+      @mcp @mcp.compact service C {
+        @mcp.ui: 'ui://shop/board.html' function board() returns Integer;
+        function count() returns Integer;
+      }
+    `).toolsFor(user());
+    const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
+    // Both the current key and the deprecated flat one, as ext-apps' registerAppTool writes.
+    expect(byName.S_card?._meta).toEqual({
+      ui: { resourceUri: "ui://shop/card.html" },
+      "ui/resourceUri": "ui://shop/card.html",
+    });
+    expect(byName.S_plain?._meta).toBeUndefined();
+    // A host binds the UI to its own tool, so a compact service keeps @mcp.ui operations apart.
+    expect(byName.C_board?._meta).toEqual(
+      expect.objectContaining({ "ui/resourceUri": "ui://shop/board.html" }),
+    );
+    expect(byName.C_call_operation?.inputSchema.properties).toEqual(
+      expect.objectContaining({ operation: { enum: ["C.count"] } }),
+    );
+  });
 });
 
 describe("exposure-registry: per-user filtering (advertising only; CAP enforces)", () => {

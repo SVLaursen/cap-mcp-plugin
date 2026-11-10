@@ -59,6 +59,14 @@ JSON Schema enums). `additionalProperties` is always `false`.
 | update      | Keys (required) plus any writable field, and the same nested compositions as create                                                        |
 | operation   | Parameters (mandatory ones required); bound operations also take their entity's keys                                                       |
 
+A `@mcp.describe` service adds `<Service>_describe` (`entity?`, limited to that service's
+entities). A `@mcp.compact` service publishes `<Service>_list_entities`, `_describe_entity`,
+`_query`, `_get`, `_create`, `_update`, `_delete` and `_call_operation` instead of per-entity and
+per-operation tools; each names its target in an `entity` (or `operation`) enum of what it can act
+on, write tools only appear when some entity allows them, and field-level shapes come from
+`describe_entity` (the executor validates against the entity's own schemas). `@mcp.ui` operations
+keep their own tool, with `_meta.ui.resourceUri` and the deprecated `_meta["ui/resourceUri"]`.
+
 `op` is one of `eq ne gt ge lt le in contains startswith endswith`. Readonly fields never appear in
 write inputs; in a deep insert, the child's back link to its parent (from the composition's
 `on` condition) is left to CAP, and a to-one composition's foreign key is replaced by the nested
