@@ -69,7 +69,7 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 - [x] `activate()` leaves `cds.env.cdsc` untouched (ADR 0011) _(mounting)_
 - [x] Production default: CAP requires `authenticated-user` on services without `@requires` (`restrict_all_services`); make `tools/list` for anonymous callers agree (or always authenticate `/mcp`) _(mounting)_
 - [x] Legacy era: `initialize` → `tools/list` / `tools/call` without a session; GET → 405; `@mcp.elicit` tools give a clear `isError` _(older clients)_
-- [ ] Auth matrix: mocked _(`auth-matrix.test.ts`)_
+- [x] Auth matrix: mocked _(`auth-matrix.test.ts`)_
 - [ ] Review: run the `reviewer` agent on M4
 
 ## M5 — Opt-in features
