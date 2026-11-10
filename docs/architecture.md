@@ -67,10 +67,12 @@ object. A self-composition nests one level.
 ## Tool output shapes
 
 `structuredContent` is always an object: query → `{ rows, total, nextCursor? }`; get, create and
-update → the record; operations → the record, or `{ value }` for scalars and lists; delete and
-operations without a return type → no output schema. Values are as CAP returns them (Decimal and
-Int64 as strings); fields other than keys and mandatory ones may be `null`. Omitted fields are
-never in an output schema, including in records an operation returns.
+update → the record; operations → `{ value }` (a scalar, a list, or one record that may be
+`null`); delete and operations without a return type → no output schema. 2026-07-28 allows any
+JSON here; objects keep one shape per tool kind and work for 2025-era clients too. Values are as
+CAP returns them (Decimal and Int64 as strings). Only keys and `not null` fields are non-null:
+`@mandatory` is checked on input, so stored rows can still hold null. Omitted fields are never
+in an output schema, including in records an operation returns.
 
 ## Division of labour
 

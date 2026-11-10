@@ -508,6 +508,16 @@ describe("schema-mapper: tool output schemas", () => {
     expect(entityOutputSchema(Books, "delete")).toBeUndefined();
   });
 
+  test("only keys and not null fields are non-null in output; @mandatory is checked on input only", () => {
+    const service = serviceOf(`
+      @mcp service S { entity T { key ID: Integer; a: String not null; @mandatory b: String; } }
+    `);
+    expect(entityOutputSchema(entityOf(service, "S.T"), "get")).toEqual({
+      type: "object",
+      properties: { ID, a: { type: "string" }, b: { type: ["string", "null"] } },
+    });
+  });
+
   test("a nullable enum allows null among its values", () => {
     const status = field("cds.String", { name: "status", enum: ["O", "C"] });
     const schema = entityOutputSchema({ ...Books, fields: [status] }, "get");
@@ -517,7 +527,7 @@ describe("schema-mapper: tool output schemas", () => {
     });
   });
 
-  test("operation output follows the CDS return type (scalar wrapped as { value })", () => {
+  test("operation output follows the CDS return type, always wrapped as { value }", () => {
     const service = serviceOf(`
       @mcp service S {
         entity Books { key ID: Integer; @mcp.omit costPrice: Decimal; }
@@ -534,13 +544,15 @@ describe("schema-mapper: tool output schemas", () => {
     );
     const nullableInt = { ...ID, type: ["integer", "null"] };
     const book = { type: "object", properties: { ID } };
+    const value = (schema: JsonSchema) => ({ type: "object", properties: { value: schema } });
+    // Always { value }: one shape for every operation, an object for 2025-era clients, and a
+    // single record may be null (nothing found) without failing output validation.
     expect(out).toEqual({
-      "S.count": { type: "object", properties: { value: nullableInt } },
-      "S.counts": { type: "object", properties: { value: { type: "array", items: nullableInt } } },
-      "S.book": book,
-      // structuredContent must be an object, so lists are wrapped too.
-      "S.books": { type: "object", properties: { value: { type: "array", items: book } } },
-      "S.stock": { type: "object", properties: { stock: nullableInt } },
+      "S.count": value(nullableInt),
+      "S.counts": value({ type: "array", items: nullableInt }),
+      "S.book": value({ ...book, type: ["object", "null"] }),
+      "S.books": value({ type: "array", items: book }),
+      "S.stock": value({ type: ["object", "null"], properties: { stock: nullableInt } }),
       "S.run": undefined,
     });
   });

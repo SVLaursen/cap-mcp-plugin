@@ -19,8 +19,10 @@ export interface FieldSpec {
   /** `array of <cdsType>` (operation parameters). */
   many?: true;
   key: boolean;
-  /** From @mandatory / not null. */
+  /** From @mandatory / not null. Required on input. */
   mandatory: boolean;
+  /** From not null: the value is never null in output (@mandatory is only checked on input). */
+  notNull?: true;
   /** From @readonly, @Core.Computed, or the projection. Never accepted as input. */
   readonly: boolean;
   description?: string;

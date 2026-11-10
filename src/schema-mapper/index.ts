@@ -264,15 +264,21 @@ export function entityOutputSchema(entity: EntitySpec, mode: EntityMode): JsonSc
   }
 }
 
-/** structuredContent must be an object, so scalars and lists are wrapped as { value }. */
+/**
+ * Always `{ value }`. 2026-07-28 allows any JSON as structuredContent, but one shape for every
+ * operation is simpler for agents, 2025-era clients need an object, and a single record may be
+ * null (nothing found) without failing the SDK's output validation.
+ */
 export function operationOutputSchema(op: OperationSpec): JsonSchema | undefined {
   const returns = op.returns;
   if (!returns) return undefined;
   const one = returns.scalar ? outputField(returns.scalar) : record(returns.fields ?? []);
-  if (returns.many) {
-    return { type: "object", properties: { value: { type: "array", items: one } } };
-  }
-  return returns.scalar ? { type: "object", properties: { value: one } } : one;
+  const value: JsonSchema = returns.many
+    ? { type: "array", items: one }
+    : returns.scalar
+      ? one
+      : { ...one, type: ["object", "null"] };
+  return { type: "object", properties: { value } };
 }
 
 /**
@@ -286,10 +292,10 @@ function record(fields: FieldSpec[]): JsonSchema {
   };
 }
 
-/** Outputs may be null unless the field is a key or mandatory. */
+/** Outputs may be null unless the field is a key or `not null` (@mandatory guards input only). */
 function outputField(field: FieldSpec): JsonSchema {
   const schema = fieldToSchema(field);
-  if (field.key || field.mandatory) return schema;
+  if (field.key || field.notNull) return schema;
   if (typeof schema.type === "string") schema.type = [schema.type, "null"];
   if (Array.isArray(schema.enum)) schema.enum = [...schema.enum, null];
   return schema;

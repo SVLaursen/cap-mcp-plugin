@@ -407,6 +407,7 @@ function readField(
     key: def.key === true,
     description: describeElement(def),
     mandatory: def.notNull === true || def["@mandatory"] === true,
+    notNull: def.notNull === true ? true : undefined,
     readonly:
       def["@readonly"] === true ||
       def["@Core.Computed"] === true ||

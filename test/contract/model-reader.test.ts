@@ -667,6 +667,7 @@ describe("model-reader: field shapes", () => {
         cdsType: "cds.Integer",
         key: false,
         mandatory: true,
+        notNull: true,
         readonly: false,
         completion: false,
       },
