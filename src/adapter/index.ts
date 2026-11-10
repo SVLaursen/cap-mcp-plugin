@@ -1,7 +1,7 @@
 import { McpServer, createMcpHandler, fromJsonSchema } from "@modelcontextprotocol/server";
 import type { CallToolResult, McpServerFactory } from "@modelcontextprotocol/server";
 import { toNodeHandler } from "@modelcontextprotocol/node";
-import type { NextFunction, Request, RequestHandler, Response } from "express";
+import type { RequestHandler } from "express";
 import { Executor, ToolError, errorResult, type ServiceLike, type ToolResult } from "../executor";
 import type { ExposureRegistry } from "../exposure-registry";
 import type { ExposureSpec, ToolSpec, UserLike } from "../types";
@@ -163,11 +163,10 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
   };
 }
 
-/** The express handlers for /mcp, to mount behind CAP's own middlewares. */
-export function mcpHandlers(options: AdapterOptions): RequestHandler[] {
+/** The express handler for /mcp, to mount behind CAP's own middlewares. */
+export function mcpHandler(options: AdapterOptions): RequestHandler {
   const node = toNodeHandler(createMcpHandler(serverFactory(options), { legacy: "stateless" }));
-  const handle = (req: Request, res: Response, next: NextFunction) => {
-    node(req, res, req.body).catch(next);
+  return (req, res, next) => {
+    node(req, res).catch(next);
   };
-  return [handle];
 }

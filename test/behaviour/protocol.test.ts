@@ -73,6 +73,29 @@ describe("protocol: stateless 2026-07-28", () => {
     });
   });
 
+  test("a malformed body is a JSON-RPC parse error (-32700), never an HTML page", async () => {
+    const res = await demo.POST("/mcp", "{not json", {
+      ...as("bob"),
+      responseType: "text",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+        "mcp-protocol-version": PROTOCOL_VERSION,
+        "mcp-method": "tools/list",
+      },
+    });
+    expect(String(res.headers["content-type"])).not.toContain("text/html");
+    expect(JSON.parse(res.data as string).error.code).toBe(-32700);
+  });
+
+  test("large arguments (over 100 kB) still get a JSON-RPC answer", async () => {
+    const res = await callTool(demo.POST, "bob", "CatalogService_Books_query", {
+      q: "x".repeat(200_000),
+    });
+    expect(res.status).toBe(200);
+    expect(res.message?.result?.structuredContent).toEqual({ rows: [], total: 0 });
+  });
+
   test("an unsupported protocol version in _meta yields UnsupportedProtocolVersion (-32022)", async () => {
     const res = await listTools(demo.POST, "bob", { version: "2099-01-01" });
     expect(res.message?.error?.code).toBe(-32022);

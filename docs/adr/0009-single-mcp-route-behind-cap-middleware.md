@@ -23,7 +23,7 @@ services or one per service. The spike tried both in the demo (cds 10.2.2, `cds.
 ## Decision
 
 - `activate(cds)` mounts **one `/mcp` route** (path from `cds.env.mcp.path`) on `cds.on('served')`,
-  behind `cds.middlewares.before`, then `express.json()`, then the MCP handler (ADR 0010).
+  behind `cds.middlewares.before`, then `the MCP handler (ADR 0010).
 - **One endpoint for all `@mcp` services.** `tools/list` shows the tools of every service the
   caller can reach (registry, per-user); cross-service name clashes are already diagnostics.
   Per-service sub-paths (`/mcp/<service>`) can be added later on the same handler.

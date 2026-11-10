@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import express, { type Application, type RequestHandler } from "express";
-import { mcpHandlers, type RequestContext } from "./adapter";
+import type { Application, RequestHandler } from "express";
+import { mcpHandler, type RequestContext } from "./adapter";
 import {
   authErrors,
   metadataHandler,
@@ -47,7 +47,7 @@ export function activate(cds: CdsLike): void {
   const log = cds.log("mcp");
   const registryFor = registryCache();
   cds.on("served", () => {
-    const handlers = mcpHandlers({
+    const handler = mcpHandler({
       serverInfo: { name: "@gavdi/cap-mcp", version: packageVersion() },
       context: () => cds.context,
       model: () => cds.model as object,
@@ -64,8 +64,8 @@ export function activate(cds: CdsLike): void {
       MCP_PATH,
       ...cds.middlewares.before,
       requireUser({ ...auth, user: () => cds.context?.user }),
-      express.json(),
-      ...handlers,
+      // No body parser: the SDK reads the body itself (4 MiB) and answers JSON-RPC errors.
+      handler,
       authErrors(auth),
     );
     log.debug(`MCP endpoint mounted at ${MCP_PATH}`);
