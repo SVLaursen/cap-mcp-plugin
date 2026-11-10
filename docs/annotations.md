@@ -32,6 +32,16 @@ An entity whose records cannot be addressed (no keys, or a key is `@mcp.omit`) o
 query, plus create if listed: get, update, delete and bound operations would hit no record or
 several.
 
+### Annotations on other layers
+
+CAP copies annotations from a db entity (or another service's entity) to every projection of it.
+The plugin follows that copying in services that are themselves `@mcp`: `@mcp.omit` on
+`db.Books.costPrice` hides the field in every MCP service, and `@mcp.wrap.modes` on `db.Books`
+applies in every MCP service that projects it. In a service without `@mcp`, copied annotations
+expose nothing and are not reported as unused; only an `@mcp` written on that service's own
+entity or operation opts it in. Limitation: an `@mcp` written on a projection whose source
+already has `@mcp` cannot be told apart from the copy, so it counts as copied.
+
 Entities CAP generates on its own are never part of the baseline: localized `.texts` entities
 and `DraftAdministrativeData`, unless one carries `@mcp` itself. `@mcp: false` and
 `@cds.api.ignore` on an entity also remove its bound operations; `@mcp: false` on a service

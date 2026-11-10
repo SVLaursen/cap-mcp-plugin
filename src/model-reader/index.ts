@@ -52,6 +52,8 @@ interface Definition {
   virtual?: boolean;
   value?: unknown;
   cardinality?: { max?: number | string };
+  projection?: { from?: { ref?: unknown[] } };
+  query?: { SELECT?: { from?: { ref?: unknown[] } } };
   on?: unknown;
   [annotation: `@${string}`]: unknown;
 }
@@ -141,7 +143,12 @@ function checkUnused(ctx: Context, services: ServiceSpec[]): void {
   const reported = new Set(ctx.diagnostics.filter((d) => d.level === "error").map((d) => d.target));
   const report = (target: string, def: Definition) => {
     if (exposed.has(target) || reported.has(target) || isExcluded(def)) return;
-    const keys = Object.keys(def).filter((key) => key.startsWith("@mcp.") && KNOWN.has(key));
+    // Annotations CAP copied from another layer are meant for the MCP services that project
+    // it; in other services they are expected to do nothing.
+    const keys = Object.keys(def).filter(
+      (key) =>
+        key.startsWith("@mcp.") && KNOWN.has(key) && !isCopied(def, key as `@${string}`, ctx),
+    );
     if (keys.length === 0) return;
     ctx.diagnostics.push({
       level: "warn",
@@ -179,8 +186,10 @@ function readService(service: string, def: Definition, ctx: Context): ServiceSpe
     if (member.kind === "entity") {
       // CAP-generated entities are not baseline, but an explicit @mcp on one still counts.
       const generated = isGenerated(name, member, ctx.definitions);
-      if (generated && !isOptedIn(member)) continue;
-      if (optedIn || isOptedIn(member)) entities.push(readEntity(name, service, member, ctx));
+      if (generated && !(isOptedIn(member) && !isCopied(member, "@mcp", ctx))) continue;
+      // Outside an @mcp service, only an @mcp written here counts, not one CAP copied in.
+      const ownOptIn = isOptedIn(member) && !isCopied(member, "@mcp", ctx);
+      if (optedIn || ownOptIn) entities.push(readEntity(name, service, member, ctx));
       const addressable = isAddressable(member);
       for (const [action, op] of Object.entries(member.actions ?? {})) {
         if (!exposesOperation(op, optedIn)) continue;
@@ -343,6 +352,22 @@ function searchColumns(def: Definition, ctx: Context, depth = 0): string[] {
       : searchColumns(target, ctx, depth + 1);
     return nested.map((column) => `${head}.${column}`);
   });
+}
+
+/** The entity a projection or view selects from, if any. */
+function sourceOf(def: Definition, ctx: Context): Definition | undefined {
+  const from = def.projection?.from ?? def.query?.SELECT?.from;
+  const ref = from?.ref?.[0];
+  return typeof ref === "string" ? ctx.definitions[ref] : undefined;
+}
+
+/**
+ * True when `key` has the same value on the entity this one projects: CAP copied it here, or it
+ * was written again with the same value (the compiled model cannot tell these apart).
+ */
+function isCopied(def: Definition, key: `@${string}`, ctx: Context): boolean {
+  const source = sourceOf(def, ctx);
+  return !!source && JSON.stringify(source[key]) === JSON.stringify(def[key]);
 }
 
 /** `on items.up_ = $self` → "up_": the child's association that CAP fills on deep insert. */

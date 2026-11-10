@@ -157,6 +157,35 @@ describe("model-reader: opt-in", () => {
     expect(exposed(readModel(csn).spec)).toEqual({ S: { entities: {}, operations: [] } });
   });
 
+  test("annotations CAP copies from another layer take effect only in @mcp services", () => {
+    const csn = compileSnippet(`
+      namespace db;
+      @mcp @mcp.wrap.modes: ['delete']
+      entity Books { key ID: Integer; title: String; @mcp.omit costPrice: Decimal; }
+      entity Authors { key ID: Integer; }
+      service Admin { entity Books as projection on db.Books; }
+      @mcp service Catalog { entity Books as projection on db.Books; }
+      service Shop {
+        @mcp entity Authors as projection on db.Authors;
+        @mcp entity Books as projection on db.Books;
+      }
+    `);
+    const { spec, diagnostics } = readModel(csn);
+    // Admin never says @mcp, so the copied @mcp / @mcp.wrap.modes expose nothing there and are
+    // not reported as unused either. Catalog is an MCP service: everything copied applies.
+    // Shop opts Authors in itself. Its @mcp on Books equals the copied one, so it cannot be
+    // told apart from it and counts as copied.
+    expect(exposed(spec)).toEqual({
+      "db.Catalog": {
+        entities: { "db.Catalog.Books": ["delete", "get", "query"] },
+        operations: [],
+      },
+      "db.Shop": { entities: { "db.Shop.Authors": ["get", "query"] }, operations: [] },
+    });
+    expect(spec.services[0]?.entities[0]?.fields.map((f) => f.name)).toEqual(["ID", "title"]);
+    expect(diagnostics).toEqual([]);
+  });
+
   test("@mcp: false on a service switches the whole service off, even opted-in members", () => {
     const csn = compileSnippet(`
       @mcp: false service S {
