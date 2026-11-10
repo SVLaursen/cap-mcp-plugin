@@ -43,6 +43,12 @@ The data passed between them is defined in `src/types.ts`.
    dispatches the JSON-RPC method. Only `tools` is advertised, with `listChanged: false`;
    `tools/list` and `server/discover` say `cacheScope: private` (lists depend on the user) and
    `ttlMs` 60 s. No session, no `Mcp-Session-Id`.
+   A 401 (CAP's `next(401)`, e.g. an invalid token) becomes CAP's own login challenge
+   (`req._login`, Basic for mocked/basic auth) or, for XSUAA/JWT/IAS,
+   `WWW-Authenticate: Bearer resource_metadata="<origin>/.well-known/oauth-protected-resource/mcp"`.
+   That RFC 9728 document is public and names the bound authorization server
+   (`cds.requires.auth.credentials.url`); without one it is 404. No authorization server
+   endpoints, no DCR.
 3. `tools/list` → `registry.toolsFor(cds.context.user)` for `cds.context.model`.
 4. `tools/call` → the SDK validates args against the tool's input schema →
    `srv.tx(tx => executor.execute(tool, args, tx, user, { confirmed }))` (the service's own root

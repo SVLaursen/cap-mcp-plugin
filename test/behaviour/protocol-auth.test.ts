@@ -1,0 +1,60 @@
+import cds from "@sap/cds";
+import { bootDemo } from "../helpers/demo";
+import { rpc } from "../helpers/mcp";
+
+/**
+ * M4 — auth metadata for OAuth-based auth (XSUAA here; IAS works the same way). The demo boots
+ * with a stub XSUAA binding: @sap/xssec validates tokens for real, so a bogus token is refused
+ * by CAP's own jwt-auth, and anonymous requests pass CAP's middleware as anonymous.
+ */
+const demo = bootDemo();
+const AUTHORIZATION_SERVER = "https://demo.authentication.example.com";
+cds.env.requires.auth = {
+  kind: "xsuaa",
+  credentials: {
+    clientid: "sb-demo",
+    clientsecret: "not-a-secret",
+    url: AUTHORIZATION_SERVER,
+    uaadomain: "authentication.example.com",
+    xsappname: "demo",
+  },
+} as unknown as typeof cds.env.requires.auth;
+
+/** The app's own origin, as the client sees it. */
+const url = () => (demo as unknown as { url: string }).url;
+const metadataUrl = () => `${url()}/.well-known/oauth-protected-resource/mcp`;
+const anyone = { validateStatus: () => true };
+
+describe("protocol: auth metadata (OAuth)", () => {
+  test("a request with an invalid token gets 401 with a WWW-Authenticate resource_metadata pointer", async () => {
+    const res = await demo.POST(
+      "/mcp",
+      {},
+      { ...anyone, headers: { authorization: "Bearer not-a-jwt" } },
+    );
+    expect(res.status).toBe(401);
+    expect(res.headers["www-authenticate"]).toBe(`Bearer resource_metadata="${metadataUrl()}"`);
+  });
+
+  test("/.well-known/oauth-protected-resource/mcp serves RFC 9728 metadata, unauthenticated", async () => {
+    const res = await demo.GET("/.well-known/oauth-protected-resource/mcp", anyone);
+    expect(res.status).toBe(200);
+    expect(res.data).toEqual({
+      resource: `${url()}/mcp`,
+      authorization_servers: [AUTHORIZATION_SERVER],
+      bearer_methods_supported: ["header"],
+    });
+  });
+
+  test("no fake Dynamic Client Registration or authorization server endpoints are served", async () => {
+    expect((await demo.GET("/.well-known/oauth-authorization-server", anyone)).status).toBe(404);
+    expect((await demo.GET("/.well-known/openid-configuration", anyone)).status).toBe(404);
+    expect((await demo.POST("/register", {}, anyone)).status).toBe(404);
+  });
+
+  test("the challenge does not get in the way of anonymous discovery outside production", async () => {
+    // CAP lets anonymous callers reach services without @requires outside production.
+    const res = await rpc(demo.POST, "anonymous", "server/discover");
+    expect(res.status).toBe(200);
+  });
+});

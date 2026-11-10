@@ -96,10 +96,23 @@ describe("protocol: older clients", () => {
   );
 });
 
-describe("protocol: auth metadata", () => {
-  test.todo("unauthenticated requests get 401 with a WWW-Authenticate resource_metadata pointer");
-  test.todo("/.well-known/oauth-protected-resource serves RFC 9728 metadata");
-  test.todo("no fake Dynamic Client Registration endpoint is served");
+describe("protocol: auth metadata (mocked; OAuth in protocol-auth.test.ts)", () => {
+  test("wrong credentials get CAP's own login challenge (Basic for mocked auth)", async () => {
+    const res = await demo.POST(
+      "/mcp",
+      {},
+      { auth: { username: "alice", password: "wrong" }, validateStatus: () => true },
+    );
+    expect(res.status).toBe(401);
+    expect(res.headers["www-authenticate"]).toBe('Basic realm="Users"');
+  });
+
+  test("without an authorization server there is no RFC 9728 metadata to serve", async () => {
+    const res = await demo.GET("/.well-known/oauth-protected-resource/mcp", {
+      validateStatus: () => true,
+    });
+    expect(res.status).toBe(404);
+  });
 });
 
 describe("protocol: mounting inside CAP", () => {

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import express, { type Application, type RequestHandler } from "express";
 import { mcpHandlers, type RequestContext } from "./adapter";
+import { authErrors, metadataHandler, metadataPath, type AuthConfig } from "./adapter/auth";
 import { registryCache } from "./exposure-registry";
 
 /** The parts of the `cds` facade the plugin uses. Passed in, never read from a global (ADR 0005). */
@@ -19,6 +20,7 @@ export interface CdsLike {
   readonly services: Record<string, unknown>;
   readonly middlewares: { before: RequestHandler[] };
   readonly env: { production?: boolean };
+  readonly requires: { auth?: AuthConfig };
 }
 
 export const MCP_PATH = "/mcp";
@@ -48,7 +50,16 @@ export function activate(cds: CdsLike): void {
       production: cds.env.production,
       log,
     });
-    cds.app.post(MCP_PATH, ...cds.middlewares.before, express.json(), ...handlers);
+    const auth = { path: MCP_PATH, auth: () => cds.requires.auth };
+    // RFC 9728 metadata is public: clients read it to find out how to authenticate.
+    cds.app.get(metadataPath(MCP_PATH), metadataHandler(auth));
+    cds.app.post(
+      MCP_PATH,
+      ...cds.middlewares.before,
+      express.json(),
+      ...handlers,
+      authErrors(auth),
+    );
     log.debug(`MCP endpoint mounted at ${MCP_PATH}`);
   });
 }
