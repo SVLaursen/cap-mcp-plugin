@@ -14,7 +14,7 @@ turns into a real test. Tick `[x]` when the task meets the definition of done in
 - [x] Module stubs with contracts; backlog of `test.todo` per milestone
 - [x] CLAUDE.md, docs, ADRs 0001–0008, skills, CI
 
-## M1 — Model reader and schema mapper (pure)
+## M1 — Model reader and schema mapper (pure) ✅
 
 Fast loop: `npm run test:contract`.
 
@@ -28,7 +28,7 @@ Fast loop: `npm run test:contract`.
 - [x] Schema mapper: scalar types _(`schema-mapper.test.ts` › scalar types)_
 - [x] Schema mapper: tool input schemas per mode and for operations _(input)_
 - [x] Schema mapper: output schemas _(output)_
-- [ ] Review: run the `reviewer` agent on M1
+- [x] Review: run the `reviewer` agent on M1 (findings fixed in the `M1 review:` commits)
 
 ## M2 — Exposure registry
 
