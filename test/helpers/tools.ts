@@ -48,7 +48,8 @@ export async function callTool(
 }
 
 /**
- * Run the executor directly, as the adapter does, for what /mcp cannot do (yet): call a tool that
+ * Run the executor directly (in `srv.tx({ user })`: the adapter's transaction also inherits the
+ * request's tenant and locale) for what /mcp cannot do (yet): call a tool that
  * is not in the caller's list (`listedFor` takes it from another user's list, to prove CAP
  * refuses the call itself), or a confirmed @mcp.elicit call (MRTR confirmation is M5).
  */

@@ -9,14 +9,19 @@ Run `git diff` (or the given range) and go through each item. Report findings wi
 
 ## CAP does the work (ADR 0003)
 
-- [ ] Data access only via `srv.run(cqn)` / `srv.send(...)`; no `cds.db`, no `cds.tx(...)` /
-      `srv.tx(...)` opened by the plugin, no `.commit()` / `.rollback()`.
+- [ ] Data access only via `srv.run(cqn)` / `srv.send(...)`; no `cds.db`, no `cds.tx(...)`, no
+      `.commit()` / `.rollback()`. The one exception: the adapter runs each `tools/call` in the
+      service's own root transaction, `srv.tx(fn)` (as CAP's protocol adapters do), and maps
+      errors only after it has rolled back.
 - [ ] CQN built as objects (`SELECT.from(...).where({ ... })`, `{ ref }`, `{ val }`), never via
       template strings or `cds.parse.expr` on user input.
 - [ ] Search via `SELECT.search(q)`.
-- [ ] No role checks deciding access (`user.is(...)` only to hide tools in the registry).
+- [ ] No role checks deciding access (`user.is(...)` only to hide tools in the registry). The
+      one exception: `/mcp` applies CAP's production default itself (`requireUser`, mirroring
+      `restrict_all_services`, ADR 0009), because it lives only in CAP's protocol adapters.
 - [ ] No timeouts that race CAP work without cancelling it.
-- [ ] CAP error `code`, `target`, `args`/`details` preserved in tool errors.
+- [ ] CAP error `code`, `target`, `args`/`details` preserved in tool errors, and messages
+      translated as over OData (`cds.i18n.messages`, the caller's locale).
 
 ## Opt-in (ADR 0004)
 

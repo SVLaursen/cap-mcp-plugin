@@ -70,7 +70,7 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 - [x] Production default: CAP requires `authenticated-user` on services without `@requires` (`restrict_all_services`); make `tools/list` for anonymous callers agree (or always authenticate `/mcp`) _(mounting)_
 - [x] Legacy era: `initialize` → `tools/list` / `tools/call` without a session; GET → 405; `@mcp.elicit` tools give a clear `isError` _(older clients)_
 - [x] Auth matrix: mocked _(`auth-matrix.test.ts`)_
-- [ ] Review: run the `reviewer` agent on M4
+- [x] Review: run the `reviewer` agent on M4 (findings fixed in the `M4 review:` commits)
 
 ## M5 — Opt-in features
 
@@ -82,6 +82,7 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 - [ ] Confirmation via MRTR `input_required` _(confirmation)_
 - [ ] Completion _(completion)_
 - [ ] Auth matrix: XSUAA/IAS × secret/certificate, IAS-only + AMS _(`auth-matrix.test.ts`)_
+- [ ] Multitenant XSUAA: RFC 9728 metadata names the provider's `credentials.url`; subscribers authenticate at their own subdomain, so derive the authorization server from the tenant (M4 review)
 - [ ] Review: run the `reviewer` agent on M5
 
 ## M6 — Developer experience and v1 compatibility
