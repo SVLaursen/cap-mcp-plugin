@@ -790,6 +790,32 @@ describe("model-reader: return types", () => {
   });
 });
 
+describe("model-reader: operation parameters", () => {
+  test("binding parameters are not offered; array parameters are many of their item type", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        entity Orders { key ID: Integer; } actions {
+          @mcp action tag(in: $self, @mandatory tags: array of String);
+          @mcp action archiveAll(in: many $self);
+        }
+      }
+    `);
+    const [tag, archiveAll] = onlyService(readModel(csn).spec).operations;
+    expect(tag?.params).toEqual([
+      {
+        name: "tags",
+        cdsType: "cds.String",
+        many: true,
+        key: false,
+        mandatory: true,
+        readonly: false,
+        completion: false,
+      },
+    ]);
+    expect(archiveAll?.params).toEqual([]);
+  });
+});
+
 describe("model-reader: diagnostics", () => {
   const codes = (diagnostics: Diagnostic[]) =>
     diagnostics.map(({ level, code, target }) => ({ level, code, target }));
@@ -907,6 +933,22 @@ describe("model-reader: diagnostics", () => {
     expect(codes(readModel(csn).diagnostics)).toEqual([
       { level: "warn", code: "UNSUPPORTED_TYPE", target: "S.Docs:embedding" },
     ]);
+  });
+
+  test("a bound operation parameter named like a key of its entity yields PARAMETER_SHADOWS_KEY", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        entity Orders { key ID: Integer; } actions {
+          @mcp action cancel(ID: Integer not null);
+          @mcp action close(reason: String);
+        }
+      }
+    `);
+    const { spec, diagnostics } = readModel(csn);
+    expect(codes(diagnostics)).toEqual([
+      { level: "error", code: "PARAMETER_SHADOWS_KEY", target: "S.Orders.cancel:ID" },
+    ]);
+    expect(onlyService(spec).operations.map((o) => o.name)).toEqual(["S.Orders.close"]);
   });
 
   test("the demo model reads with zero error-level diagnostics", async () => {

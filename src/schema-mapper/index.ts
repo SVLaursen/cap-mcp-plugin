@@ -65,6 +65,12 @@ export function isMappedType(cdsType: string): boolean {
 }
 
 export function fieldToSchema(field: FieldSpec): JsonSchema {
+  if (field.many) {
+    const { many: _many, description, ...item } = field;
+    const schema: JsonSchema = { type: "array", items: fieldToSchema(item) };
+    if (description) schema.description = description;
+    return schema;
+  }
   const schema: JsonSchema = { ...(TYPES[field.cdsType] ?? {}) };
   if (field.length !== undefined && schema.type === "string") schema.maxLength = field.length;
   if (field.enum) {

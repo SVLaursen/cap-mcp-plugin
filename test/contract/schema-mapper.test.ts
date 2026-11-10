@@ -148,6 +148,16 @@ describe("schema-mapper: scalar types", () => {
     expect(schemaError(fieldToSchema(field("cds.Time")), "25:00:00")).toBeDefined();
   });
 
+  test("many → array of the item type; the description stays on the array", () => {
+    expect(
+      fieldToSchema(field("cds.String", { many: true, length: 3, description: "Tags" })),
+    ).toEqual({
+      type: "array",
+      items: { type: "string", maxLength: 3 },
+      description: "Tags",
+    });
+  });
+
   test("description is copied when present", () => {
     expect(fieldToSchema(field("cds.Boolean", { description: "In stock" }))).toEqual({
       type: "boolean",

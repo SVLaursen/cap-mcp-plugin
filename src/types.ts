@@ -16,6 +16,8 @@ export interface FieldSpec {
   name: string;
   /** Resolved CDS builtin, e.g. "cds.String", "cds.Integer", "cds.Decimal". */
   cdsType: string;
+  /** `array of <cdsType>` (operation parameters). */
+  many?: true;
   key: boolean;
   /** From @mandatory / not null. */
   mandatory: boolean;
@@ -124,6 +126,8 @@ export type DiagnosticCode =
   | "UNKNOWN_ANNOTATION"
   | "INVALID_ANNOTATION_VALUE"
   | "BOUND_OPERATION_WITHOUT_KEYS"
+  /** A bound operation parameter with the name of one of its entity's keys. */
+  | "PARAMETER_SHADOWS_KEY"
   /** An element or parameter type with no JSON Schema mapping; agents see it as "any value". */
   | "UNSUPPORTED_TYPE"
   /** @mcp.omit on a key element: the entity's get tool cannot address records. */

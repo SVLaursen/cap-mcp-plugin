@@ -147,6 +147,17 @@ function readService(service: string, def: Definition, ctx: Context): ServiceSpe
           });
           continue;
         }
+        const keys = Object.entries(member.elements ?? {}).filter(([, el]) => el.key);
+        const clash = keys.find(([key]) => key in (op.params ?? {}));
+        if (clash) {
+          ctx.diagnostics.push({
+            level: "error",
+            code: "PARAMETER_SHADOWS_KEY",
+            target: `${name}.${action}:${clash[0]}`,
+            message: `Parameter ${clash[0]} of ${action} has the name of a key of ${name}; the tool could not tell them apart. Not exposed`,
+          });
+          continue;
+        }
         operations.push(readOperation(`${name}.${action}`, service, op, ctx, name));
       }
     } else if (member.kind === "function" || member.kind === "action") {
@@ -289,7 +300,9 @@ function readOperation(
   ctx: Context,
   boundTo?: string,
 ): OperationSpec {
-  const params = Object.entries(def.params ?? {}).map(([param, p]) => readField(param, p));
+  const params = Object.entries(def.params ?? {})
+    .filter(([, p]) => (p.items ?? p).type !== "$self") // CAP's binding parameter
+    .map(([param, p]) => readField(param, p));
   checkTypes(ctx, name, params);
   return {
     name,
@@ -364,13 +377,18 @@ function readField(
   def: Definition,
   siblings: Record<string, Definition> = {},
 ): FieldSpec {
+  if (def.items) {
+    const item = readField(name, def.items);
+    const mandatory = def.notNull === true || def["@mandatory"] === true;
+    return { ...item, many: true, mandatory, description: describeElement(def) };
+  }
   const association = str(def["@odata.foreignKey4"]);
   const range = def["@assert.range"];
   return {
     name,
     cdsType: def.type ?? "",
     key: def.key === true,
-    description: str(def["@mcp.hint"]) ?? str(def["@description"]) ?? def.doc,
+    description: describeElement(def),
     mandatory: def.notNull === true || def["@mandatory"] === true,
     readonly:
       def["@readonly"] === true ||
@@ -491,6 +509,10 @@ function isGenerated(
   if (def["@cds.autoexposed"] === true || name.endsWith(".DraftAdministrativeData")) return true;
   const parent = name.endsWith(".texts") ? definitions[name.slice(0, -".texts".length)] : undefined;
   return parent?.elements?.texts?.target === name;
+}
+
+function describeElement(def: Definition): string | undefined {
+  return str(def["@mcp.hint"]) ?? str(def["@description"]) ?? def.doc;
 }
 
 function title(name: string, def: Definition): string {

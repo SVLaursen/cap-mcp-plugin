@@ -69,6 +69,7 @@ The model reader reports these; the startup report (M6) prints them. Targets are
 | `V1_ANNOTATION`                | warn  | `@mcp.wrap.tools`, `@mcp.tool`, `@mcp.usePrimaryKey`, or `@mcp.resource: [ … ]`                                                  | Ignored (M6 shim maps)                     |
 | `INVALID_ANNOTATION_VALUE`     | error | An unknown `@mcp.wrap.modes` value; `update`/`delete` on an entity without exposed keys; an `@mcp.ui` value that is not `ui://…` | That value is ignored                      |
 | `BOUND_OPERATION_WITHOUT_KEYS` | error | An exposed bound operation on an entity without exposed keys (none, or one is `@mcp.omit`)                                       | The operation is not exposed               |
+| `PARAMETER_SHADOWS_KEY`        | error | A bound operation parameter has the name of a key of its entity                                                                  | The operation is not exposed               |
 | `UNSUPPORTED_TYPE`             | warn  | An exposed element or parameter whose type has no JSON Schema mapping (e.g. `Vector`)                                            | Exposed as "any value"                     |
 | `OMITTED_KEY`                  | warn  | `@mcp.omit` on a key of an exposed entity                                                                                        | Only query (and create) are offered for it |
 
