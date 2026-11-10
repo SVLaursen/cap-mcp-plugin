@@ -181,16 +181,6 @@ describe("executor: reads", () => {
   });
 });
 
-describe("executor: operations", () => {
-  test.todo("unbound function stockByGenre returns its value as structured content");
-  test.todo("unbound action submitOrder runs the handler and returns { stock }");
-  test.todo(
-    "submitOrder over stock returns a tool error with code ORDER_EXCEEDS_STOCK and target quantity",
-  );
-  test.todo("the unannotated action restock is neither listed nor callable");
-  test.todo("bound action OrdersService.Orders.cancel takes the order key plus parameters");
-});
-
 describe("executor: drafts and deep insert", () => {
   test.todo("create on draft-enabled Orders goes NEW → (patch) → SAVE and yields an active order");
   test.todo("update on draft-enabled Orders goes EDIT → patch → SAVE");

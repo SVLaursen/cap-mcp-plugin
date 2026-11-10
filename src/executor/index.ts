@@ -39,13 +39,18 @@ export interface ExecutorOptions {
   limits?: Limits;
 }
 
+/** Per call. `confirmed`: the user confirmed this call (@mcp.elicit, MRTR in M5). */
+export interface CallOptions {
+  confirmed?: boolean;
+}
+
 /**
  * A tool call the agent can fix: a bad argument, a missing record. Becomes an `isError` result,
  * never a protocol error, so the agent sees what went wrong.
  */
 export class ToolError extends Error {
   constructor(
-    readonly code: "INVALID_ARGUMENT" | "NOT_FOUND",
+    readonly code: "INVALID_ARGUMENT" | "NOT_FOUND" | "CONFIRMATION_REQUIRED",
     message: string,
     readonly target?: string,
   ) {
@@ -77,12 +82,14 @@ type Args = Record<string, unknown>;
  */
 export class Executor {
   private readonly entities: Map<string, EntitySpec>;
+  private readonly operations: Map<string, OperationSpec>;
   private readonly services: Map<string, ServiceSpec>;
   private readonly limits: Limits;
 
   constructor(spec: ExposureSpec, options: ExecutorOptions = {}) {
     this.entities = new Map(spec.services.flatMap((s) => s.entities.map((e) => [e.name, e])));
     this.services = new Map(spec.services.map((s) => [s.name, s]));
+    this.operations = new Map(spec.services.flatMap((s) => s.operations.map((o) => [o.name, o])));
     this.limits = options.limits ?? DEFAULT_LIMITS;
   }
 
@@ -92,6 +99,7 @@ export class Executor {
     args: Args,
     service: ServiceLike,
     user: UserLike,
+    options: CallOptions = {},
   ): Promise<ToolResult> {
     try {
       const target = tool.target;
@@ -113,6 +121,19 @@ export class Executor {
             }),
           ),
         });
+      }
+      if (target.kind === "operation") {
+        return await this.call(this.operation(target.operation), args, service, options);
+      }
+      if (target.kind === "compact" && target.action === "call_operation") {
+        allowOnly(args, ["operation", "args"]);
+        const op = this.operation(String(args.operation), target.service);
+        return await this.call(
+          op,
+          args.args === undefined ? {} : object(args.args, "args"),
+          service,
+          options,
+        );
       }
       return await this.dispatch(tool, args, service);
     } catch (error) {
@@ -236,6 +257,66 @@ export class Executor {
       entities: entities.map(describeEntity),
       operations: wanted === undefined ? service.operations.map(describeOperation) : [],
     });
+  }
+
+  private operation(name: string, service?: string): OperationSpec {
+    const op = this.operations.get(name);
+    // Through a compact call_operation: only that service's operations, and not @mcp.ui ones
+    // (they have their own tool).
+    if (!op || (service !== undefined && (op.service !== service || op.ui !== undefined))) {
+      throw new ToolError("INVALID_ARGUMENT", `Unknown operation ${name}`, "operation");
+    }
+    return op;
+  }
+
+  /**
+   * An operation through srv.send, so the app's `on` handler runs: unbound with its parameters
+   * as req.data, bound with the instance key in req.params (as OData does). @mcp.elicit
+   * operations only run once the user confirmed the call.
+   */
+  private async call(
+    op: OperationSpec,
+    args: Args,
+    service: ServiceLike,
+    options: CallOptions,
+  ): Promise<ToolResult> {
+    const bound = op.boundTo ? this.entities.get(op.boundTo) : undefined;
+    const keyNames = bound?.keys.map((k) => k.name) ?? [];
+    allowOnly(args, [...keyNames, ...op.params.map((p) => p.name)]);
+    const data: Args = {};
+    for (const p of op.params) {
+      const v = args[p.name];
+      if (v === undefined || (v === null && !p.mandatory)) continue;
+      if (p.many) {
+        if (!Array.isArray(v))
+          throw new ToolError("INVALID_ARGUMENT", `${p.name} must be an array`, p.name);
+        v.forEach((item, i) => value(p, item, `${p.name}[${i}]`));
+      } else value(p, v, p.name);
+      data[p.name] = v;
+    }
+    if (op.elicit?.length && !options.confirmed) {
+      throw new ToolError(
+        "CONFIRMATION_REQUIRED",
+        `${op.title} needs the user's confirmation before it runs`,
+      );
+    }
+    const event = op.name.slice(op.name.lastIndexOf(".") + 1);
+    const returned = bound
+      ? await service.send({
+          event,
+          entity: bound.name,
+          data,
+          // The key alone addresses the active record (CAP rejects IsActiveEntity here).
+          params: [keyOf(bound, pickKeys(args, keyNames))],
+        })
+      : await service.send({ event, data });
+    if (!op.returns) return { text: `${op.title} done` };
+    const fields = op.returns.fields?.map((f) => f.name);
+    const shape = (v: unknown) =>
+      fields && v && typeof v === "object" ? project(v as Args, fields) : v;
+    const value_ =
+      op.returns.many && Array.isArray(returned) ? returned.map(shape) : shape(returned ?? null);
+    return result({ value: value_ });
   }
 
   /** The entity a call names, which must be exposed (and in `service`, for compact tools). */
@@ -590,6 +671,8 @@ function and(...parts: unknown[][]): unknown[] {
 }
 
 const ref = (name: string) => ({ ref: [name] });
+const pickKeys = (args: Args, names: string[]) =>
+  Object.fromEntries(names.filter((n) => n in args).map((n) => [n, args[n]]));
 const project = (row: Args, names: string[]) =>
   Object.fromEntries(names.filter((n) => n in row).map((n) => [n, row[n]]));
 const byName = (fields: FieldSpec[]) => new Map(fields.map((f) => [f.name, f]));

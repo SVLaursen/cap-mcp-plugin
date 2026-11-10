@@ -49,7 +49,7 @@ executor directly inside `cds.test` (call it with `cds.services.X` within a
 - [x] Regression #2, #6 _(`v1-findings.test.ts`)_
 - [x] Writes through the service; custom handlers run; mode gating _(`executor-writes.test.ts`)_
 - [x] Regression #1 (failed commit), #5 (same user context) _(`v1-findings.test.ts`)_
-- [ ] Operations: functions, actions, bound actions; structured CAP errors _(operations)_
+- [x] Operations: functions, actions, bound actions; structured CAP errors _(`executor-operations.test.ts`)_
 - [ ] Drafts and deep insert _(drafts and deep insert)_
 - [ ] Authorization is CAP's: MCP rows equal OData rows per user _(authorization)_
 - [ ] Review: run the `reviewer` agent on M3

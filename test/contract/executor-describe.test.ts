@@ -31,6 +31,29 @@ async function describe_(user: cds.User, name: string, args: Record<string, unkn
   return executor.execute(tool, args, noService, user);
 }
 
+describe("executor: compact call_operation", () => {
+  test("only calls operations of its own service, and never @mcp.ui ones", async () => {
+    const r = ExposureRegistry.fromModel(
+      compileSnippet(`
+        @mcp @mcp.compact service A {
+          function count() returns Integer;
+          @mcp.ui: 'ui://a/card.html' function card() returns Integer;
+        }
+        @mcp service B { function other() returns Integer; }
+      `),
+    );
+    const tool = r.toolsFor(bob).find((t) => t.name === "A_call_operation");
+    if (!tool) throw new Error("A_call_operation not listed");
+    const ex = new Executor(r.spec);
+    for (const operation of ["B.other", "A.card", "A.nope"]) {
+      const result = await ex.execute(tool, { operation }, noService, bob);
+      expect(result.structuredContent).toEqual({
+        error: expect.objectContaining({ code: "INVALID_ARGUMENT", target: "operation" }),
+      });
+    }
+  });
+});
+
 describe("executor: describe tools", () => {
   test("<Service>_describe describes what the service exposes to this caller, and nothing else", async () => {
     const result = await describe_(bob, "Shop_describe");

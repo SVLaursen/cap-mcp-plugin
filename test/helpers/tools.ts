@@ -19,6 +19,7 @@ export async function callTool(
   who: DemoUser,
   name: string,
   args: Record<string, unknown> = {},
+  options: { confirmed?: boolean } = {},
 ): Promise<ToolResult> {
   const registry = ExposureRegistry.fromModel(cds.model as unknown as object);
   const user = demoUser(who);
@@ -26,7 +27,7 @@ export async function callTool(
   if (!tool) throw new Error(`${name} is not listed for ${who}`);
   const service = cds.services[name.split("_")[0] ?? ""] as unknown as ServiceLike;
   const executor = new Executor(registry.spec);
-  return cds.tx({ user }, () => executor.execute(tool, args, service, user));
+  return cds.tx({ user }, () => executor.execute(tool, args, service, user, options));
 }
 
 export type Page = { rows: Record<string, unknown>[]; total: number; nextCursor?: string };

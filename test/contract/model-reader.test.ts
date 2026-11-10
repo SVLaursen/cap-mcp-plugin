@@ -881,6 +881,19 @@ describe("model-reader: operation parameters", () => {
   });
 });
 
+describe("model-reader: draft return types", () => {
+  test("an operation returning a draft entity leaves out CAP's draft columns", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        @odata.draft.enabled entity Orders { key ID: UUID; status: String; }
+        function latest() returns Orders;
+      }
+    `);
+    const [latest] = onlyService(readModel(csn).spec).operations;
+    expect(latest?.returns?.fields?.map((f) => f.name)).toEqual(["ID", "status"]);
+  });
+});
+
 describe("model-reader: diagnostics", () => {
   const codes = (diagnostics: Diagnostic[]) =>
     diagnostics.map(({ level, code, target }) => ({ level, code, target }));

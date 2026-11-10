@@ -428,7 +428,9 @@ function readReturns(returns: Definition | undefined, ctx: Context): ReturnSpec 
   const type = returns.items ?? returns;
   const entity = type.type ? ctx.definitions[type.type] : undefined;
   if (entity?.kind === "entity" && type.type) {
-    return { many, entity: type.type, fields: readFields(entity.elements) };
+    const draft = entity["@odata.draft.enabled"] === true || entity.drafts !== undefined;
+    const fields = readFields(entity.elements).filter((f) => !draft || !DRAFT_ELEMENTS.has(f.name));
+    return { many, entity: type.type, fields };
   }
   if (type.elements) return { many, fields: readFields(type.elements) };
   return { many, scalar: readField("value", type) };
