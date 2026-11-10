@@ -113,6 +113,18 @@ describe("exposure-registry: tool list", () => {
     expect(tools.Shop_order?.outputSchema).toBeUndefined();
   });
 
+  test("tool specs are deeply frozen, since every user and request shares them", () => {
+    const [tool] = registry(shop).toolsFor(user());
+    expect(Object.isFrozen(tool)).toBe(true);
+    expect(Object.isFrozen(tool?.annotations)).toBe(true);
+    expect(Object.isFrozen((tool?.inputSchema.properties as Record<string, unknown>).ID)).toBe(
+      true,
+    );
+    expect(() => {
+      (tool!.annotations as { readOnlyHint: boolean }).readOnlyHint = false;
+    }).toThrow(TypeError);
+  });
+
   test("two tools that would share a name are both left out and reported as TOOL_NAME_CLASH", () => {
     const clash = registry(`
       @mcp service S {

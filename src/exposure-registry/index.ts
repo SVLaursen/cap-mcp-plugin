@@ -130,7 +130,8 @@ export class ExposureRegistry {
         message: `${candidates.map(describeTarget).join(" and ")} would both be the tool ${name}; neither is exposed`,
       });
     }
-    return tools.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    // Shared by every user and request, so nobody may change them in place.
+    return tools.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)).map(deepFreeze);
   }
 
   private serviceTools(service: ServiceSpec): ToolSpec[] {
@@ -346,6 +347,14 @@ function compactTool(
     annotations,
     target: { kind: "compact", service: service.name, action },
   };
+}
+
+function deepFreeze<T>(value: T): T {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const child of Object.values(value)) deepFreeze(child);
+  }
+  return value;
 }
 
 function partition<T>(items: T[], test: (item: T) => boolean): [T[], T[]] {
