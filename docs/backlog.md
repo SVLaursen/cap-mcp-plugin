@@ -30,13 +30,13 @@ Fast loop: `npm run test:contract`.
 - [x] Schema mapper: output schemas _(output)_
 - [x] Review: run the `reviewer` agent on M1 (findings fixed in the `M1 review:` commits)
 
-## M2 — Exposure registry
+## M2 — Exposure registry ✅
 
 - [x] Tool names, deterministic order, read-only/destructive hints _(`exposure-registry.test.ts` › tool list)_
 - [x] Describe tool scoped to its service; compact tool set; `@mcp.ui` metadata _(tool list)_
 - [x] Per-user filtering by `@requires` only; `@restrict where` never hides tools _(per-user)_
 - [x] Cache per model object _(caching)_
-- [ ] Review: run the `reviewer` agent on M2
+- [x] Review: run the `reviewer` agent on M2 (findings fixed in the `M2 review:` commits)
 
 ## M3 — Executor on CAP
 
@@ -64,6 +64,7 @@ executor directly inside `cds.test` (call it with `cds.services.X` within a
 - [ ] Auth metadata: 401 + `WWW-Authenticate`, RFC 9728 endpoint, no fake DCR _(auth metadata)_
 - [ ] `cds.context.user` is the caller; AMS middleware applies without special code _(mounting)_
 - [ ] `activate()` leaves `cds.env.cdsc` untouched (ADR 0011) _(mounting)_
+- [ ] Production default: CAP requires `authenticated-user` on services without `@requires` (`restrict_all_services`); make `tools/list` for anonymous callers agree (or always authenticate `/mcp`) _(mounting)_
 - [ ] Auth matrix: mocked _(`auth-matrix.test.ts`)_
 - [ ] Review: run the `reviewer` agent on M4
 
