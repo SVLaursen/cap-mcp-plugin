@@ -53,6 +53,19 @@ bound operations.
 
 Unknown `@mcp.*` keys produce an `UNKNOWN_ANNOTATION` diagnostic at startup.
 
+## Diagnostics
+
+The model reader reports these; the startup report (M6) prints them. Targets are written
+`Def`, `Def:element`, `Entity.boundOperation` or `Operation:param`.
+
+| Code                           | Level | When                                                                                | Effect                              |
+| ------------------------------ | ----- | ----------------------------------------------------------------------------------- | ----------------------------------- |
+| `UNKNOWN_ANNOTATION`           | warn  | An `@mcp.*` key v2 does not know, anywhere in the model (incl. qualified `#x` keys) | Ignored                             |
+| `V1_ANNOTATION`                | warn  | `@mcp.wrap.tools`, `@mcp.tool`, `@mcp.usePrimaryKey`, or `@mcp.resource: [ … ]`     | Ignored (M6 shim maps)              |
+| `INVALID_ANNOTATION_VALUE`     | error | An unknown `@mcp.wrap.modes` value, or an `@mcp.ui` value that is not `ui://…`      | That value is ignored               |
+| `BOUND_OPERATION_WITHOUT_KEYS` | error | An exposed bound operation on an entity with no keys                                | The operation is not exposed        |
+| `OMITTED_KEY`                  | warn  | `@mcp.omit` on a key of an exposed entity                                           | Exposed; get cannot address records |
+
 ## Names and descriptions
 
 - Description: `@mcp.description` → `@description` → doc comment (`/** … */`) → `@title` → none.

@@ -68,8 +68,34 @@ const MODES: ReadonlySet<string> = new Set<EntityMode>([
   "delete",
 ]);
 
+/** Every annotation key v2 understands. Anything else under `@mcp.` is a diagnostic. */
+const KNOWN = new Set([
+  "@mcp",
+  "@mcp.name",
+  "@mcp.description",
+  "@mcp.hint",
+  "@mcp.omit",
+  "@mcp.wrap.modes",
+  "@mcp.deepInsert",
+  "@mcp.resource",
+  "@mcp.prompts",
+  "@mcp.ui",
+  "@mcp.elicit",
+  "@mcp.completion",
+  "@mcp.describe",
+  "@mcp.compact",
+]);
+
+/** v1 annotations that v2 dropped or renamed, with what to use instead (docs/annotations.md). */
+const V1: Record<string, string> = {
+  "@mcp.wrap.tools": "query/get tools are the default for an exposed entity; use @mcp",
+  "@mcp.tool": "use @mcp on the action; functions are baseline under @mcp on the service",
+  "@mcp.usePrimaryKey": "dropped; keys are always the entity keys",
+};
+
 export function readModel(csn: unknown): ModelReadResult {
   const ctx: Context = { definitions: (csn as Csn).definitions ?? {}, diagnostics: [] };
+  checkAnnotations(ctx);
   const services = Object.entries(ctx.definitions)
     .filter(([, def]) => def.kind === "service")
     .map(([name, def]) => readService(name, def, ctx))
@@ -86,10 +112,19 @@ function readService(service: string, def: Definition, ctx: Context): ServiceSpe
     if (!name.startsWith(`${service}.`) || isExcluded(member)) continue;
     if (member.kind === "entity" && !isGenerated(name, member, ctx.definitions)) {
       if (optedIn || isOptedIn(member)) entities.push(readEntity(name, service, member, ctx));
+      const keyless = !Object.values(member.elements ?? {}).some((el) => el.key);
       for (const [action, op] of Object.entries(member.actions ?? {})) {
-        if (exposesOperation(op, optedIn)) {
-          operations.push(readOperation(`${name}.${action}`, service, op, ctx, name));
+        if (!exposesOperation(op, optedIn)) continue;
+        if (keyless) {
+          ctx.diagnostics.push({
+            level: "error",
+            code: "BOUND_OPERATION_WITHOUT_KEYS",
+            target: `${name}.${action}`,
+            message: `${name} has no keys, so its bound operation ${action} cannot address an instance; not exposed`,
+          });
+          continue;
         }
+        operations.push(readOperation(`${name}.${action}`, service, op, ctx, name));
       }
     } else if (member.kind === "function" || member.kind === "action") {
       if (exposesOperation(member, optedIn)) {
@@ -113,6 +148,16 @@ function readService(service: string, def: Definition, ctx: Context): ServiceSpe
 
 function readEntity(name: string, service: string, def: Definition, ctx: Context): EntitySpec {
   const elements = Object.entries(def.elements ?? {});
+  for (const [element, el] of elements) {
+    if (el.key && isOmitted(el)) {
+      ctx.diagnostics.push({
+        level: "warn",
+        code: "OMITTED_KEY",
+        target: `${name}:${element}`,
+        message: `@mcp.omit on key ${element}: the get tool for ${name} cannot address records`,
+      });
+    }
+  }
   const fields = elements
     .filter(([, el]) => !ASSOCIATION.has(el.type ?? "") && !isExcluded(el) && !isOmitted(el))
     .map(([field, el]) => readField(field, el, def.elements));
@@ -237,6 +282,61 @@ function readField(
 /** An @assert.range bound; `_` (open) compiles to `{ "=": "_" }`. */
 function bound(value: unknown): number | undefined {
   return typeof value === "number" ? value : undefined;
+}
+
+/**
+ * Report unknown and v1 `@mcp.*` keys anywhere in the model, exposed or not, so a typo is never
+ * a silent no-op. Targets: `Def`, `Def:element`, `Def.boundOp`, `Op:param`.
+ */
+function checkAnnotations(ctx: Context): void {
+  for (const [name, def] of Object.entries(ctx.definitions)) {
+    if (def.kind === "entity" && isGenerated(name, def, ctx.definitions)) continue;
+    checkKeys(ctx, name, def);
+    for (const [element, el] of Object.entries(def.elements ?? {})) {
+      checkKeys(ctx, `${name}:${element}`, el);
+    }
+    // Only entities have bound actions; a linked service also lists its unbound ones here.
+    const bound = def.kind === "entity" ? def.actions : undefined;
+    for (const [action, op] of Object.entries(bound ?? {})) {
+      checkKeys(ctx, `${name}.${action}`, op);
+      for (const [param, p] of Object.entries(op.params ?? {})) {
+        checkKeys(ctx, `${name}.${action}:${param}`, p);
+      }
+    }
+    for (const [param, p] of Object.entries(def.params ?? {})) {
+      checkKeys(ctx, `${name}:${param}`, p);
+    }
+  }
+}
+
+function checkKeys(ctx: Context, target: string, def: Definition): void {
+  for (const key of Object.keys(def)) {
+    if (key !== "@mcp" && !key.startsWith("@mcp.")) continue;
+    const v1 = V1[key];
+    if (v1) {
+      ctx.diagnostics.push({
+        level: "warn",
+        code: "V1_ANNOTATION",
+        target,
+        message: `${key} is a v1 annotation: ${v1}`,
+      });
+    } else if (key === "@mcp.resource" && Array.isArray(def[key])) {
+      ctx.diagnostics.push({
+        level: "warn",
+        code: "V1_ANNOTATION",
+        target,
+        message:
+          "@mcp.resource with a list of query options is v1; use the query tool. In v2, @mcp.resource means single records by key",
+      });
+    } else if (!KNOWN.has(key)) {
+      ctx.diagnostics.push({
+        level: "warn",
+        code: "UNKNOWN_ANNOTATION",
+        target,
+        message: `Unknown annotation ${key} on ${target}; it has no effect`,
+      });
+    }
+  }
 }
 
 function invalid(ctx: Context, target: string, message: string): void {

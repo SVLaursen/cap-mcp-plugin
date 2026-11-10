@@ -1,4 +1,6 @@
+import path from "node:path";
 import cds from "@sap/cds";
+import { DEMO_DIR } from "./demo";
 
 /** The slice of cds.compile used here; cds-types does not model the options argument. */
 type Compile = ((source: string, options?: { docs?: boolean }) => unknown) & {
@@ -24,4 +26,14 @@ export function compileSnippet(
   const compile = cds.compile as unknown as Compile;
   const nodejs = compile.for.nodejs(compile(source, { docs }));
   return cds.linked(nodejs as cds.csn.CSN);
+}
+
+/**
+ * Compile the demo app's services the same way, without booting it. For contract tests that
+ * need the real demo model (e.g. "the demo reads with zero errors").
+ */
+export async function compileDemo(): Promise<cds.linked.LinkedCSN> {
+  const compile = cds.compile as unknown as Compile;
+  const csn = await cds.load(path.join(DEMO_DIR, "srv"), { docs: true } as never);
+  return cds.linked(compile.for.nodejs(csn) as cds.csn.CSN);
 }

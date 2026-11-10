@@ -105,6 +105,8 @@ export type DiagnosticCode =
   | "UNKNOWN_ANNOTATION"
   | "INVALID_ANNOTATION_VALUE"
   | "BOUND_OPERATION_WITHOUT_KEYS"
+  /** @mcp.omit on a key element: the entity's get tool cannot address records. */
+  | "OMITTED_KEY"
   | "DRAFT_WRITE_NOT_SUPPORTED"
   | "V1_ANNOTATION"
   | "V1_DEFAULT_CHANGED";

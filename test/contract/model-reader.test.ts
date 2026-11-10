@@ -5,8 +5,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { readModel } from "../../src/model-reader";
-import type { ExposureSpec, FieldSpec, ServiceSpec } from "../../src/types";
-import { compileSnippet } from "../helpers/snippet";
+import type { Diagnostic, ExposureSpec, FieldSpec, ServiceSpec } from "../../src/types";
+import { compileDemo, compileSnippet } from "../helpers/snippet";
 
 describe("model-reader: doc comments (ADR 0011)", () => {
   const source = `
@@ -634,11 +634,84 @@ describe("model-reader: field shapes", () => {
 });
 
 describe("model-reader: diagnostics", () => {
-  test.todo("an unknown @mcp.* key yields UNKNOWN_ANNOTATION naming the definition and key");
-  test.todo("v1-only annotations (@mcp.wrap.tools, @mcp.usePrimaryKey) yield V1_ANNOTATION");
-  test.todo("a bound operation on an entity without keys yields BOUND_OPERATION_WITHOUT_KEYS");
-  test.todo(
-    "@mcp.omit on a key element of an exposed entity yields a warn-level diagnostic (get cannot address records)",
-  );
-  test.todo("the demo model reads with zero error-level diagnostics");
+  const codes = (diagnostics: Diagnostic[]) =>
+    diagnostics.map(({ level, code, target }) => ({ level, code, target }));
+
+  test("an unknown @mcp.* key yields UNKNOWN_ANNOTATION naming the definition and key", () => {
+    const csn = compileSnippet(`
+      @mcp @mcp.descibe service S {
+        entity Books { key ID: Integer; @mcp.hnit: 'x' title: String; }
+        @mcp action order(@mcp.completon book: Integer);
+      }
+    `);
+    const { diagnostics } = readModel(csn);
+    expect(codes(diagnostics)).toEqual([
+      { level: "warn", code: "UNKNOWN_ANNOTATION", target: "S" },
+      { level: "warn", code: "UNKNOWN_ANNOTATION", target: "S.Books:title" },
+      { level: "warn", code: "UNKNOWN_ANNOTATION", target: "S.order:book" },
+    ]);
+    expect(diagnostics.map((d) => d.message)).toEqual([
+      expect.stringContaining("@mcp.descibe"),
+      expect.stringContaining("@mcp.hnit"),
+      expect.stringContaining("@mcp.completon"),
+    ]);
+  });
+
+  test("v1-only annotations (@mcp.wrap.tools, @mcp.usePrimaryKey) yield V1_ANNOTATION", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        @mcp.wrap.tools @mcp.usePrimaryKey @mcp.resource: ['filter', 'top']
+        entity Books { key ID: Integer; }
+        @mcp.tool action order();
+      }
+    `);
+    const { diagnostics } = readModel(csn);
+    expect(codes(diagnostics)).toEqual([
+      { level: "warn", code: "V1_ANNOTATION", target: "S.Books" },
+      { level: "warn", code: "V1_ANNOTATION", target: "S.Books" },
+      { level: "warn", code: "V1_ANNOTATION", target: "S.Books" },
+      { level: "warn", code: "V1_ANNOTATION", target: "S.order" },
+    ]);
+    expect(diagnostics.map((d) => d.message)).toEqual([
+      expect.stringContaining("@mcp.wrap.tools"),
+      expect.stringContaining("@mcp.usePrimaryKey"),
+      expect.stringContaining("@mcp.resource"),
+      expect.stringContaining("@mcp.tool"),
+    ]);
+    // v1's array form of @mcp.resource does not opt in to v2 resources.
+    expect(onlyService(readModel(csn).spec).entities[0]?.resource).toBe(false);
+  });
+
+  test("a bound operation on an entity without keys yields BOUND_OPERATION_WITHOUT_KEYS", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        entity Log { message: String; } actions { function latest() returns String; }
+        entity Books { key ID: Integer; } actions { function price() returns Decimal; }
+      }
+    `);
+    const { spec, diagnostics } = readModel(csn);
+    expect(codes(diagnostics)).toEqual([
+      { level: "error", code: "BOUND_OPERATION_WITHOUT_KEYS", target: "S.Log.latest" },
+    ]);
+    // It could never address an instance, so it is not exposed.
+    expect(onlyService(spec).operations.map((o) => o.name)).toEqual(["S.Books.price"]);
+  });
+
+  test("@mcp.omit on a key element of an exposed entity yields a warn-level diagnostic (get cannot address records)", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        entity Books { key ID: Integer; @mcp.omit key edition: Integer; }
+        entity Authors { key ID: Integer; }
+      }
+      service Hidden { entity Notes { @mcp.omit key ID: Integer; } }
+    `);
+    expect(codes(readModel(csn).diagnostics)).toEqual([
+      { level: "warn", code: "OMITTED_KEY", target: "S.Books:edition" },
+    ]);
+  });
+
+  test("the demo model reads with zero error-level diagnostics", async () => {
+    const { diagnostics } = readModel(await compileDemo());
+    expect(diagnostics.filter((d) => d.level === "error")).toEqual([]);
+  });
 });
