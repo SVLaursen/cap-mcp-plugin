@@ -65,7 +65,7 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 - [x] Switch M3 executor tests to go through `/mcp`; delete the placeholder test in `demo-baseline.test.ts`
 - [x] Regression #3 (describe never leaks), #4 (no session state) _(`v1-findings.test.ts`)_
 - [x] Auth metadata: own 401 on `/mcp` (Bearer `resource_metadata` for JWT/IAS, `req._login` for mocked), `/.well-known/oauth-protected-resource/mcp` at the root, no fake DCR _(auth metadata; `protocol-auth.test.ts` boots the demo with a stub XSUAA binding)_
-- [ ] `cds.context.user` is the caller; AMS middleware applies without special code _(mounting)_
+- [x] `cds.context.user` is the caller; AMS middleware applies without special code _(mounting)_
 - [ ] `activate()` leaves `cds.env.cdsc` untouched (ADR 0011) _(mounting)_
 - [ ] Production default: CAP requires `authenticated-user` on services without `@requires` (`restrict_all_services`); make `tools/list` for anonymous callers agree (or always authenticate `/mcp`) _(mounting)_
 - [ ] Legacy era: `initialize` → `tools/list` / `tools/call` without a session; GET → 405; `@mcp.elicit` tools give a clear `isError` _(older clients)_

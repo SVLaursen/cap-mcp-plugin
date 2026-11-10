@@ -2,6 +2,7 @@ import cds from "@sap/cds";
 import pkg from "../../package.json";
 import { ExposureRegistry } from "../../src/exposure-registry";
 import type { ToolSpec } from "../../src/types";
+import type { Request } from "express";
 import { as, bootDemo } from "../helpers/demo";
 import { PROTOCOL_VERSION, callTool, listTools, rpc } from "../helpers/mcp";
 import { TOOLS_TTL_MS } from "../../src/adapter";
@@ -11,6 +12,16 @@ import { demoUser } from "../helpers/tools";
  * M4 — adapter: MCP 2026-07-28 over Streamable HTTP, stateless.
  */
 const demo = bootDemo();
+
+/** Stands in for a plugin like @sap/ams: grants the roles named in a test header. */
+cds.middlewares.add(function grantFromHeader(req: Request, _res: unknown, next: () => void) {
+  const roles = req.headers["x-test-grant"];
+  const user = cds.context?.user as (cds.User & { roles: Record<string, 1> }) | undefined;
+  if (typeof roles === "string" && user) {
+    for (const role of roles.split(",")) user.roles[role] = 1;
+  }
+  next();
+});
 
 /** What tools/list publishes for a tool: the spec without the executor's back-reference. */
 const listed = ({ target: _target, ...tool }: ToolSpec) => tool;
@@ -145,11 +156,27 @@ describe("protocol: mounting inside CAP", () => {
   test.todo(
     "activate() leaves cds.env.cdsc untouched, so doc comments stay the app's choice (ADR 0011)",
   );
-  test.todo(
-    "SPIKE: mount as a CAP protocol adapter (cds.env.protocols) vs. one /mcp route behind cds.middlewares.before; record the decision as an ADR",
-  );
-  test.todo("cds.context.user inside a tool handler is the authenticated user (not privileged)");
-  test.todo(
-    "middleware added by other plugins (e.g. @sap/ams) applies to /mcp without special code",
-  );
+  test("cds.context.user inside a tool handler is the authenticated user (not privileged)", async () => {
+    // @restrict where createdBy = $user: a privileged or technical user would see every order.
+    for (const who of ["bob", "carol"] as const) {
+      const odata = await demo.GET("/orders/Orders?$select=orderNo&$orderby=orderNo", as(who));
+      const mcp = await callTool(demo.POST, who, "OrdersService_Orders_query", {
+        select: ["orderNo"],
+        orderby: [{ field: "orderNo" }],
+      });
+      const orderNos = odata.data.value.map((o: { orderNo: string }) => ({ orderNo: o.orderNo }));
+      expect(mcp.message?.result?.structuredContent).toMatchObject({ rows: orderNos });
+      expect(orderNos).toHaveLength(who === "bob" ? 1 : 2);
+    }
+  });
+
+  test("middleware added by other plugins (e.g. @sap/ams) applies to /mcp without special code", async () => {
+    // grantFromHeader (added with cds.middlewares.add, as @sap/ams adds its own) grants roles.
+    const plain = await listTools(demo.POST, "bob");
+    const granted = await listTools(demo.POST, "bob", { headers: { "x-test-grant": "admin" } });
+    const names = (res: typeof plain) =>
+      (res.message?.result?.tools as { name: string }[]).map((t) => t.name);
+    expect(names(plain)).not.toContain("AdminService_query");
+    expect(names(granted)).toContain("AdminService_query");
+  });
 });
