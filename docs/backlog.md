@@ -63,7 +63,7 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 - [x] `@mcp` services keep their OData endpoints (guard against a protocol named `mcp`) _(mounting)_
 - [x] Stateless tools/list and tools/call; `server/discover`; version errors; `resultType`; `ttlMs`/`cacheScope` _(stateless)_
 - [x] Switch M3 executor tests to go through `/mcp`; delete the placeholder test in `demo-baseline.test.ts`
-- [ ] Regression #3 (describe never leaks), #4 (no session state) _(`v1-findings.test.ts`)_
+- [x] Regression #3 (describe never leaks), #4 (no session state) _(`v1-findings.test.ts`)_
 - [ ] Auth metadata: own 401 on `/mcp` (Bearer `resource_metadata` for JWT/IAS, `req._login` for mocked), `/.well-known/oauth-protected-resource/mcp` at the root, no fake DCR _(auth metadata)_
 - [ ] `cds.context.user` is the caller; AMS middleware applies without special code _(mounting)_
 - [ ] `activate()` leaves `cds.env.cdsc` untouched (ADR 0011) _(mounting)_

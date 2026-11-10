@@ -3,6 +3,7 @@
  * Each must be written red against the v2 code path FIRST, then made green.
  */
 import { as, bootDemo } from "../helpers/demo";
+import { listTools } from "../helpers/mcp";
 import { callTool, page } from "../helpers/tools";
 
 const demo = bootDemo();
@@ -41,8 +42,37 @@ describe("v1 regressions", () => {
       expect(text).not.toContain(hidden);
     }
     expect(text).toContain("CatalogService.Books");
+    // Nor does anything else /mcp publishes to bob (tool names, schemas, descriptions).
+    const listed = JSON.stringify((await listTools(demo.POST, "bob")).message?.result);
+    for (const hidden of [
+      "AdminService",
+      "sap.capire",
+      "AuditNotes",
+      "costPrice",
+      "email",
+      "restock",
+    ]) {
+      expect(listed).not.toContain(hidden);
+    }
   });
-  test.todo("#4 there is no session state: a request never sees tools resolved for another user");
+  test("#4 there is no session state: a request never sees tools resolved for another user", async () => {
+    // v1 kept one server per session and reused its tool list. Interleave alice and bob on the
+    // same endpoint, sending whatever session id a stateful server might have handed out.
+    const names = async (who: "alice" | "bob", headers: Record<string, string> = {}) => {
+      const res = await listTools(demo.POST, who, { headers });
+      expect(res.headers["mcp-session-id"]).toBeUndefined();
+      return (res.message?.result?.tools as { name: string }[]).map((t) => t.name);
+    };
+    const alice = await names("alice");
+    expect(alice).toContain("AdminService_query");
+    for (const headers of [{}, { "mcp-session-id": "alice-session" }] as Record<string, string>[]) {
+      expect(await names("bob", headers)).not.toContain("AdminService_query");
+      expect(await names("alice", headers)).toEqual(alice);
+    }
+    await expect(
+      callTool("bob", "AdminService_query", { entity: "AdminService.Books" }),
+    ).rejects.toThrow(/-32602 Tool AdminService_query not found/);
+  });
   test("#5 reads and writes run with the same user context (cds.context.user)", async () => {
     // Reads: @restrict where createdBy = $user only lets bob see his own order.
     const orders = page(
