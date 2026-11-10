@@ -97,8 +97,8 @@ docs/                   plan, architecture, annotation spec, backlog, testing, A
 ## Things learned while setting up (save yourself the detour)
 
 - **Doc comments** reach CSN only with `cds.env.cdsc.docs = true` (the demo sets it; the
-  snippet helper passes `{ docs: true }`). M1 must decide whether the plugin sets this default
-  itself via its own `package.json` `cds` section.
+  snippet helper passes `{ docs: true }` unless told `{ docs: false }`). The plugin does not set
+  it for the app (ADR 0011).
 - **MCP SDK v2** is split into packages: `@modelcontextprotocol/server`, `/client`, `/node`
   (Node HTTP transport), `/express`, `/core`, plus `@modelcontextprotocol/ext-apps` for MCP
   Apps. All ship CommonJS builds, so `require` works. v2 implements the 2026-07-28 spec; the old

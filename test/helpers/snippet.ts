@@ -7,7 +7,8 @@ type Compile = ((source: string, options?: { docs?: boolean }) => unknown) & {
 
 /**
  * Compile a CDS source string into the linked, Node.js-flavoured CSN the plugin reads at
- * runtime. Doc comments are kept (`/** … *\/` becomes `doc`), as they are in the demo app.
+ * runtime. Doc comments are kept (`/** … *\/` becomes `doc`), as they are in the demo app;
+ * pass `{ docs: false }` to compile like an app that leaves `cds.env.cdsc.docs` unset (ADR 0011).
  *
  * Use this for contract tests: given this CDS, the model reader / schema mapper / registry
  * must produce exactly this output. No server, no database, no mocks.
@@ -16,8 +17,11 @@ type Compile = ((source: string, options?: { docs?: boolean }) => unknown) & {
  *   const csn = compileSnippet(`@mcp service S { entity Books { key ID: Integer; } }`);
  *   expect(readModel(csn).spec.services[0].entities[0].name).toBe("S.Books");
  */
-export function compileSnippet(source: string): cds.linked.LinkedCSN {
+export function compileSnippet(
+  source: string,
+  { docs = true }: { docs?: boolean } = {},
+): cds.linked.LinkedCSN {
   const compile = cds.compile as unknown as Compile;
-  const nodejs = compile.for.nodejs(compile(source, { docs: true }));
+  const nodejs = compile.for.nodejs(compile(source, { docs }));
   return cds.linked(nodejs as cds.csn.CSN);
 }

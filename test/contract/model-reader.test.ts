@@ -2,6 +2,44 @@
  * M1 — model-reader: CSN + @mcp annotations → ExposureSpec.
  * Spec: docs/annotations.md. Turn each todo into a real test (red), then implement (green).
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { readModel } from "../../src/model-reader";
+import { compileSnippet } from "../helpers/snippet";
+
+describe("model-reader: doc comments (ADR 0011)", () => {
+  const source = `
+    /** Browse the book catalogue */
+    @title: 'Catalogue'
+    @mcp service CatalogService {}
+  `;
+  const service = (description: string | undefined) => ({
+    name: "CatalogService",
+    title: "Catalogue",
+    description,
+    compact: false,
+    describe: false,
+    entities: [],
+    operations: [],
+    prompts: [],
+  });
+
+  test("with cdsc.docs on, a doc comment becomes the description", () => {
+    const { spec } = readModel(compileSnippet(source, { docs: true }));
+    expect(spec).toEqual({ services: [service("Browse the book catalogue")] });
+  });
+
+  test("with cdsc.docs off, the description falls back to @title", () => {
+    const { spec } = readModel(compileSnippet(source, { docs: false }));
+    expect(spec).toEqual({ services: [service("Catalogue")] });
+  });
+
+  test("the plugin does not switch cdsc.docs on for the app", () => {
+    const pkg = JSON.parse(readFileSync(join(__dirname, "../../package.json"), "utf8"));
+    expect(pkg.cds?.cdsc?.docs).toBeUndefined();
+  });
+});
+
 describe("model-reader: opt-in", () => {
   test.todo("a model without any @mcp annotation produces an empty spec and no diagnostics");
   test.todo("@mcp on a service exposes every entity with modes {query, get} and nothing else");

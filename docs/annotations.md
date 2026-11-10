@@ -53,7 +53,8 @@ Unknown `@mcp.*` keys produce an `UNKNOWN_ANNOTATION` diagnostic at startup.
 - Description: `@mcp.description` → `@description` → doc comment (`/** … */`) → `@title` → none.
 - Title: `@mcp.name` → `@title` → definition name.
 - Element description: `@mcp.hint` → `@description` → doc comment.
-- Doc comments need `cds.env.cdsc.docs = true` (M1 decides whether the plugin sets this).
+- Doc comments need `cds.env.cdsc.docs = true` in the app's own config. The plugin does not set
+  it, because it also changes the app's OData `$metadata` (ADR 0011).
 
 ## Configuration (`cds.env.mcp`)
 
