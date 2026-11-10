@@ -49,6 +49,8 @@ export interface EntitySpec {
   draft: boolean;
   /** Compositions opted in with @mcp.deepInsert, with their fully qualified target entity. */
   deepInsert: { element: string; target: string }[];
+  /** @requires on the entity, if any. Used only to hide tools; CAP still enforces. */
+  requires?: string[];
   /** Search fields from @cds.search (resolved by CAP at runtime; listed for the description). */
   searchable: boolean;
 }
@@ -66,6 +68,8 @@ export interface OperationSpec {
   params: FieldSpec[];
   /** The CDS return type, if any. Drives outputSchema. */
   returns?: ReturnSpec;
+  /** @requires on the operation, if any. Used only to hide tools; CAP still enforces. */
+  requires?: string[];
   /** Opted in with @mcp.elicit. */
   elicit?: string[];
   /** Opted in with @mcp.ui (MCP Apps, issue #133): a ui:// resource URI. */

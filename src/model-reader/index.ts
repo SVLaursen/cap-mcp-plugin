@@ -158,6 +158,7 @@ function readService(service: string, def: Definition, ctx: Context): ServiceSpe
     name: service,
     title: title(service, def),
     description: describe(def),
+    requires: roles(def),
     compact: def["@mcp.compact"] === true,
     describe: def["@mcp.describe"] === true,
     entities,
@@ -188,6 +189,7 @@ function readEntity(name: string, service: string, def: Definition, ctx: Context
     keys: fields.filter((f) => f.key),
     fields,
     modes: readModes(name, def, ctx, isAddressable(def)),
+    requires: roles(def),
     resource: def["@mcp.resource"] === true,
     // Linked CSN gives draft roots and the compositions inside them a `drafts` entity.
     draft,
@@ -254,6 +256,7 @@ function readOperation(
     description: describe(def),
     params: Object.entries(def.params ?? {}).map(([param, p]) => readField(param, p)),
     returns: readReturns(def.returns, ctx),
+    requires: roles(def),
     elicit: strings(def["@mcp.elicit"]),
     ui: readUi(name, def, ctx),
   };
@@ -440,6 +443,12 @@ function title(name: string, def: Definition): string {
 
 function describe(def: Definition): string | undefined {
   return str(def["@mcp.description"]) ?? str(def["@description"]) ?? def.doc ?? str(def["@title"]);
+}
+
+/** @requires: 'role' or ['a', 'b']. Only for hiding tools; CAP enforces it on every request. */
+function roles(def: Definition): string[] | undefined {
+  const requires = def["@requires"];
+  return typeof requires === "string" ? [requires] : strings(requires);
 }
 
 function strings(value: unknown): string[] | undefined {

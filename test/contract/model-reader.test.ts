@@ -674,6 +674,32 @@ describe("model-reader: field shapes", () => {
   });
 });
 
+describe("model-reader: authorization metadata", () => {
+  test("@requires on services, entities and operations is carried as a role list", () => {
+    const csn = compileSnippet(`
+      @requires: 'admin' @mcp service S {
+        @requires: ['support', 'admin'] entity Tickets { key ID: Integer; }
+          actions { @requires: 'admin' @mcp action close(); }
+        entity Open { key ID: Integer; }
+        @requires: 'authenticated-user' function mine() returns Integer;
+      }
+      @mcp service T {}
+    `);
+    const { services } = readModel(csn).spec;
+    const [s, t] = services;
+    expect(t?.requires).toBeUndefined();
+    expect(s?.requires).toEqual(["admin"]);
+    expect(s?.entities.map((e) => [e.name, e.requires])).toEqual([
+      ["S.Tickets", ["support", "admin"]],
+      ["S.Open", undefined],
+    ]);
+    expect(s?.operations.map((o) => [o.name, o.requires])).toEqual([
+      ["S.Tickets.close", ["admin"]],
+      ["S.mine", ["authenticated-user"]],
+    ]);
+  });
+});
+
 describe("model-reader: return types", () => {
   test("operations carry their return type: scalar, entity, inline structure, or many of them", () => {
     const csn = compileSnippet(`
