@@ -242,6 +242,13 @@ function readEntity(name: string, service: string, def: Definition, ctx: Context
   const draft = def["@odata.draft.enabled"] === true || def.drafts !== undefined;
   const fields = readFields(def.elements).filter((f) => !draft || !DRAFT_ELEMENTS.has(f.name));
   checkTypes(ctx, name, fields);
+  for (const [element, el] of Object.entries(def.elements ?? {})) {
+    // CAP copies the annotation onto a managed association's foreign keys; report the element once.
+    const foreignKey = el["@odata.foreignKey4"] !== undefined;
+    if (el["@mcp.deepInsert"] !== undefined && el.type !== "cds.Composition" && !foreignKey) {
+      invalid(ctx, `${name}:${element}`, `@mcp.deepInsert only applies to compositions`);
+    }
+  }
   return {
     name,
     service,

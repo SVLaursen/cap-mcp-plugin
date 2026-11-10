@@ -996,6 +996,18 @@ describe("model-reader: diagnostics", () => {
     ]);
   });
 
+  test("@mcp.deepInsert on anything but a composition is INVALID_ANNOTATION_VALUE", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        entity Books { key ID: Integer; @mcp.deepInsert author: Association to Authors; }
+        entity Authors { key ID: Integer; }
+      }
+    `);
+    expect(codes(readModel(csn).diagnostics)).toEqual([
+      { level: "error", code: "INVALID_ANNOTATION_VALUE", target: "S.Books:author" },
+    ]);
+  });
+
   test("the demo model reads with zero error-level diagnostics", async () => {
     const { diagnostics } = readModel(await compileDemo());
     expect(diagnostics.filter((d) => d.level === "error")).toEqual([]);

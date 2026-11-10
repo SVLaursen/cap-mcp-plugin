@@ -82,6 +82,7 @@ executor directly inside `cds.test` (call it with `cds.services.X` within a
 ## M6 — Developer experience and v1 compatibility
 
 - [ ] Startup exposure report and diagnostics output (`cli`)
+- [ ] Startup report groups a diagnostic that CAP propagated to several projections (one typo in a db entity is reported once per projection today)
 - [ ] Startup report: say when an exposed definition has a doc comment in the source but `cdsc.docs` is off, and how to turn it on (ADR 0011)
 - [ ] `cds add mcp` facet
 - [ ] `cds mcp` stdio entry point
@@ -101,4 +102,4 @@ executor directly inside `cds.test` (call it with `cds.services.X` within a
 
 Multitenancy and extensibility · structured errors polish · OpenTelemetry and audit logging ·
 long-running actions (tasks extension) · `subscriptions/listen` · binary resources ·
-file-based prompts · row and call budgets. Add tasks here when 2.0 is out.
+file-based prompts · row and call budgets · entities with parameters (`entity P(p: Integer)`; exposed today without a way to pass `p`). Add tasks here when 2.0 is out.

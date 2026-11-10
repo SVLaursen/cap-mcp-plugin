@@ -9,6 +9,9 @@ describe("executor: reads", () => {
   test.todo(
     "query where/orderby/select use only exposed scalar fields; omitted fields are rejected",
   );
+  test.todo(
+    "where values are checked against the field's type before CQN is built ('in' needs an array, 'contains' a string field)",
+  );
   test.todo("q search goes through SELECT.search and @cds.search, never over omitted fields");
   test.todo("get returns one record; a missing key is a NOT_FOUND tool error, not null");
   test.todo("results are structuredContent plus ONE text block (not one block per row)");
