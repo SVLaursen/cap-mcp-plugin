@@ -55,8 +55,8 @@ JSON Schema enums). `additionalProperties` is always `false`.
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | query       | `q`, `where: [{ field, op, value }]` (all must hold), `orderby: [{ field, dir }]`, `select: [field]`, `top` (≤ `limits.maxRows`), `cursor` |
 | get, delete | The keys, all required                                                                                                                     |
-| create      | Writable fields; `@mandatory` / `not null` ones required; `@mcp.deepInsert` compositions as arrays of the child's create shape             |
-| update      | Keys (required) plus any writable field                                                                                                    |
+| create      | Writable fields; `@mandatory` / `not null` ones required; `@mcp.deepInsert` compositions nested (array for many, object for one)           |
+| update      | Keys (required) plus any writable field, and the same nested compositions as create                                                        |
 | operation   | Parameters (mandatory ones required); bound operations also take their entity's keys                                                       |
 
 `op` is one of `eq ne gt ge lt le in contains startswith endswith`. Readonly fields never appear in
