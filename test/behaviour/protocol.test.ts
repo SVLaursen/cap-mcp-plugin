@@ -25,6 +25,9 @@ describe("protocol: auth metadata", () => {
 
 describe("protocol: mounting inside CAP", () => {
   test.todo(
+    "activate() leaves cds.env.cdsc untouched, so doc comments stay the app's choice (ADR 0011)",
+  );
+  test.todo(
     "SPIKE: mount as a CAP protocol adapter (cds.env.protocols) vs. one /mcp route behind cds.middlewares.before; record the decision as an ADR",
   );
   test.todo("cds.context.user inside a tool handler is the authenticated user (not privileged)");

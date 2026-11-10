@@ -20,6 +20,14 @@ The plugin does not set `cdsc.docs`. The model reader uses `doc` when it is pres
 otherwise continues down the fallback chain (`@title`, then nothing). Apps that want doc
 comments as MCP descriptions set `"cdsc": { "docs": true }` themselves, as the demo does.
 
+## Alternatives considered
+
+- **Set `cdsc.docs` in the plugin's `package.json`.** Rejected: changes `$metadata` (above).
+- **Compile a second, MCP-only model with `docs: true`.** Keeps OData untouched, but doubles
+  model compilation at startup and has to follow every model change CAP makes at runtime
+  (extensibility, MTX tenant models), which `cds.context.model` gives us for free. Revisit if
+  apps ask for doc comments without the `$metadata` change.
+
 ## Consequences
 
 - Installing the plugin changes nothing outside `/mcp` (in the spirit of ADR 0004).
@@ -27,4 +35,5 @@ comments as MCP descriptions set `"cdsc": { "docs": true }` themselves, as the d
   `@title`. The M6 startup report should say so when an exposed definition has neither, so the
   missing setting is easy to spot.
 - `cds add mcp` (M6) may offer to add the setting to the app's own config.
-- A contract test guards that the plugin's `package.json` never sets it.
+- A contract test guards that the plugin's `package.json` never sets it; a behaviour test (M4)
+  guards that `activate()` does not set it at runtime either.

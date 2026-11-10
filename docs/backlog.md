@@ -63,6 +63,7 @@ executor directly inside `cds.test` (call it with `cds.services.X` within a
 - [ ] Regression #3 (describe never leaks), #4 (no session state) _(`v1-findings.test.ts`)_
 - [ ] Auth metadata: 401 + `WWW-Authenticate`, RFC 9728 endpoint, no fake DCR _(auth metadata)_
 - [ ] `cds.context.user` is the caller; AMS middleware applies without special code _(mounting)_
+- [ ] `activate()` leaves `cds.env.cdsc` untouched (ADR 0011) _(mounting)_
 - [ ] Auth matrix: mocked _(`auth-matrix.test.ts`)_
 - [ ] Review: run the `reviewer` agent on M4
 
@@ -81,6 +82,7 @@ executor directly inside `cds.test` (call it with `cds.services.X` within a
 ## M6 — Developer experience and v1 compatibility
 
 - [ ] Startup exposure report and diagnostics output (`cli`)
+- [ ] Startup report: say when an exposed definition has a doc comment in the source but `cdsc.docs` is off, and how to turn it on (ADR 0011)
 - [ ] `cds add mcp` facet
 - [ ] `cds mcp` stdio entry point
 - [ ] Config keys finalised in `docs/annotations.md` (camelCase, via `cds.env` only)
