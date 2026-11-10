@@ -58,7 +58,7 @@ executor directly inside `cds.test` (call it with `cds.services.X` within a
 
 - [x] **SPIKE**: mount as a CAP protocol adapter (`cds.env.protocols`, see `node_modules/@sap/cds/lib/srv/protocols/`) vs. one `/mcp` route behind `cds.middlewares.before`. One endpoint for all services or one per service? → ADR 0009: one `/mcp` route on `served` behind `cds.middlewares.before`, one endpoint for all services _(`protocol.test.ts` › mounting)_
 - [x] **SPIKE**: support for 2025-11-25 clients (initialize handshake) — does SDK v2 serve both? → ADR 0010: `createMcpHandler` with `legacy: 'stateless'` _(older clients)_
-- [ ] Fix `test/helpers/mcp.ts` to what the SDK requires: `MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name` headers; `clientCapabilities`/`clientInfo` in `_meta`; a legacy helper that parses SSE (ADR 0010)
+- [x] Fix `test/helpers/mcp.ts` to what the SDK requires: `MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name` headers; `clientCapabilities`/`clientInfo` in `_meta`; a legacy helper that parses SSE (ADR 0010)
 - [ ] `activate(cds)`: mount `/mcp` on `served` behind `cds.middlewares.before` + `express.json()`; handler = `toNodeHandler(createMcpHandler(factory))`; factory from the registry for `cds.context.user`, keyed by `cds.context.model ?? cds.model`; advertise only implemented capabilities (ADR 0009, 0010) _(mounting)_
 - [ ] `@mcp` services keep their OData endpoints (guard against a protocol named `mcp`) _(mounting)_
 - [ ] Stateless tools/list and tools/call; `server/discover`; version errors; `resultType`; `ttlMs`/`cacheScope` _(stateless)_

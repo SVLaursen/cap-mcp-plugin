@@ -54,9 +54,15 @@ test("bob's Orders over MCP equal bob's Orders over OData", async () => {
   const mcp = await callTool(demo.POST, "bob", "OrdersService_Orders_query", {
     select: ["orderNo"],
   });
-  expect(mcp.data.result.structuredContent.rows).toEqual(odata.data.value.map(/* … */));
+  expect(mcp.message?.result?.structuredContent).toMatchObject({ rows: odata.data.value });
 });
 ```
+
+`test/helpers/mcp.ts` sends what the SDK requires of a 2026-07-28 request (the
+`MCP-Protocol-Version`, `Mcp-Method` and `Mcp-Name` headers; protocol version, client
+capabilities and client info in `_meta`) and parses JSON or SSE responses into `message`.
+`legacyRpc` / `legacyInitialize` speak the 2025 era (ADR 0010). `rpc(..., "anonymous", ...)`
+sends no credentials.
 
 - Each file gets a fresh in-memory database. Within a file, tests share state; keep write
   tests independent or order them deliberately.
