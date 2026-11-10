@@ -117,10 +117,13 @@ function createSchema(entity: EntitySpec, options: SchemaOptions, parent?: strin
  */
 function querySchema(entity: EntitySpec, limits: Limits): JsonSchema {
   const fields = entity.fields.map((f) => f.name);
+  const search: Record<string, JsonSchema> = entity.search.length
+    ? { q: { type: "string", description: `Free-text search over ${entity.search.join(", ")}` } }
+    : {};
   return {
     type: "object",
     properties: {
-      q: { type: "string", description: "Free-text search over the entity's searchable fields" },
+      ...search,
       where: {
         type: "array",
         description: "Conditions, all of which must hold",

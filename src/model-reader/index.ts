@@ -48,6 +48,8 @@ interface Definition {
   drafts?: Definition;
   returns?: Definition;
   items?: Definition;
+  virtual?: boolean;
+  value?: unknown;
   [annotation: `@${string}`]: unknown;
 }
 
@@ -196,7 +198,7 @@ function readEntity(name: string, service: string, def: Definition, ctx: Context
     deepInsert: elements
       .filter(([, el]) => el.type === "cds.Composition" && el["@mcp.deepInsert"] === true)
       .map(([element, el]) => ({ element, target: el.target ?? "" })),
-    searchable: false,
+    search: searchColumns(def, ctx),
   };
 }
 
@@ -232,6 +234,44 @@ function readModes(
     );
   }
   return modes;
+}
+
+/**
+ * The columns `q` may search, following CAP's @cds.search rules (@cap-js/db-service
+ * lib/search.js) but never an @mcp.omit field, on this entity or behind an association.
+ */
+function searchColumns(def: Definition, ctx: Context, depth = 0): string[] {
+  const elements = def.elements ?? {};
+  const listed = new Map<string, unknown>();
+  for (const key of Object.keys(def)) {
+    if (key.startsWith("@cds.search."))
+      listed.set(key.slice("@cds.search.".length), def[key as `@${string}`]);
+  }
+  const visible = (el: Definition | undefined): el is Definition =>
+    !!el && !el.virtual && !isExcluded(el) && !isOmitted(el);
+  const chosen = [...listed].filter(([, on]) => on);
+  if (chosen.length === 0) {
+    return Object.entries(elements)
+      .filter(([, el]) => visible(el) && el.type === "cds.String" && el.value === undefined)
+      .filter(([name]) => listed.get(name) === undefined && !DRAFT_ELEMENTS.has(name))
+      .map(([name]) => name);
+  }
+  return chosen.flatMap(([path]) => {
+    const [head = "", ...rest] = path.split(".");
+    const el = elements[head];
+    if (!visible(el)) return [];
+    if (!ASSOCIATION.has(el.type ?? "")) return rest.length ? [] : [head];
+    const target = el.target ? ctx.definitions[el.target] : undefined;
+    if (!target || depth > 0) return [];
+    const nested = rest.length
+      ? searchColumns(
+          { elements: target.elements, [`@cds.search.${rest.join(".")}`]: true },
+          ctx,
+          depth + 1,
+        )
+      : searchColumns(target, ctx, depth + 1);
+    return nested.map((column) => `${head}.${column}`);
+  });
 }
 
 /** An entity's records can be addressed when it has keys and none of them is @mcp.omit. */

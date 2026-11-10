@@ -51,8 +51,11 @@ export interface EntitySpec {
   deepInsert: { element: string; target: string }[];
   /** @requires on the entity, if any. Used only to hide tools; CAP still enforces. */
   requires?: string[];
-  /** Search fields from @cds.search (resolved by CAP at runtime; listed for the description). */
-  searchable: boolean;
+  /**
+   * Columns `q` searches: CAP's @cds.search rules, minus @mcp.omit fields. Paths for
+   * associations ("author.name"). Empty → no `q`. The executor passes these to CAP explicitly.
+   */
+  search: string[];
 }
 
 export interface OperationSpec {

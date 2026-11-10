@@ -700,6 +700,50 @@ describe("model-reader: authorization metadata", () => {
   });
 });
 
+describe("model-reader: search columns", () => {
+  const search = (source: string) =>
+    Object.fromEntries(
+      onlyService(readModel(compileSnippet(source)).spec).entities.map((e) => [e.name, e.search]),
+    );
+
+  test("without @cds.search entries set to true: every plain String element except @mcp.omit and false ones", () => {
+    expect(
+      search(`
+        @mcp service S {
+          @cds.search: { born: false }
+          entity Authors {
+            key ID: Integer; name: String; bio: LargeString; @mcp.omit email: String;
+            virtual nick: String; age: Integer; born: String;
+          }
+        }
+      `),
+    ).toEqual({ "S.Authors": ["name"] });
+  });
+
+  test("with @cds.search: only the listed elements; associations expand to their target's", () => {
+    expect(
+      search(`
+        @mcp service S {
+          @cds.search: { title, author }
+          entity Books { key ID: Integer; title: String; descr: String; author: Association to Authors; }
+          entity Authors { key ID: Integer; name: String; @mcp.omit email: String; }
+        }
+      `)["S.Books"],
+    ).toEqual(["title", "author.name"]);
+  });
+
+  test("an @mcp.omit element listed in @cds.search is still not searched", () => {
+    expect(
+      search(`
+        @mcp service S {
+          @cds.search: { title, secret }
+          entity Notes { key ID: Integer; title: String; @mcp.omit secret: String; }
+        }
+      `),
+    ).toEqual({ "S.Notes": ["title"] });
+  });
+});
+
 describe("model-reader: return types", () => {
   test("operations carry their return type: scalar, entity, inline structure, or many of them", () => {
     const csn = compileSnippet(`

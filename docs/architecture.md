@@ -72,16 +72,16 @@ never in an output schema, including in records an operation returns.
 
 ## Division of labour
 
-| Concern        | CAP does it                                  | The plugin does it                                                    |
-| -------------- | -------------------------------------------- | --------------------------------------------------------------------- |
-| Authentication | ✔ (auth strategies, AMS)                     | Serves RFC 9728 metadata so clients can find the authorization server |
-| Authorization  | ✔ (`@requires`, `@restrict`, instance rules) | Hides tools a user can never call; never decides access               |
-| Transactions   | ✔ (one per request, commit/rollback)         | Never opens, commits or swallows                                      |
-| Validation     | ✔ (`@mandatory`, `@assert.*`, handlers)      | JSON Schema for the agent's benefit only                              |
-| Search         | ✔ (`SELECT.search`, `@cds.search`)           | Passes `q` through                                                    |
-| Drafts         | ✔ (draft API)                                | Chooses NEW/EDIT/SAVE for draft-enabled entities                      |
-| Exposure       |                                              | ✔ (`@mcp*` annotations, opt-in)                                       |
-| Protocol       |                                              | ✔ (SDK v2)                                                            |
+| Concern        | CAP does it                                  | The plugin does it                                                            |
+| -------------- | -------------------------------------------- | ----------------------------------------------------------------------------- |
+| Authentication | ✔ (auth strategies, AMS)                     | Serves RFC 9728 metadata so clients can find the authorization server         |
+| Authorization  | ✔ (`@requires`, `@restrict`, instance rules) | Hides tools a user can never call; never decides access                       |
+| Transactions   | ✔ (one per request, commit/rollback)         | Never opens, commits or swallows                                              |
+| Validation     | ✔ (`@mandatory`, `@assert.*`, handlers)      | JSON Schema for the agent's benefit only                                      |
+| Search         | ✔ (`SELECT.search`, `@cds.search`)           | Passes `q` with explicit columns: CAP's `@cds.search` rules minus `@mcp.omit` |
+| Drafts         | ✔ (draft API)                                | Chooses NEW/EDIT/SAVE for draft-enabled entities                              |
+| Exposure       |                                              | ✔ (`@mcp*` annotations, opt-in)                                               |
+| Protocol       |                                              | ✔ (SDK v2)                                                                    |
 
 ## What lives where at runtime
 

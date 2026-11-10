@@ -205,6 +205,18 @@ describe("schema-mapper: tool input schemas", () => {
     });
   });
 
+  test("query: no q when the entity has nothing searchable", () => {
+    const service = serviceOf(`@mcp service S { entity Counts { key ID: Integer; n: Integer; } }`);
+    const schema = entityInputSchema(entityOf(service, "S.Counts"), "query");
+    expect(Object.keys(schema.properties as object)).toEqual([
+      "where",
+      "orderby",
+      "select",
+      "top",
+      "cursor",
+    ]);
+  });
+
   test("query: limits come from the caller (cds.env.mcp.limits)", () => {
     const schema = entityInputSchema(Books, "query", { limits: { maxRows: 50, defaultRows: 10 } });
     expect((schema.properties as Record<string, unknown>).top).toEqual({
