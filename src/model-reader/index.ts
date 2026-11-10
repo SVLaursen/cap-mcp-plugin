@@ -266,7 +266,7 @@ function readEntity(name: string, service: string, def: Definition, ctx: Context
     keys: fields.filter((f) => f.key),
     fields,
     modes: readModes(name, def, ctx, isAddressable(def)),
-    requires: roles(def),
+    requires: entityRoles(def, ctx),
     resource: def["@mcp.resource"] === true,
     // Linked CSN gives draft roots and the compositions inside them a `drafts` entity.
     draft,
@@ -635,6 +635,23 @@ function title(name: string, def: Definition): string {
 
 function describe(def: Definition): string | undefined {
   return str(def["@mcp.description"]) ?? str(def["@description"]) ?? def.doc ?? str(def["@title"]);
+}
+
+/**
+ * An entity's @requires as CAP applies it: its own, or, for a composition child (`up_`) with
+ * neither @requires nor @restrict, the nearest ancestor's (CAP's `_auth_depends_on`).
+ */
+function entityRoles(def: Definition, ctx: Context): string[] | undefined {
+  let current: Definition | undefined = def;
+  const seen = new Set<Definition>();
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    if (current["@requires"] !== undefined || current["@restrict"] !== undefined)
+      return roles(current);
+    const parent: string | undefined = current.elements?.up_?.target;
+    current = parent ? ctx.definitions[parent] : undefined;
+  }
+  return undefined;
 }
 
 /** @requires: 'role' or ['a', 'b']. Only for hiding tools; CAP enforces it on every request. */

@@ -268,6 +268,26 @@ describe("exposure-registry: per-user filtering (advertising only; CAP enforces)
     ]);
   });
 
+  test("children of a composition take their parent's @requires, as CAP authorizes them", () => {
+    const r = registry(`
+      @mcp service S {
+        @requires: 'admin' entity Orders {
+          key ID: Integer;
+          items: Composition of many { key pos: Integer; notes: Composition of many { key n: Integer; } };
+        }
+      }
+    `);
+    expect(names(r.toolsFor(capUser("bob")))).toEqual([]);
+    expect(names(r.toolsFor(capUser("alice", "admin")))).toEqual([
+      "S_Orders_get",
+      "S_Orders_items_get",
+      "S_Orders_items_notes_get",
+      "S_Orders_items_notes_query",
+      "S_Orders_items_query",
+      "S_Orders_query",
+    ]);
+  });
+
   test("CAP's pseudo roles work through a real cds.User", () => {
     const r = registry(`
       @mcp service S {
