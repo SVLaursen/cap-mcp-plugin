@@ -58,6 +58,8 @@ export interface OperationSpec {
   name: string;
   service: string;
   kind: "function" | "action";
+  /** @mcp.name → @title → the fully qualified name. */
+  title: string;
   /** Fully qualified entity for bound operations. */
   boundTo?: string;
   description?: string;

@@ -380,11 +380,93 @@ describe("model-reader: opt-in", () => {
 });
 
 describe("model-reader: names and descriptions", () => {
-  test.todo(
-    "description falls back: @mcp.description → @description → doc comment → @title → none",
-  );
-  test.todo("title falls back: @mcp.name → @title → definition name");
-  test.todo("element descriptions use @mcp.hint → @description → doc comment");
+  /** Every exposed definition, flattened, with the name/description pair under test. */
+  function labels(
+    spec: ExposureSpec,
+    pick: (d: { title?: string; description?: string }) => unknown,
+  ) {
+    return Object.fromEntries(
+      spec.services.flatMap((s) => [
+        [s.name, pick(s)],
+        ...s.entities.map((e) => [e.name, pick(e)]),
+        ...s.operations.map((o) => [o.name, pick(o)]),
+      ]),
+    );
+  }
+
+  test("description falls back: @mcp.description → @description → doc comment → @title → none", () => {
+    const csn = compileSnippet(`
+      /** doc S */ @mcp.description: 'mcp S' @description: 'cds S' @title: 'Title S'
+      @mcp service S {
+        /** doc A */ @description: 'cds A' @title: 'Title A' entity A { key ID: Integer; }
+        /** doc B */ @title: 'Title B' entity B { key ID: Integer; }
+        @title: 'Title C' entity C { key ID: Integer; }
+        entity D { key ID: Integer; }
+        /** doc f */ @mcp.description: 'mcp f' function f() returns Integer;
+      }
+    `);
+    expect(labels(readModel(csn).spec, (d) => d.description)).toEqual({
+      S: "mcp S",
+      "S.A": "cds A",
+      "S.B": "doc B",
+      "S.C": "Title C",
+      "S.D": undefined,
+      "S.f": "mcp f",
+    });
+  });
+
+  test("title falls back: @mcp.name → @title → definition name", () => {
+    const csn = compileSnippet(`
+      @mcp.name: 'Shop' @title: 'Shop service'
+      @mcp service S {
+        @title: 'Books' entity A { key ID: Integer; }
+        entity B { key ID: Integer; }
+        @mcp.name: 'Count books' function f() returns Integer;
+        @title: 'Stock' function g() returns Integer;
+        function h() returns Integer;
+      }
+    `);
+    expect(labels(readModel(csn).spec, (d) => d.title)).toEqual({
+      S: "Shop",
+      "S.A": "Books",
+      "S.B": "S.B",
+      "S.f": "Count books",
+      "S.g": "Stock",
+      "S.h": "S.h",
+    });
+  });
+
+  test("element descriptions use @mcp.hint → @description → doc comment", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        entity Books {
+          key ID: Integer;
+          /** doc a */ @mcp.hint: 'hint a' @description: 'cds a' a: String;
+          /** doc b */ @description: 'cds b' b: String;
+          /** doc c */ @title: 'Title c' c: String;
+          @title: 'Title d' d: String;
+        }
+        @mcp action order(/** doc p */ @mcp.hint: 'hint p' p: Integer, /** doc q */ q: Integer);
+      }
+    `);
+    const service = onlyService(readModel(csn).spec);
+    const hints = (fields: FieldSpec[]) => fields.map((f) => [f.name, f.description]);
+    expect(service.entities.map((e) => hints(e.fields))).toEqual([
+      [
+        ["ID", undefined],
+        ["a", "hint a"],
+        ["b", "cds b"],
+        ["c", "doc c"],
+        ["d", undefined],
+      ],
+    ]);
+    expect(service.operations.map((o) => hints(o.params))).toEqual([
+      [
+        ["p", "hint p"],
+        ["q", "doc q"],
+      ],
+    ]);
+  });
 });
 
 describe("model-reader: field shapes", () => {

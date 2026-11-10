@@ -96,7 +96,7 @@ function readService(service: string, def: Definition, ctx: Context): ServiceSpe
   if (!optedIn && entities.length === 0 && operations.length === 0) return undefined;
   return {
     name: service,
-    title: str(def["@title"]) ?? service,
+    title: title(service, def),
     description: describe(def),
     compact: def["@mcp.compact"] === true,
     describe: def["@mcp.describe"] === true,
@@ -114,7 +114,7 @@ function readEntity(name: string, service: string, def: Definition, ctx: Context
   return {
     name,
     service,
-    title: str(def["@title"]) ?? name,
+    title: title(name, def),
     description: describe(def),
     keys: fields.filter((f) => f.key),
     fields,
@@ -159,6 +159,7 @@ function readOperation(
     name,
     service,
     kind: def.kind === "function" ? "function" : "action",
+    title: title(name, def),
     boundTo,
     description: describe(def),
     params: Object.entries(def.params ?? {}).map(([param, p]) => readField(param, p)),
@@ -200,6 +201,7 @@ function readField(name: string, def: Definition): FieldSpec {
     name,
     cdsType: def.type ?? "",
     key: def.key === true,
+    description: str(def["@mcp.hint"]) ?? str(def["@description"]) ?? def.doc,
     mandatory: false,
     readonly: false,
     completion: def["@mcp.completion"] === true,
@@ -240,8 +242,12 @@ function isGenerated(
   return parent?.elements?.texts?.target === name;
 }
 
+function title(name: string, def: Definition): string {
+  return str(def["@mcp.name"]) ?? str(def["@title"]) ?? name;
+}
+
 function describe(def: Definition): string | undefined {
-  return def.doc ?? str(def["@title"]);
+  return str(def["@mcp.description"]) ?? str(def["@description"]) ?? def.doc ?? str(def["@title"]);
 }
 
 function strings(value: unknown): string[] | undefined {
