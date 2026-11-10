@@ -208,10 +208,60 @@ describe("exposure-registry: tool list", () => {
 });
 
 describe("exposure-registry: per-user filtering (advertising only; CAP enforces)", () => {
-  test.todo("tools of a service with @requires: 'admin' are hidden from a user without admin");
-  test.todo("entity-level @requires hides that entity's tools");
-  test.todo("@restrict with only `where` conditions does NOT hide tools (CAP filters rows)");
-  test.todo("the same spec yields identical lists for users with identical roles");
+  test("tools of a service with @requires: 'admin' are hidden from a user without admin", () => {
+    const r = registry(`
+      @requires: 'admin' @mcp service Admin { entity Books { key ID: Integer; } }
+      @mcp service Catalog { entity Books { key ID: Integer; } }
+    `);
+    expect(names(r.toolsFor(user()))).toEqual(["Catalog_Books_get", "Catalog_Books_query"]);
+    expect(names(r.toolsFor(user("admin")))).toEqual([
+      "Admin_Books_get",
+      "Admin_Books_query",
+      "Catalog_Books_get",
+      "Catalog_Books_query",
+    ]);
+  });
+
+  test("entity-level @requires hides that entity's tools", () => {
+    const r = registry(`
+      @mcp service S {
+        @requires: ['support', 'admin'] entity Tickets { key ID: Integer; }
+          actions { function age() returns Integer; }
+        entity Books { key ID: Integer; }
+        @requires: 'admin' function audit() returns Integer;
+      }
+    `);
+    expect(names(r.toolsFor(user()))).toEqual(["S_Books_get", "S_Books_query"]);
+    // Any one of the listed roles is enough, as in CAP.
+    expect(names(r.toolsFor(user("support")))).toEqual([
+      "S_Books_get",
+      "S_Books_query",
+      "S_Tickets_age",
+      "S_Tickets_get",
+      "S_Tickets_query",
+    ]);
+    expect(names(r.toolsFor(user("admin")))).toContain("S_audit");
+  });
+
+  test("@restrict with only `where` conditions does NOT hide tools (CAP filters rows)", () => {
+    const r = registry(`
+      @mcp service S {
+        @restrict: [{ grant: 'READ', to: 'authenticated-user', where: 'createdBy = $user' }]
+        entity Orders { key ID: Integer; createdBy: String; }
+      }
+    `);
+    expect(names(r.toolsFor(user()))).toEqual(["S_Orders_get", "S_Orders_query"]);
+  });
+
+  test("the same spec yields identical lists for users with identical roles", () => {
+    const r = registry(`
+      @requires: 'admin' @mcp service Admin { entity Books { key ID: Integer; } }
+      @mcp service Catalog { entity Books { key ID: Integer; } }
+    `);
+    const alice = { id: "alice", is: (role: string) => role === "admin" };
+    const ann = { id: "ann", is: (role: string) => role === "admin" };
+    expect(r.toolsFor(alice)).toEqual(r.toolsFor(ann));
+  });
 });
 
 describe("exposure-registry: caching", () => {

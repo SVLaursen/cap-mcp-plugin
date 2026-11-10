@@ -60,6 +60,8 @@ export class ExposureRegistry {
   /** Problems found while building tools (e.g. name clashes). Reported at startup. */
   readonly diagnostics: Diagnostic[] = [];
   private readonly tools: ToolSpec[];
+  /** Per tool: every @requires on its path (service, entity, operation). Each needs one role. */
+  private readonly requires = new WeakMap<ToolSpec, string[][]>();
 
   constructor(
     private readonly spec: ExposureSpec,
@@ -68,8 +70,14 @@ export class ExposureRegistry {
     this.tools = this.build();
   }
 
-  toolsFor(_user: UserLike): ToolSpec[] {
-    return this.tools;
+  /**
+   * The tools this user could ever call. Only hides what CAP would always refuse by @requires;
+   * @restrict (instance rules, `where`) is CAP's job when the call runs.
+   */
+  toolsFor(user: UserLike): ToolSpec[] {
+    return this.tools.filter((tool) =>
+      (this.requires.get(tool) ?? []).every((roles) => roles.some((role) => user.is(role))),
+    );
   }
 
   private build(): ToolSpec[] {
@@ -101,17 +109,27 @@ export class ExposureRegistry {
     const lookup = (name: string) => entities.get(name);
     const limits = this.options.limits;
     const tools: ToolSpec[] = [];
-    if (service.describe) tools.push(describeTool(service));
+    const tag = (tool: ToolSpec, ...requires: (string[] | undefined)[]) => {
+      this.requires.set(
+        tool,
+        [service.requires, ...requires].filter((r): r is string[] => !!r),
+      );
+      return tool;
+    };
+    if (service.describe) tools.push(tag(describeTool(service)));
     if (service.compact) {
       // An MCP App is bound to its own tool, so @mcp.ui operations stay separate.
       const [ui, rest] = partition(service.operations, (op) => op.ui !== undefined);
-      tools.push(...compactTools(service, rest, limits?.maxRows));
-      for (const op of ui) tools.push(operationTool(service, op, lookup(op.boundTo ?? "")));
+      tools.push(...compactTools(service, rest, limits?.maxRows).map((tool) => tag(tool)));
+      for (const op of ui) {
+        const bound = lookup(op.boundTo ?? "");
+        tools.push(tag(operationTool(service, op, bound), bound?.requires, op.requires));
+      }
       return tools;
     }
     for (const entity of service.entities) {
       for (const mode of entity.modes) {
-        tools.push({
+        const tool: ToolSpec = {
           name: toolName(service.name, entity.name, mode),
           title: `${entity.title}: ${mode}`,
           description: withDescription(DESCRIBE_MODE[mode](entity.title), entity.description),
@@ -119,11 +137,13 @@ export class ExposureRegistry {
           outputSchema: entityOutputSchema(entity, mode),
           annotations: HINTS[mode],
           target: { kind: "entity", entity: entity.name, mode },
-        });
+        };
+        tools.push(tag(tool, entity.requires));
       }
     }
     for (const op of service.operations) {
-      tools.push(operationTool(service, op, op.boundTo ? entities.get(op.boundTo) : undefined));
+      const bound = op.boundTo ? entities.get(op.boundTo) : undefined;
+      tools.push(tag(operationTool(service, op, bound), bound?.requires, op.requires));
     }
     return tools;
   }
