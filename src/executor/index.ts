@@ -2,6 +2,7 @@ import { NotImplementedError } from "../errors";
 import { DEFAULT_LIMITS, OPERATORS, type Limits } from "../schema-mapper";
 import { view } from "../exposure-registry/access";
 import type {
+  EntityMode,
   EntitySpec,
   ExposureSpec,
   FieldSpec,
@@ -115,6 +116,8 @@ export class Executor {
       return await this.dispatch(tool, args, service);
     } catch (error) {
       if (error instanceof ToolError) return toolError(error);
+      const cap = capError(error);
+      if (cap) return toolError(cap);
       throw error;
     }
   }
@@ -123,16 +126,74 @@ export class Executor {
     const target = tool.target;
     if (target.kind === "entity") {
       const entity = this.entity(target.entity);
-      if (target.mode === "query") return this.query(entity, args, service);
-      if (target.mode === "get") return this.get(entity, args, service);
+      const run = this.modes(entity, service)[target.mode];
+      if (target.mode === "query") return run({}, args);
+      // Per-entity tools take keys (and fields) at the top level.
+      const isKey = (name: string) => entity.keys.some((k) => k.name === name);
+      const keys = Object.fromEntries(Object.entries(args).filter(([k]) => isKey(k)));
+      const rest = Object.fromEntries(Object.entries(args).filter(([k]) => !isKey(k)));
+      return target.mode === "create" ? run({}, args) : run(keys, rest);
     }
-    if (target.kind === "compact" && (target.action === "query" || target.action === "get")) {
-      const { entity: name, key, ...rest } = args;
+    if (target.kind === "compact" && isEntityAction(target.action)) {
+      const { entity: name, key, data, ...rest } = args;
       const entity = this.entity(String(name), target.service, target.action);
-      if (target.action === "query") return this.query(entity, rest, service);
-      return this.get(entity, object(key, "key"), service);
+      const run = this.modes(entity, service)[target.action];
+      if (target.action === "query") return run({}, rest);
+      allowOnly(rest, []);
+      const keyArgs = target.action === "create" ? {} : object(key, "key");
+      const writes = target.action === "create" || target.action === "update";
+      return run(keyArgs, writes ? object(data, "data") : {});
     }
     throw new NotImplementedError(`execute(${target.kind})`, "M3");
+  }
+
+  /** One runner per entity mode: (key, data) → result. */
+  private modes(
+    entity: EntitySpec,
+    service: ServiceLike,
+  ): Record<EntityMode, (key: Args, data: Args) => Promise<ToolResult>> {
+    return {
+      query: (_key, data) => this.query(entity, data, service),
+      get: (key, data) => {
+        allowOnly(data, []);
+        return this.get(entity, key, service);
+      },
+      create: (_key, data) => this.create(entity, data, service),
+      update: (key, data) => this.update(entity, key, data, service),
+      delete: async (key, data) => {
+        allowOnly(data, []);
+        const address = keyOf(entity, key);
+        const done = (await service.run({
+          DELETE: { from: { ref: [entity.name] }, where: keyWhere(address) },
+        })) as Affected;
+        if (affected(done) === 0) throw notFound(entity, address);
+        return result({ deleted: address });
+      },
+    };
+  }
+
+  private async create(entity: EntitySpec, data: Args, service: ServiceLike): Promise<ToolResult> {
+    const entry = writable(entity, data, "create");
+    const written = (await service.run({
+      INSERT: { into: { ref: [entity.name] }, entries: [entry] },
+    })) as Args[];
+    // CAP returns the written keys, generated ones included.
+    return this.get(entity, pick(written[0] ?? entry, entity), service);
+  }
+
+  private async update(
+    entity: EntitySpec,
+    key: Args,
+    data: Args,
+    service: ServiceLike,
+  ): Promise<ToolResult> {
+    const address = keyOf(entity, key);
+    const changes = writable(entity, data, "update");
+    const done = (await service.run({
+      UPDATE: { entity: { ref: [entity.name] }, data: changes, where: keyWhere(address) },
+    })) as Affected;
+    if (affected(done) === 0) throw notFound(entity, address);
+    return this.get(entity, address, service);
   }
 
   /** The service as this caller can reach it (empty if not at all). */
@@ -173,7 +234,7 @@ export class Executor {
   }
 
   /** The entity a call names, which must be exposed (and in `service`, for compact tools). */
-  private entity(name: string, service?: string, mode?: "query" | "get"): EntitySpec {
+  private entity(name: string, service?: string, mode?: EntityMode): EntitySpec {
     const entity = this.entities.get(name);
     if (!entity || (service && entity.service !== service) || (mode && !entity.modes.has(mode))) {
       throw new ToolError("INVALID_ARGUMENT", `Unknown entity ${name}`, "entity");
@@ -229,12 +290,10 @@ export class Executor {
         one: true,
         from: { ref: [entity.name] },
         columns: entity.fields.map((f) => ref(f.name)),
-        where: and(...Object.entries(key).map(([name, value]) => [ref(name), "=", { val: value }])),
+        where: keyWhere(key),
       },
     })) as Args | undefined;
-    if (!row) {
-      throw new ToolError("NOT_FOUND", `No ${entity.title} with ${JSON.stringify(key)}`);
-    }
+    if (!row) throw notFound(entity, key);
     return result(row, resourceLinks(entity, [row]));
   }
 }
@@ -285,6 +344,64 @@ const typeName = (cdsType: string) => cdsType.replace(/^cds\./, "");
 /** Drop undefined properties, so descriptions only say what is there. */
 function clean<T extends Record<string, unknown>>(value: T): Partial<T> {
   return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as Partial<T>;
+}
+
+type Affected = { affected?: number } | number | undefined;
+const affected = (r: Affected) => (typeof r === "number" ? r : (r?.affected ?? 0));
+
+const notFound = (entity: EntitySpec, key: Args) =>
+  new ToolError("NOT_FOUND", `No ${entity.title} with ${JSON.stringify(key)}`);
+
+const keyWhere = (key: Args) =>
+  and(...Object.entries(key).map(([name, val]) => [ref(name), "=", { val }]));
+
+const pick = (row: Args, entity: EntitySpec) =>
+  Object.fromEntries(entity.keys.map((k) => [k.name, row[k.name]]));
+
+/**
+ * Data the agent may write: fields that are not readonly, each of its type; null only where the
+ * field is optional. Keys can be given on create but never changed by update. CAP checks the
+ * rest (@mandatory, @assert.*, handlers).
+ */
+function writable(entity: EntitySpec, data: Args, mode: "create" | "update"): Args {
+  const fields = byName(entity.fields.filter((f) => !f.readonly && (mode === "create" || !f.key)));
+  for (const [name, v] of Object.entries(data)) {
+    const f = field(fields, name, `data.${name}`);
+    if (v !== null || f.mandatory) value(f, v, `data.${name}`);
+  }
+  return data;
+}
+
+interface ToolErrorLike {
+  code: string;
+  message: string;
+  target?: string;
+  details?: unknown[];
+}
+
+/**
+ * A CAP request error (4xx, e.g. req.error / req.reject, ASSERT_*) as a tool error the agent
+ * can act on, keeping code, target and details. Anything else (5xx, bugs) is not ours to hide.
+ */
+function capError(error: unknown): ToolErrorLike | undefined {
+  if (!error || typeof error !== "object") return undefined;
+  const e = error as Record<string, unknown>;
+  const numeric = typeof e.code === "number" ? e.code : undefined;
+  const status = Number(e.status ?? e.statusCode ?? numeric ?? NaN);
+  if (!(status >= 400 && status < 500)) return undefined;
+  const message = typeof e.message === "string" ? e.message : "";
+  return {
+    code: typeof e.code === "string" ? e.code : message || String(status),
+    message: message || String(e.code),
+    target: typeof e.target === "string" ? e.target : undefined,
+    details: Array.isArray(e.details)
+      ? e.details.map((d: unknown) => capError({ status, ...(d as object) }) ?? d)
+      : undefined,
+  };
+}
+
+function isEntityAction(action: string): action is EntityMode {
+  return ["query", "get", "create", "update", "delete"].includes(action);
 }
 
 /** Exactly the entity's keys, each of its type. */
@@ -484,11 +601,12 @@ function result(structuredContent: unknown, links?: ToolResult["links"]): ToolRe
   return { structuredContent, text: JSON.stringify(structuredContent), ...(links && { links }) };
 }
 
-function toolError(error: ToolError): ToolResult {
+function toolError(error: ToolErrorLike): ToolResult {
   const body = {
     code: error.code,
     message: error.message,
     ...(error.target && { target: error.target }),
+    ...(error.details && { details: error.details }),
   };
   return {
     isError: true,

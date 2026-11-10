@@ -181,16 +181,6 @@ describe("executor: reads", () => {
   });
 });
 
-describe("executor: writes", () => {
-  test.todo("create on AdminService.Books inserts through the service; custom before-handlers run");
-  test.todo(
-    "a negative price is rejected by the demo handler with code PRICE_NEGATIVE, target price",
-  );
-  test.todo("update changes only provided fields; readonly fields are refused by schema");
-  test.todo("delete removes the row");
-  test.todo("a write tool for an entity without that mode is not listed and not callable");
-});
-
 describe("executor: operations", () => {
   test.todo("unbound function stockByGenre returns its value as structured content");
   test.todo("unbound action submitOrder runs the handler and returns { stock }");

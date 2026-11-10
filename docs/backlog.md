@@ -47,7 +47,7 @@ executor directly inside `cds.test` (call it with `cds.services.X` within a
 - [x] Reads: query `{ rows, total, nextCursor }`, paging, count, where/orderby/select limits, `q` via `SELECT.search`, `get` NOT_FOUND, one text block _(`executor.test.ts` › reads)_
 - [x] Describe tools (`<Service>_describe`, compact `list_entities` / `describe_entity`) scoped to what the caller can reach _(`executor-describe.test.ts`)_; regression #3
 - [x] Regression #2, #6 _(`v1-findings.test.ts`)_
-- [ ] Writes through the service; custom handlers run; mode gating _(writes)_
+- [x] Writes through the service; custom handlers run; mode gating _(`executor-writes.test.ts`)_
 - [ ] Regression #1 (failed commit), #5 (same user context) _(`v1-findings.test.ts`)_
 - [ ] Operations: functions, actions, bound actions; structured CAP errors _(operations)_
 - [ ] Drafts and deep insert _(drafts and deep insert)_
