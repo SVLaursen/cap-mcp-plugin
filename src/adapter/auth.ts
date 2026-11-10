@@ -33,8 +33,21 @@ export function metadataPath(mcpPath: string): string {
   return `/.well-known/oauth-protected-resource${mcpPath}`;
 }
 
+/** The first value of a (possibly repeated, comma-separated) forwarding header. */
+function forwarded(req: Request, name: string): string | undefined {
+  return req.get(name)?.split(",")[0]?.trim() || undefined;
+}
+
+/**
+ * The origin the client connected to. On BTP a router terminates TLS and forwards plain HTTP,
+ * and CAP does not set express's `trust proxy`, so read the forwarding headers here: RFC 9728
+ * clients reject a `resource` that differs from the URL they used. The values only shape the
+ * URLs this same client is told about.
+ */
 function origin(req: Request): string {
-  return `${req.protocol}://${req.get("host")}`;
+  const proto = forwarded(req, "x-forwarded-proto") ?? req.protocol;
+  const host = forwarded(req, "x-forwarded-host") ?? req.get("host");
+  return `${proto}://${host}`;
 }
 
 /** The RFC 9728 document for /mcp, or undefined when there is no authorization server. */

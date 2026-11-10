@@ -60,6 +60,23 @@ describe("protocol: auth metadata (OAuth)", () => {
     });
   });
 
+  test("behind a TLS-terminating proxy (BTP), URLs use the client's scheme and host", async () => {
+    const headers = { "x-forwarded-proto": "https", "x-forwarded-host": "app.example.com" };
+    const metadata = await demo.GET("/.well-known/oauth-protected-resource/mcp", {
+      ...anyone,
+      headers,
+    });
+    expect(metadata.data.resource).toBe("https://app.example.com/mcp");
+    const challenge = await demo.POST(
+      "/mcp",
+      {},
+      { ...anyone, headers: { ...headers, authorization: "Bearer not-a-jwt" } },
+    );
+    expect(challenge.headers["www-authenticate"]).toBe(
+      'Bearer resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/mcp"',
+    );
+  });
+
   test("no fake Dynamic Client Registration or authorization server endpoints are served", async () => {
     expect((await demo.GET("/.well-known/oauth-authorization-server", anyone)).status).toBe(404);
     expect((await demo.GET("/.well-known/openid-configuration", anyone)).status).toBe(404);
