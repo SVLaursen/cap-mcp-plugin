@@ -45,7 +45,7 @@ executor directly inside `cds.test` (call it with `cds.services.X` within a
 `cds.tx({ user }, …)`), then switch the same tests to `/mcp` in M4.
 
 - [x] Reads: query `{ rows, total, nextCursor }`, paging, count, where/orderby/select limits, `q` via `SELECT.search`, `get` NOT_FOUND, one text block _(`executor.test.ts` › reads)_
-- [ ] Describe tools (`<Service>_describe`, compact `list_entities` / `describe_entity`) scoped to what the caller can reach _(describe tools)_
+- [x] Describe tools (`<Service>_describe`, compact `list_entities` / `describe_entity`) scoped to what the caller can reach _(`executor-describe.test.ts`)_; regression #3
 - [x] Regression #2, #6 _(`v1-findings.test.ts`)_
 - [ ] Writes through the service; custom handlers run; mode gating _(writes)_
 - [ ] Regression #1 (failed commit), #5 (same user context) _(`v1-findings.test.ts`)_

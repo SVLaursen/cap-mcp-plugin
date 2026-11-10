@@ -19,9 +19,22 @@ describe("v1 regressions", () => {
     const mcp = page(await callTool("bob", "CatalogService_Authors_query", { q: "example.com" }));
     expect(mcp).toEqual({ rows: [], total: 0 });
   });
-  test.todo(
-    "#3 the describe tool never reveals unexposed entities, db-layer entities or omitted fields",
-  );
+  test("#3 the describe tool never reveals unexposed entities, db-layer entities or omitted fields", async () => {
+    const result = await callTool("bob", "CatalogService_describe");
+    const text = JSON.stringify(result.structuredContent);
+    for (const hidden of [
+      "AdminService",
+      "OrdersService",
+      "sap.capire",
+      "AuditNotes",
+      "costPrice",
+      "email",
+      "restock",
+    ]) {
+      expect(text).not.toContain(hidden);
+    }
+    expect(text).toContain("CatalogService.Books");
+  });
   test.todo("#4 there is no session state: a request never sees tools resolved for another user");
   test.todo("#5 reads and writes run with the same user context (cds.context.user)");
   test("#6 count with skip > 0 returns the full count", async () => {

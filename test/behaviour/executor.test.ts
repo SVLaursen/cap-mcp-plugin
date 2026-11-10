@@ -181,12 +181,6 @@ describe("executor: reads", () => {
   });
 });
 
-describe("executor: describe tools", () => {
-  test.todo(
-    "<Service>_describe and compact describe_entity / list_entities leave out entities and operations whose @requires the caller cannot meet",
-  );
-});
-
 describe("executor: writes", () => {
   test.todo("create on AdminService.Books inserts through the service; custom before-handlers run");
   test.todo(

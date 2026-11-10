@@ -26,7 +26,7 @@ export async function callTool(
   if (!tool) throw new Error(`${name} is not listed for ${who}`);
   const service = cds.services[name.split("_")[0] ?? ""] as unknown as ServiceLike;
   const executor = new Executor(registry.spec);
-  return cds.tx({ user }, () => executor.execute(tool, args, service));
+  return cds.tx({ user }, () => executor.execute(tool, args, service, user));
 }
 
 export type Page = { rows: Record<string, unknown>[]; total: number; nextCursor?: string };

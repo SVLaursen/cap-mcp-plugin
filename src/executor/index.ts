@@ -1,6 +1,15 @@
 import { NotImplementedError } from "../errors";
 import { DEFAULT_LIMITS, OPERATORS, type Limits } from "../schema-mapper";
-import type { EntitySpec, ExposureSpec, FieldSpec, ToolSpec } from "../types";
+import { view } from "../exposure-registry/access";
+import type {
+  EntitySpec,
+  ExposureSpec,
+  FieldSpec,
+  OperationSpec,
+  ServiceSpec,
+  ToolSpec,
+  UserLike,
+} from "../types";
 
 /** The executor's view of a CAP service. A structural subset of cds.Service. */
 export interface ServiceLike {
@@ -66,15 +75,43 @@ type Args = Record<string, unknown>;
  */
 export class Executor {
   private readonly entities: Map<string, EntitySpec>;
+  private readonly services: Map<string, ServiceSpec>;
   private readonly limits: Limits;
 
   constructor(spec: ExposureSpec, options: ExecutorOptions = {}) {
     this.entities = new Map(spec.services.flatMap((s) => s.entities.map((e) => [e.name, e])));
+    this.services = new Map(spec.services.map((s) => [s.name, s]));
     this.limits = options.limits ?? DEFAULT_LIMITS;
   }
 
-  async execute(tool: ToolSpec, args: Args, service: ServiceLike): Promise<ToolResult> {
+  /** `user` is the caller (cds.context.user); describe tools only describe what it can reach. */
+  async execute(
+    tool: ToolSpec,
+    args: Args,
+    service: ServiceLike,
+    user: UserLike,
+  ): Promise<ToolResult> {
     try {
+      const target = tool.target;
+      if (target.kind === "describe")
+        return await this.describe(target.service, args, user, "describe");
+      if (target.kind === "compact" && target.action === "describe_entity") {
+        return await this.describe(target.service, args, user, "describe_entity");
+      }
+      if (target.kind === "compact" && target.action === "list_entities") {
+        allowOnly(args, []);
+        const reachable = this.reachable(target.service, user);
+        return result({
+          entities: reachable.entities.map((e) =>
+            clean({
+              name: e.name,
+              title: e.title,
+              description: e.description,
+              modes: [...e.modes].sort(),
+            }),
+          ),
+        });
+      }
       return await this.dispatch(tool, args, service);
     } catch (error) {
       if (error instanceof ToolError) return toolError(error);
@@ -96,6 +133,43 @@ export class Executor {
       return this.get(entity, object(key, "key"), service);
     }
     throw new NotImplementedError(`execute(${target.kind})`, "M3");
+  }
+
+  /** The service as this caller can reach it (empty if not at all). */
+  private reachable(name: string, user: UserLike): ServiceSpec {
+    const service = this.services.get(name);
+    const visible = service && view(service, user);
+    if (!visible) throw new ToolError("INVALID_ARGUMENT", `Unknown service ${name}`);
+    return visible;
+  }
+
+  /**
+   * What a service exposes to this caller: its reachable entities (fields without @mcp.omit,
+   * which never reach the spec) and operations. Nothing outside the service (v1 finding #3).
+   */
+  private async describe(
+    name: string,
+    args: Args,
+    user: UserLike,
+    tool: "describe" | "describe_entity",
+  ): Promise<ToolResult> {
+    allowOnly(args, ["entity"]);
+    const service = this.reachable(name, user);
+    const wanted = args.entity === undefined ? undefined : String(args.entity);
+    const entities = service.entities.filter((e) => wanted === undefined || e.name === wanted);
+    if ((wanted !== undefined || tool === "describe_entity") && entities.length === 0) {
+      throw new ToolError("INVALID_ARGUMENT", `Unknown entity ${String(args.entity)}`, "entity");
+    }
+    if (tool === "describe_entity") return result(describeEntity(entities[0] as EntitySpec));
+    return result({
+      service: clean({
+        name: service.name,
+        title: service.title,
+        description: service.description,
+      }),
+      entities: entities.map(describeEntity),
+      operations: wanted === undefined ? service.operations.map(describeOperation) : [],
+    });
   }
 
   /** The entity a call names, which must be exposed (and in `service`, for compact tools). */
@@ -163,6 +237,54 @@ export class Executor {
     }
     return result(row, resourceLinks(entity, [row]));
   }
+}
+
+function describeEntity(entity: EntitySpec) {
+  return clean({
+    name: entity.name,
+    title: entity.title,
+    description: entity.description,
+    keys: entity.keys.map((k) => k.name),
+    modes: [...entity.modes].sort(),
+    fields: entity.fields.map(describeField),
+  });
+}
+
+function describeOperation(op: OperationSpec) {
+  const r = op.returns;
+  const returns = r && (r.scalar ? typeName(r.scalar.cdsType) : (r.entity ?? "structure"));
+  return clean({
+    name: op.name,
+    title: op.title,
+    kind: op.kind,
+    description: op.description,
+    boundTo: op.boundTo,
+    params: op.params.map(describeField),
+    returns: r && (r.many ? `array of ${returns}` : returns),
+  });
+}
+
+function describeField(f: FieldSpec) {
+  return clean({
+    name: f.name,
+    type: f.many ? `array of ${typeName(f.cdsType)}` : typeName(f.cdsType),
+    key: f.key || undefined,
+    mandatory: f.mandatory || undefined,
+    readonly: f.readonly || undefined,
+    description: f.description,
+    enum: f.enum,
+    length: f.length,
+    precision: f.precision,
+    scale: f.scale,
+    target: f.target,
+  });
+}
+
+const typeName = (cdsType: string) => cdsType.replace(/^cds\./, "");
+
+/** Drop undefined properties, so descriptions only say what is there. */
+function clean<T extends Record<string, unknown>>(value: T): Partial<T> {
+  return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as Partial<T>;
 }
 
 /** Exactly the entity's keys, each of its type. */
