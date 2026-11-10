@@ -776,6 +776,39 @@ describe("model-reader: diagnostics", () => {
     ]);
   });
 
+  test("entities whose records cannot be addressed offer only query (and create)", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        @mcp.wrap.modes: ['create', 'update', 'delete']
+        entity Log { message: String; }
+        @mcp.wrap.modes: ['create', 'update', 'delete']
+        entity Books { key ID: Integer; @mcp.omit key edition: Integer; title: String; }
+          actions { function price() returns Decimal; }
+        entity Secret { @mcp.omit key ID: Integer; name: String; }
+          actions { function peek() returns String; }
+        entity Plain { key ID: Integer; }
+      }
+    `);
+    const { spec, diagnostics } = readModel(csn);
+    expect(exposed(spec).S).toEqual({
+      entities: {
+        "S.Log": ["create", "query"],
+        "S.Books": ["create", "query"],
+        "S.Secret": ["query"],
+        "S.Plain": ["get", "query"],
+      },
+      operations: [],
+    });
+    expect(codes(diagnostics)).toEqual([
+      { level: "error", code: "INVALID_ANNOTATION_VALUE", target: "S.Log" },
+      { level: "warn", code: "OMITTED_KEY", target: "S.Books:edition" },
+      { level: "error", code: "INVALID_ANNOTATION_VALUE", target: "S.Books" },
+      { level: "error", code: "BOUND_OPERATION_WITHOUT_KEYS", target: "S.Books.price" },
+      { level: "warn", code: "OMITTED_KEY", target: "S.Secret:ID" },
+      { level: "error", code: "BOUND_OPERATION_WITHOUT_KEYS", target: "S.Secret.peek" },
+    ]);
+  });
+
   test("the demo model reads with zero error-level diagnostics", async () => {
     const { diagnostics } = readModel(await compileDemo());
     expect(diagnostics.filter((d) => d.level === "error")).toEqual([]);

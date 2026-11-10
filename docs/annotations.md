@@ -28,6 +28,10 @@ Without `@mcp` on the service, `@mcp` on a single entity or operation exposes ju
 definition (entity: query + get). Functions come with the service baseline only, not with
 `@mcp` on their entity.
 
+An entity whose records cannot be addressed (no keys, or a key is `@mcp.omit`) offers only
+query, plus create if listed: get, update, delete and bound operations would hit no record or
+several.
+
 Entities CAP generates on its own are never part of the baseline: localized `.texts` entities
 and `DraftAdministrativeData`. `@mcp: false` and `@cds.api.ignore` on an entity also remove its
 bound operations.
@@ -58,13 +62,13 @@ Unknown `@mcp.*` keys produce an `UNKNOWN_ANNOTATION` diagnostic at startup.
 The model reader reports these; the startup report (M6) prints them. Targets are written
 `Def`, `Def:element`, `Entity.boundOperation` or `Operation:param`.
 
-| Code                           | Level | When                                                                                | Effect                              |
-| ------------------------------ | ----- | ----------------------------------------------------------------------------------- | ----------------------------------- |
-| `UNKNOWN_ANNOTATION`           | warn  | An `@mcp.*` key v2 does not know, anywhere in the model (incl. qualified `#x` keys) | Ignored                             |
-| `V1_ANNOTATION`                | warn  | `@mcp.wrap.tools`, `@mcp.tool`, `@mcp.usePrimaryKey`, or `@mcp.resource: [ … ]`     | Ignored (M6 shim maps)              |
-| `INVALID_ANNOTATION_VALUE`     | error | An unknown `@mcp.wrap.modes` value, or an `@mcp.ui` value that is not `ui://…`      | That value is ignored               |
-| `BOUND_OPERATION_WITHOUT_KEYS` | error | An exposed bound operation on an entity with no keys                                | The operation is not exposed        |
-| `OMITTED_KEY`                  | warn  | `@mcp.omit` on a key of an exposed entity                                           | Exposed; get cannot address records |
+| Code                           | Level | When                                                                                                                             | Effect                                     |
+| ------------------------------ | ----- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `UNKNOWN_ANNOTATION`           | warn  | An `@mcp.*` key v2 does not know, anywhere in the model (incl. qualified `#x` keys)                                              | Ignored                                    |
+| `V1_ANNOTATION`                | warn  | `@mcp.wrap.tools`, `@mcp.tool`, `@mcp.usePrimaryKey`, or `@mcp.resource: [ … ]`                                                  | Ignored (M6 shim maps)                     |
+| `INVALID_ANNOTATION_VALUE`     | error | An unknown `@mcp.wrap.modes` value; `update`/`delete` on an entity without exposed keys; an `@mcp.ui` value that is not `ui://…` | That value is ignored                      |
+| `BOUND_OPERATION_WITHOUT_KEYS` | error | An exposed bound operation on an entity without exposed keys (none, or one is `@mcp.omit`)                                       | The operation is not exposed               |
+| `OMITTED_KEY`                  | warn  | `@mcp.omit` on a key of an exposed entity                                                                                        | Only query (and create) are offered for it |
 
 ## Names and descriptions
 

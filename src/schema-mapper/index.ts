@@ -76,7 +76,11 @@ export function entityInputSchema(
     case "delete":
       return object(entity.keys, entity.keys);
     case "update":
-      return object(writable(entity.fields), entity.keys);
+      // Keys are the record's address, so they stay even when read-only.
+      return object(
+        [...entity.keys, ...writable(entity.fields).filter((f) => !f.key)],
+        entity.keys,
+      );
     case "create":
       return createSchema(entity, options);
     case "query":

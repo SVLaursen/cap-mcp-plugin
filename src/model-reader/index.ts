@@ -74,6 +74,8 @@ const DRAFT_ELEMENTS = new Set([
   "SiblingEntity",
 ]);
 const BASELINE: readonly EntityMode[] = ["query", "get"];
+/** Modes that act on one record, so they need its keys. */
+const ADDRESSED: ReadonlySet<string> = new Set(["get", "update", "delete"]);
 const MODES: ReadonlySet<string> = new Set<EntityMode>([
   "query",
   "get",
@@ -126,15 +128,15 @@ function readService(service: string, def: Definition, ctx: Context): ServiceSpe
     if (!name.startsWith(`${service}.`) || isExcluded(member)) continue;
     if (member.kind === "entity" && !isGenerated(name, member, ctx.definitions)) {
       if (optedIn || isOptedIn(member)) entities.push(readEntity(name, service, member, ctx));
-      const keyless = !Object.values(member.elements ?? {}).some((el) => el.key);
+      const addressable = isAddressable(member);
       for (const [action, op] of Object.entries(member.actions ?? {})) {
         if (!exposesOperation(op, optedIn)) continue;
-        if (keyless) {
+        if (!addressable) {
           ctx.diagnostics.push({
             level: "error",
             code: "BOUND_OPERATION_WITHOUT_KEYS",
             target: `${name}.${action}`,
-            message: `${name} has no keys, so its bound operation ${action} cannot address an instance; not exposed`,
+            message: `${name} has no exposed keys, so its bound operation ${action} cannot address an instance; not exposed`,
           });
           continue;
         }
@@ -168,7 +170,7 @@ function readEntity(name: string, service: string, def: Definition, ctx: Context
         level: "warn",
         code: "OMITTED_KEY",
         target: `${name}:${element}`,
-        message: `@mcp.omit on key ${element}: the get tool for ${name} cannot address records`,
+        message: `@mcp.omit on key ${element}: records of ${name} cannot be addressed, so get, update, delete and bound operations are not offered`,
       });
     }
   }
@@ -181,7 +183,7 @@ function readEntity(name: string, service: string, def: Definition, ctx: Context
     description: describe(def),
     keys: fields.filter((f) => f.key),
     fields,
-    modes: readModes(name, def, ctx),
+    modes: readModes(name, def, ctx, isAddressable(def)),
     resource: def["@mcp.resource"] === true,
     // Linked CSN gives draft roots and the compositions inside them a `drafts` entity.
     draft,
@@ -192,23 +194,44 @@ function readEntity(name: string, service: string, def: Definition, ctx: Context
   };
 }
 
-/** Baseline query + get, plus whatever @mcp.wrap.modes lists. Unknown modes are reported. */
-function readModes(name: string, def: Definition, ctx: Context): ReadonlySet<EntityMode> {
+/**
+ * Baseline query + get, plus whatever @mcp.wrap.modes lists. Unknown modes are reported.
+ * Without an address (see isAddressable) only query and create make sense.
+ */
+function readModes(
+  name: string,
+  def: Definition,
+  ctx: Context,
+  addressable: boolean,
+): ReadonlySet<EntityMode> {
+  const modes = new Set<EntityMode>(addressable ? BASELINE : ["query"]);
   const listed = def["@mcp.wrap.modes"];
-  if (listed === undefined) return new Set(BASELINE);
-  const values: unknown[] = Array.isArray(listed) ? listed : [listed];
-  const modes = new Set<EntityMode>(BASELINE);
-  for (const value of values) {
-    if (typeof value === "string" && MODES.has(value)) modes.add(value as EntityMode);
-    else {
+  if (listed === undefined) return modes;
+  const refused: string[] = [];
+  for (const value of Array.isArray(listed) ? listed : [listed]) {
+    if (typeof value !== "string" || !MODES.has(value)) {
       invalid(
         ctx,
         name,
         `@mcp.wrap.modes: unknown mode ${JSON.stringify(value)} (allowed: create, update, delete)`,
       );
-    }
+    } else if (!addressable && ADDRESSED.has(value)) refused.push(value);
+    else modes.add(value as EntityMode);
+  }
+  if (refused.length) {
+    invalid(
+      ctx,
+      name,
+      `@mcp.wrap.modes: ${refused.join(", ")} need a record address, but ${name} has no exposed keys`,
+    );
   }
   return modes;
+}
+
+/** An entity's records can be addressed when it has keys and none of them is @mcp.omit. */
+function isAddressable(def: Definition): boolean {
+  const keys = Object.values(def.elements ?? {}).filter((el) => el.key);
+  return keys.length > 0 && !keys.some(isOmitted);
 }
 
 function readOperation(

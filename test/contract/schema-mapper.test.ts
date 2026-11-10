@@ -233,6 +233,18 @@ describe("schema-mapper: tool input schemas", () => {
     });
   });
 
+  test("update: a read-only key is still accepted, as the record's address", () => {
+    const service = serviceOf(`
+      @mcp service S { @mcp.wrap.modes: ['update'] entity T { @readonly key ID: Integer; t: String; } }
+    `);
+    expect(entityInputSchema(entityOf(service, "S.T"), "update")).toEqual({
+      type: "object",
+      properties: { ID, t: { type: "string" } },
+      required: ["ID"],
+      additionalProperties: false,
+    });
+  });
+
   test("delete: required keys only", () => {
     expect(entityInputSchema(Books, "delete")).toEqual({
       type: "object",
