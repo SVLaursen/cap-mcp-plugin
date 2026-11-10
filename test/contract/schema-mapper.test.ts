@@ -1,8 +1,10 @@
 /**
  * M1 — schema-mapper: FieldSpec / EntitySpec / OperationSpec → JSON Schema 2020-12.
  */
-import { fieldToSchema } from "../../src/schema-mapper";
-import type { FieldSpec } from "../../src/types";
+import { readModel } from "../../src/model-reader";
+import { entityInputSchema, fieldToSchema, operationInputSchema } from "../../src/schema-mapper";
+import type { EntitySpec, FieldSpec, ServiceSpec } from "../../src/types";
+import { compileSnippet } from "../helpers/snippet";
 
 /** A plain, optional, writable field of the given CDS type. */
 function field(cdsType: string, extra: Partial<FieldSpec> = {}): FieldSpec {
@@ -108,14 +110,188 @@ describe("schema-mapper: scalar types", () => {
   });
 });
 
+/** Read a snippet and return its one service. */
+function serviceOf(source: string): ServiceSpec {
+  const [service] = readModel(compileSnippet(source)).spec.services;
+  if (!service) throw new Error("expected a service");
+  return service;
+}
+
+function entityOf(service: ServiceSpec, name: string): EntitySpec {
+  const entity = service.entities.find((e) => e.name === name);
+  if (!entity) throw new Error(`no entity ${name}`);
+  return entity;
+}
+
+const books = serviceOf(`
+  @mcp service S {
+    @mcp.wrap.modes: ['create', 'update', 'delete']
+    entity Books {
+      key ID: Integer;
+      title: String(100) not null;
+      @readonly stock: Integer;
+      @mcp.omit costPrice: Decimal;
+      price: Decimal(9, 2);
+    }
+  }
+`);
+const Books = entityOf(books, "S.Books");
+const ID = { type: "integer", minimum: -2147483648, maximum: 2147483647 };
+const decimal = { type: "string", pattern: "^-?\\d+(\\.\\d+)?$" };
+
 describe("schema-mapper: tool input schemas", () => {
-  test.todo("get: required keys only, additionalProperties false");
-  test.todo("query: where/orderby/select only offer non-omitted scalar fields; top max 200");
-  test.todo("create: readonly fields absent; mandatory fields required");
-  test.todo("update: keys required; every other writable field optional");
-  test.todo("delete: required keys only");
-  test.todo("operation: params mapped; mandatory params required; optional otherwise");
-  test.todo("deep insert: opted-in compositions appear as arrays of the target's create schema");
+  test("get: required keys only, additionalProperties false", () => {
+    expect(entityInputSchema(Books, "get")).toEqual({
+      type: "object",
+      properties: { ID },
+      required: ["ID"],
+      additionalProperties: false,
+    });
+  });
+
+  test("query: where/orderby/select only offer non-omitted scalar fields; top max 200", () => {
+    const fields = ["ID", "title", "stock", "price"];
+    expect(entityInputSchema(Books, "query")).toEqual({
+      type: "object",
+      properties: {
+        q: { type: "string", description: expect.any(String) },
+        where: {
+          type: "array",
+          description: expect.any(String),
+          items: {
+            type: "object",
+            properties: {
+              field: { enum: fields },
+              op: {
+                enum: [
+                  "eq",
+                  "ne",
+                  "gt",
+                  "ge",
+                  "lt",
+                  "le",
+                  "in",
+                  "contains",
+                  "startswith",
+                  "endswith",
+                ],
+              },
+              value: { description: expect.any(String) },
+            },
+            required: ["field", "op", "value"],
+            additionalProperties: false,
+          },
+        },
+        orderby: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { field: { enum: fields }, dir: { enum: ["asc", "desc"] } },
+            required: ["field"],
+            additionalProperties: false,
+          },
+        },
+        select: { type: "array", items: { enum: fields }, uniqueItems: true },
+        top: { type: "integer", minimum: 1, maximum: 200, default: 25 },
+        cursor: { type: "string", description: expect.any(String) },
+      },
+      additionalProperties: false,
+    });
+  });
+
+  test("query: limits come from the caller (cds.env.mcp.limits)", () => {
+    const schema = entityInputSchema(Books, "query", { limits: { maxRows: 50, defaultRows: 10 } });
+    expect((schema.properties as Record<string, unknown>).top).toEqual({
+      type: "integer",
+      minimum: 1,
+      maximum: 50,
+      default: 10,
+    });
+  });
+
+  test("create: readonly fields absent; mandatory fields required", () => {
+    expect(entityInputSchema(Books, "create")).toEqual({
+      type: "object",
+      properties: { ID, title: { type: "string", maxLength: 100 }, price: decimal },
+      required: ["title"],
+      additionalProperties: false,
+    });
+  });
+
+  test("update: keys required; every other writable field optional", () => {
+    expect(entityInputSchema(Books, "update")).toEqual({
+      type: "object",
+      properties: { ID, title: { type: "string", maxLength: 100 }, price: decimal },
+      required: ["ID"],
+      additionalProperties: false,
+    });
+  });
+
+  test("delete: required keys only", () => {
+    expect(entityInputSchema(Books, "delete")).toEqual({
+      type: "object",
+      properties: { ID },
+      required: ["ID"],
+      additionalProperties: false,
+    });
+  });
+
+  test("operation: params mapped; mandatory params required; optional otherwise", () => {
+    const service = serviceOf(`
+      @mcp service S {
+        entity Orders { key ID: Integer; } actions { @mcp action cancel(reason: String); }
+        @mcp action order(book: Integer, quantity: Integer @mandatory);
+      }
+    `);
+    const [cancel, order] = service.operations;
+    expect(operationInputSchema(order!)).toEqual({
+      type: "object",
+      properties: { book: ID, quantity: ID },
+      required: ["quantity"],
+      additionalProperties: false,
+    });
+    // Bound operations also take the keys of the instance they run on.
+    expect(operationInputSchema(cancel!, entityOf(service, "S.Orders"))).toEqual({
+      type: "object",
+      properties: { ID, reason: { type: "string" } },
+      required: ["ID"],
+      additionalProperties: false,
+    });
+  });
+
+  test("deep insert: opted-in compositions appear as arrays of the target's create schema", () => {
+    const service = serviceOf(`
+      @mcp service S {
+        @mcp.wrap.modes: ['create']
+        entity Orders {
+          key ID: Integer;
+          @mcp.deepInsert items: Composition of many Items on items.up_ = $self;
+          notes: Composition of many Notes on notes.up_ = $self;
+        }
+        entity Items { key ID: Integer; up_: Association to Orders; quantity: Integer not null; }
+        entity Notes { key ID: Integer; up_: Association to Orders; }
+      }
+    `);
+    const lookup = (name: string) => service.entities.find((e) => e.name === name);
+    const schema = entityInputSchema(entityOf(service, "S.Orders"), "create", { entities: lookup });
+    expect(schema).toEqual({
+      type: "object",
+      properties: {
+        ID,
+        items: {
+          type: "array",
+          // The back link (up__ID) is filled in by CAP, so the agent never sends it.
+          items: {
+            type: "object",
+            properties: { ID, quantity: ID },
+            required: ["quantity"],
+            additionalProperties: false,
+          },
+        },
+      },
+      additionalProperties: false,
+    });
+  });
 });
 
 describe("schema-mapper: tool output schemas", () => {

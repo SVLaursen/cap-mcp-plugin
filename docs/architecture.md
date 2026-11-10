@@ -45,6 +45,23 @@ The data passed between them is defined in `src/types.ts`.
 5. The result goes back as `structuredContent` plus one text block, or as a tool error that
    keeps CAP's `code`, `target` and `details`.
 
+## Tool input shapes
+
+Built by `schema-mapper`, executed by `executor`. Every argument is structured JSON, so the
+executor builds CQN objects and the agent can only name exposed fields (the field names are
+JSON Schema enums). `additionalProperties` is always `false`.
+
+| Tool        | Arguments                                                                                                                                  |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| query       | `q`, `where: [{ field, op, value }]` (all must hold), `orderby: [{ field, dir }]`, `select: [field]`, `top` (≤ `limits.maxRows`), `cursor` |
+| get, delete | The keys, all required                                                                                                                     |
+| create      | Writable fields; `@mandatory` / `not null` ones required; `@mcp.deepInsert` compositions as arrays of the child's create shape             |
+| update      | Keys (required) plus any writable field                                                                                                    |
+| operation   | Parameters (mandatory ones required); bound operations also take their entity's keys                                                       |
+
+`op` is one of `eq ne gt ge lt le in contains startswith endswith`. Readonly fields never appear in
+write inputs; in a deep insert, the child's back link to its parent is left to CAP.
+
 ## Division of labour
 
 | Concern        | CAP does it                                  | The plugin does it                                                    |

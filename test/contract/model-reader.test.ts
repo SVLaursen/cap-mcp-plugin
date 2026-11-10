@@ -339,7 +339,7 @@ describe("model-reader: opt-in", () => {
     ]);
   });
 
-  test("@mcp.deepInsert on a composition element lists it in deepInsert", () => {
+  test("@mcp.deepInsert on a composition element lists it, with its target, in deepInsert", () => {
     const csn = compileSnippet(`
       @mcp service S {
         entity Orders {
@@ -353,7 +353,7 @@ describe("model-reader: opt-in", () => {
     `);
     const { entities } = onlyService(readModel(csn).spec);
     expect(entities.map((e) => [e.name, e.deepInsert])).toEqual([
-      ["S.Orders", ["items"]],
+      ["S.Orders", [{ element: "items", target: "S.Items" }]],
       ["S.Items", []],
       ["S.Notes", []],
     ]);

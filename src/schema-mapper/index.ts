@@ -1,5 +1,5 @@
 import { NotImplementedError } from "../errors";
-import type { EntitySpec, FieldSpec, JsonSchema, OperationSpec } from "../types";
+import type { EntityMode, EntitySpec, FieldSpec, JsonSchema, OperationSpec } from "../types";
 
 /**
  * schema-mapper (milestone M1)
@@ -52,14 +52,117 @@ export function fieldToSchema(field: FieldSpec): JsonSchema {
   return schema;
 }
 
-export function entityInputSchema(_entity: EntitySpec, _mode: string): JsonSchema {
-  throw new NotImplementedError("entityInputSchema", "M1");
+/** Row limits for the query tool, from cds.env.mcp.limits (docs/annotations.md). */
+export interface Limits {
+  maxRows: number;
+  defaultRows: number;
 }
 
-export function entityOutputSchema(_entity: EntitySpec, _mode: string): JsonSchema {
+export interface SchemaOptions {
+  limits?: Limits;
+  /** Finds a composition target's EntitySpec, for deep insert. */
+  entities?: (name: string) => EntitySpec | undefined;
+}
+
+const DEFAULT_LIMITS: Limits = { maxRows: 200, defaultRows: 25 };
+const OPERATORS = ["eq", "ne", "gt", "ge", "lt", "le", "in", "contains", "startswith", "endswith"];
+
+export function entityInputSchema(
+  entity: EntitySpec,
+  mode: EntityMode,
+  options: SchemaOptions = {},
+): JsonSchema {
+  switch (mode) {
+    case "get":
+    case "delete":
+      return object(entity.keys, entity.keys);
+    case "update":
+      return object(writable(entity.fields), entity.keys);
+    case "create":
+      return createSchema(entity, options);
+    case "query":
+      return querySchema(entity, options.limits ?? DEFAULT_LIMITS);
+  }
+}
+
+/** Bound operations take the keys of their instance as well as their parameters. */
+export function operationInputSchema(op: OperationSpec, boundEntity?: EntitySpec): JsonSchema {
+  const keys = boundEntity?.keys ?? [];
+  return object([...keys, ...op.params], [...keys, ...op.params.filter((p) => p.mandatory)]);
+}
+
+function createSchema(entity: EntitySpec, options: SchemaOptions, parent?: string): JsonSchema {
+  // In a deep insert, CAP fills the child's back link to its parent.
+  const fields = writable(entity.fields).filter((f) => !parent || f.target !== parent);
+  const schema = object(
+    fields,
+    fields.filter((f) => f.mandatory),
+  );
+  const properties = schema.properties as Record<string, JsonSchema>;
+  for (const { element, target } of entity.deepInsert) {
+    const child = options.entities?.(target);
+    if (child) {
+      properties[element] = { type: "array", items: createSchema(child, options, entity.name) };
+    }
+  }
+  return schema;
+}
+
+/**
+ * Structured query arguments: never a filter string, so the executor builds CQN objects and
+ * only exposed fields can be named. See docs/architecture.md › Tool input shapes.
+ */
+function querySchema(entity: EntitySpec, limits: Limits): JsonSchema {
+  const fields = entity.fields.map((f) => f.name);
+  return {
+    type: "object",
+    properties: {
+      q: { type: "string", description: "Free-text search over the entity's searchable fields" },
+      where: {
+        type: "array",
+        description: "Conditions, all of which must hold",
+        items: {
+          type: "object",
+          properties: {
+            field: { enum: fields },
+            op: { enum: OPERATORS },
+            value: { description: "Compared with the field; an array for 'in'" },
+          },
+          required: ["field", "op", "value"],
+          additionalProperties: false,
+        },
+      },
+      orderby: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: { field: { enum: fields }, dir: { enum: ["asc", "desc"] } },
+          required: ["field"],
+          additionalProperties: false,
+        },
+      },
+      select: { type: "array", items: { enum: fields }, uniqueItems: true },
+      top: { type: "integer", minimum: 1, maximum: limits.maxRows, default: limits.defaultRows },
+      cursor: { type: "string", description: "nextCursor from the previous page" },
+    },
+    additionalProperties: false,
+  };
+}
+
+function writable(fields: FieldSpec[]): FieldSpec[] {
+  return fields.filter((f) => !f.readonly);
+}
+
+function object(fields: FieldSpec[], required: FieldSpec[]): JsonSchema {
+  const schema: JsonSchema = {
+    type: "object",
+    properties: Object.fromEntries(fields.map((f) => [f.name, fieldToSchema(f)])),
+  };
+  if (required.length) schema.required = required.map((f) => f.name);
+  schema.additionalProperties = false;
+  return schema;
+}
+
+export function entityOutputSchema(_entity: EntitySpec, _mode: EntityMode): JsonSchema {
   throw new NotImplementedError("entityOutputSchema", "M1");
-}
-
-export function operationInputSchema(_op: OperationSpec): JsonSchema {
-  throw new NotImplementedError("operationInputSchema", "M1");
 }

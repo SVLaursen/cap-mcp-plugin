@@ -174,7 +174,7 @@ function readEntity(name: string, service: string, def: Definition, ctx: Context
     draft: def["@odata.draft.enabled"] === true || def.drafts !== undefined,
     deepInsert: elements
       .filter(([, el]) => el.type === "cds.Composition" && el["@mcp.deepInsert"] === true)
-      .map(([element]) => element),
+      .map(([element, el]) => ({ element, target: el.target ?? "" })),
     searchable: false,
   };
 }

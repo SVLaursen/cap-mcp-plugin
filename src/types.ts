@@ -47,8 +47,8 @@ export interface EntitySpec {
   resource: boolean;
   /** @odata.draft.enabled, or a composition inside such an entity. Writes must go through the draft API (or be refused). */
   draft: boolean;
-  /** Composition/association element names opted in with @mcp.deepInsert. */
-  deepInsert: string[];
+  /** Compositions opted in with @mcp.deepInsert, with their fully qualified target entity. */
+  deepInsert: { element: string; target: string }[];
   /** Search fields from @cds.search (resolved by CAP at runtime; listed for the description). */
   searchable: boolean;
 }

@@ -26,7 +26,7 @@ Fast loop: `npm run test:contract`.
 - [x] Field shapes: keys, mandatory, readonly, enum, length/precision/scale, range, FK targets, `Entity:element` params _(field shapes)_
 - [x] Diagnostics: unknown keys, v1 annotations, bound op without keys, `@mcp.omit` on a key (warn); demo reads with zero errors _(diagnostics)_
 - [x] Schema mapper: scalar types _(`schema-mapper.test.ts` › scalar types)_
-- [ ] Schema mapper: tool input schemas per mode and for operations _(input)_
+- [x] Schema mapper: tool input schemas per mode and for operations _(input)_
 - [ ] Schema mapper: output schemas _(output)_
 - [ ] Review: run the `reviewer` agent on M1
 
