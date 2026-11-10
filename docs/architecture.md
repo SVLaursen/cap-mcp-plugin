@@ -40,7 +40,9 @@ The data passed between them is defined in `src/types.ts`.
 2. The SDK classifies the request (2026-07-28 envelope or 2025 era), rejects unsupported
    versions, and calls the factory, which builds a fresh `McpServer` with the caller's tools
    (registry for `cds.context.model ?? cds.model`, `toolsFor(cds.context.user)`); the server
-   dispatches the JSON-RPC method. Only `tools` is advertised, with `listChanged: false`.
+   dispatches the JSON-RPC method. Only `tools` is advertised, with `listChanged: false`;
+   `tools/list` and `server/discover` say `cacheScope: private` (lists depend on the user) and
+   `ttlMs` 60 s. No session, no `Mcp-Session-Id`.
 3. `tools/list` → `registry.toolsFor(cds.context.user)` for `cds.context.model`.
 4. `tools/call` → the SDK validates args against the tool's input schema →
    `srv.tx(tx => executor.execute(tool, args, tx, user, { confirmed }))` (the service's own root

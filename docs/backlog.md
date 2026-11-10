@@ -61,7 +61,7 @@ executor directly inside `cds.test` (call it with `cds.services.X` within a
 - [x] Fix `test/helpers/mcp.ts` to what the SDK requires: `MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name` headers; `clientCapabilities`/`clientInfo` in `_meta`; a legacy helper that parses SSE (ADR 0010)
 - [x] `activate(cds)`: mount `/mcp` on `served` behind `cds.middlewares.before` + `express.json()`; handler = `toNodeHandler(createMcpHandler(factory))`; factory from the registry for `cds.context.user`, keyed by `cds.context.model ?? cds.model`; advertise only implemented capabilities (ADR 0009, 0010) _(mounting)_
 - [x] `@mcp` services keep their OData endpoints (guard against a protocol named `mcp`) _(mounting)_
-- [ ] Stateless tools/list and tools/call; `server/discover`; version errors; `resultType`; `ttlMs`/`cacheScope` _(stateless)_
+- [x] Stateless tools/list and tools/call; `server/discover`; version errors; `resultType`; `ttlMs`/`cacheScope` _(stateless)_
 - [ ] Switch M3 executor tests to go through `/mcp`; delete the placeholder test in `demo-baseline.test.ts`
 - [ ] Regression #3 (describe never leaks), #4 (no session state) _(`v1-findings.test.ts`)_
 - [ ] Auth metadata: own 401 on `/mcp` (Bearer `resource_metadata` for JWT/IAS, `req._login` for mocked), `/.well-known/oauth-protected-resource/mcp` at the root, no fake DCR _(auth metadata)_

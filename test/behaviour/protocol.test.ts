@@ -1,8 +1,10 @@
 import cds from "@sap/cds";
+import pkg from "../../package.json";
 import { ExposureRegistry } from "../../src/exposure-registry";
 import type { ToolSpec } from "../../src/types";
 import { as, bootDemo } from "../helpers/demo";
-import { listTools, rpc } from "../helpers/mcp";
+import { PROTOCOL_VERSION, callTool, listTools, rpc } from "../helpers/mcp";
+import { TOOLS_TTL_MS } from "../../src/adapter";
 import { demoUser } from "../helpers/tools";
 
 /**
@@ -13,13 +15,79 @@ const demo = bootDemo();
 /** What tools/list publishes for a tool: the spec without the executor's back-reference. */
 const listed = ({ target: _target, ...tool }: ToolSpec) => tool;
 describe("protocol: stateless 2026-07-28", () => {
-  test.todo("tools/list works without any initialize handshake");
-  test.todo("no Mcp-Session-Id header is ever set");
-  test.todo("server/discover returns supported versions, capabilities and server identity");
-  test.todo("an unsupported protocol version in _meta yields UnsupportedProtocolVersion (-32022)");
-  test.todo("every result carries resultType 'complete' (or 'input_required' for MRTR)");
-  test.todo("list results carry ttlMs and cacheScope");
-  test.todo("two users hitting the same endpoint concurrently each get their own tool list");
+  test("tools/list works without any initialize handshake", async () => {
+    const res = await listTools(demo.POST, "bob");
+    expect(res.status).toBe(200);
+    expect(res.message?.result?.tools).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "CatalogService_Books_query" })]),
+    );
+  });
+
+  test("tools/call works without any initialize handshake", async () => {
+    const res = await callTool(demo.POST, "bob", "CatalogService_Books_get", { ID: 201 });
+    expect(res.status).toBe(200);
+    expect(res.message?.result).toMatchObject({
+      structuredContent: { ID: 201, title: "Wuthering Heights" },
+      content: [{ type: "text" }],
+    });
+    expect(res.message?.result?.isError).toBeUndefined();
+  });
+
+  test("no Mcp-Session-Id header is ever set", async () => {
+    for (const res of [
+      await listTools(demo.POST, "bob"),
+      await callTool(demo.POST, "bob", "CatalogService_Books_get", { ID: 201 }),
+      await rpc(demo.POST, "bob", "server/discover"),
+    ]) {
+      expect(res.headers["mcp-session-id"]).toBeUndefined();
+    }
+  });
+
+  test("server/discover returns supported versions, capabilities and server identity", async () => {
+    const res = await rpc(demo.POST, "bob", "server/discover");
+    expect(res.message?.result).toMatchObject({
+      supportedVersions: expect.arrayContaining([PROTOCOL_VERSION]),
+      capabilities: { tools: { listChanged: false } },
+      _meta: {
+        "io.modelcontextprotocol/serverInfo": { name: "@gavdi/cap-mcp", version: pkg.version },
+      },
+    });
+  });
+
+  test("an unsupported protocol version in _meta yields UnsupportedProtocolVersion (-32022)", async () => {
+    const res = await listTools(demo.POST, "bob", { version: "2099-01-01" });
+    expect(res.message?.error?.code).toBe(-32022);
+  });
+
+  test("every result carries resultType 'complete' (or 'input_required' for MRTR)", async () => {
+    for (const res of [
+      await listTools(demo.POST, "bob"),
+      await callTool(demo.POST, "bob", "CatalogService_Books_get", { ID: 201 }),
+      await callTool(demo.POST, "bob", "CatalogService_Books_get", { ID: 999 }),
+      await rpc(demo.POST, "bob", "server/discover"),
+    ]) {
+      expect(res.message?.result?.resultType).toBe("complete");
+    }
+  });
+
+  test("list results carry ttlMs and cacheScope private (lists depend on the user)", async () => {
+    for (const res of [
+      await listTools(demo.POST, "bob"),
+      await rpc(demo.POST, "bob", "server/discover"),
+    ]) {
+      expect(res.message?.result).toMatchObject({ ttlMs: TOOLS_TTL_MS, cacheScope: "private" });
+    }
+  });
+
+  test("two users hitting the same endpoint concurrently each get their own tool list", async () => {
+    const registry = ExposureRegistry.fromModel(cds.model as unknown as object);
+    const callers = ["alice", "bob", "carol", "alice", "bob", "carol"] as const;
+    const lists = await Promise.all(callers.map((who) => listTools(demo.POST, who)));
+    lists.forEach((res, i) => {
+      const who = callers[i] ?? "bob";
+      expect(res.message?.result?.tools).toEqual(registry.toolsFor(demoUser(who)).map(listed));
+    });
+  });
 });
 
 describe("protocol: older clients", () => {

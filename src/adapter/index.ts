@@ -22,6 +22,12 @@ import type { ExposureSpec, ToolSpec, UserLike } from "../types";
  * - Advertises only what it implements.
  */
 
+/**
+ * How long a client may cache tools/list and server/discover. Tool lists change only with the
+ * model (a deployment, a tenant extension) or the user's roles; CAP enforces either way.
+ */
+export const TOOLS_TTL_MS = 60_000;
+
 /** What the adapter needs from a request's cds.context. */
 export interface RequestContext {
   user: UserLike;
@@ -101,6 +107,11 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
     const server = new McpServer(options.serverInfo, {
       // Registering tools defaults listChanged to true; we never send that notification.
       capabilities: { tools: { listChanged: false } },
+      // Lists depend on the user: only the requesting client may cache them.
+      cacheHints: {
+        "tools/list": { ttlMs: TOOLS_TTL_MS, cacheScope: "private" },
+        "server/discover": { ttlMs: TOOLS_TTL_MS, cacheScope: "private" },
+      },
     });
     for (const tool of registry.toolsFor(user)) {
       server.registerTool(
