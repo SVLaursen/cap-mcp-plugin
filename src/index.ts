@@ -35,7 +35,7 @@ export interface CdsLike {
   readonly services: Record<string, unknown>;
   readonly middlewares: { before: RequestHandler[] };
   readonly requires: { auth?: AuthConfig };
-  readonly env: { mcp?: unknown; cdsc?: { docs?: boolean } };
+  readonly env: { mcp?: unknown; cdsc?: { docs?: boolean }; profiles?: string[] };
   /** Used once at startup, to compare the model with its doc comments (ADR 0011). */
   load(files: string | string[], options: { docComment: true; silent: true }): Promise<unknown>;
   readonly i18n: { messages: { at(key: string, locale?: string, args?: unknown): unknown } };
@@ -63,7 +63,7 @@ export function packageVersion(): string {
  */
 export function activate(cds: CdsLike): void {
   const log = cds.log("mcp");
-  cds.on("served", async () => {
+  cds.on("served", () => {
     // Read once the app's env is complete (profiles applied).
     const { config, v1, diagnostics } = readConfig(cds.env.mcp);
     const instructions = readInstructions(config.instructions, cds.root);
@@ -119,9 +119,10 @@ export function activate(cds: CdsLike): void {
       authErrors(auth),
     );
     log.debug(`MCP endpoint mounted at ${mcpPath}`);
-    if (!cds.env.cdsc?.docs && process.env.NODE_ENV !== "production") {
-      await reportLostDocComments(cds, registry, log);
-    }
+    const production =
+      process.env.NODE_ENV === "production" || !!cds.env.profiles?.includes("production");
+    // Beside startup, never in its way: CAP awaits `served` listeners before it listens.
+    if (!cds.env.cdsc?.docs && !production) void reportLostDocComments(cds, registry, log);
   });
 }
 

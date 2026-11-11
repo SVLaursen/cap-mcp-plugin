@@ -13,7 +13,16 @@ process.env.CDS_CDSC_DOCS = "false";
 afterAll(() => delete process.env.CDS_CDSC_DOCS);
 bootDemo();
 
-test("with cdsc.docs off, the startup report names definitions whose doc comments MCP lost", () => {
+const HINT = /^\d+ exposed definitions have doc comments that MCP does not see/;
+
+/** The hint comes after startup (the recompile runs beside it), so wait for it. */
+async function hint(): Promise<void> {
+  for (let i = 0; i < 100 && !info.some((line) => HINT.test(line)); i++)
+    await new Promise((resolve) => setTimeout(resolve, 20));
+}
+
+test("with cdsc.docs off, the startup report names definitions whose doc comments MCP lost", async () => {
+  await hint();
   expect(info).toContainEqual(
     expect.stringMatching(
       /^\d+ exposed definitions have doc comments that MCP does not see \(.*CatalogService\.Books[,)].*"docs": true/,
