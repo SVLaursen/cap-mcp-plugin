@@ -16,6 +16,7 @@ import type {
   EntitySpec,
   ExposureSpec,
   OperationSpec,
+  ResourceSpec,
   ServiceSpec,
   ToolSpec,
   UserLike,
@@ -139,6 +140,19 @@ export class ExposureRegistry {
     return list;
   }
 
+  /**
+   * Resource templates for @mcp.resource entities this user may read (`get`, as CAP's grants
+   * decide it): one record by key at `cap://<Service>/<Entity>/{key}` (ADR 0006). Entities
+   * without an addressable key have no get, so no template.
+   */
+  resourcesFor(user: UserLike): ResourceSpec[] {
+    return this.spec.services.flatMap((service) =>
+      service.entities
+        .filter((e) => e.resource && e.modes.has("get") && canUseMode(user, service, e, "get"))
+        .map((e) => resourceSpec(service, e)),
+    );
+  }
+
   /** Name checks and clashes are decided once, on the full (unfiltered) tool set. */
   private build(): void {
     const byName = new Map<string, Entry[]>();
@@ -231,6 +245,18 @@ export class ExposureRegistry {
     }
     return entries;
   }
+}
+
+function resourceSpec(service: ServiceSpec, entity: EntitySpec): ResourceSpec {
+  const local = entity.name.slice(service.name.length + 1);
+  return {
+    uriTemplate: `cap://${service.name}/${local}/{key}`,
+    name: toolName(service.name, entity.name),
+    title: entity.title,
+    ...(entity.description && { description: entity.description }),
+    mimeType: "application/json",
+    entity: entity.name,
+  };
 }
 
 /** Describe and compact tools of a service (or of one user's view of it). */

@@ -576,3 +576,32 @@ describe("exposure-registry: caching", () => {
     expect(r.diagnostics.map((d) => d.code)).toEqual(["UNKNOWN_ANNOTATION"]);
   });
 });
+
+describe("exposure-registry: resources", () => {
+  test("@mcp.resource entities get a template per record key, for users who may read them", () => {
+    const r = registry(`
+      namespace my;
+      @mcp service S {
+        /** People. */
+        @mcp.resource entity People { key ID: Integer; name: String; }
+        @mcp.resource @requires: 'admin' entity Secrets { key a: String; key b: Integer; }
+        @mcp.resource entity Keyless { name: String; }
+        entity Plain { key ID: Integer; }
+      }
+    `);
+    expect(r.resourcesFor(user())).toEqual([
+      {
+        uriTemplate: "cap://my.S/People/{key}",
+        name: "S_People",
+        title: "my.S.People",
+        description: "People.",
+        mimeType: "application/json",
+        entity: "my.S.People",
+      },
+    ]);
+    expect(r.resourcesFor(user("admin")).map((t) => t.uriTemplate)).toEqual([
+      "cap://my.S/People/{key}",
+      "cap://my.S/Secrets/{key}",
+    ]);
+  });
+});

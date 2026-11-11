@@ -1,11 +1,17 @@
-import { McpServer, createMcpHandler, fromJsonSchema } from "@modelcontextprotocol/server";
+import {
+  McpServer,
+  ResourceNotFoundError,
+  ResourceTemplate,
+  createMcpHandler,
+  fromJsonSchema,
+} from "@modelcontextprotocol/server";
 import type { CallToolResult, McpServerFactory } from "@modelcontextprotocol/server";
 import { toNodeHandler } from "@modelcontextprotocol/node";
 import type { RequestHandler } from "express";
 import { isProduction } from "./auth";
 import { Executor, ToolError, errorResult, type ServiceLike, type ToolResult } from "../executor";
 import type { ExposureRegistry } from "../exposure-registry";
-import type { ExposureSpec, ToolSpec, UserLike } from "../types";
+import type { ExposureSpec, ResourceSpec, ToolSpec, UserLike } from "../types";
 
 /**
  * adapter (milestone M4)
@@ -85,8 +91,7 @@ function caches() {
 }
 
 /** The name of the CAP service a tool acts on. */
-function serviceOf(spec: ExposureSpec, tool: ToolSpec): string | undefined {
-  const target = tool.target;
+function serviceOf(spec: ExposureSpec, target: ToolSpec["target"]): string | undefined {
   if (target.kind === "describe" || target.kind === "compact") return target.service;
   const owns = (s: ExposureSpec["services"][number]) =>
     target.kind === "entity"
@@ -160,15 +165,25 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
     const user = context.user;
     const registry = options.registryFor(context.model ?? options.model());
     const executor = executorFor(registry);
+    const resources = registry.resourcesFor(user);
+    const listed = { ttlMs: TOOLS_TTL_MS, cacheScope: "private" } as const;
     const server = new McpServer(options.serverInfo, {
-      // Registering tools defaults listChanged to true; we never send that notification.
-      capabilities: { tools: { listChanged: false } },
+      // Registering defaults listChanged to true; we never send that notification.
+      capabilities: {
+        tools: { listChanged: false },
+        ...(resources.length ? { resources: { listChanged: false } } : {}),
+      },
       // Lists depend on the user: only the requesting client may cache them.
       cacheHints: {
-        "tools/list": { ttlMs: TOOLS_TTL_MS, cacheScope: "private" },
-        "server/discover": { ttlMs: TOOLS_TTL_MS, cacheScope: "private" },
+        "tools/list": listed,
+        "server/discover": listed,
+        ...(resources.length
+          ? { "resources/list": listed, "resources/templates/list": listed }
+          : {}),
       },
     });
+    for (const resource of resources)
+      registerResource(server, resource, registry, executor, options);
     for (const tool of registry.toolsFor(user)) {
       server.registerTool(
         tool.name,
@@ -181,7 +196,7 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
           _meta: tool._meta,
         },
         async (args: unknown) => {
-          const service = options.services[serviceOf(registry.spec, tool) ?? ""] as
+          const service = options.services[serviceOf(registry.spec, tool.target) ?? ""] as
             TxService | undefined;
           if (!service) throw new Error(`cap-mcp: no service serves ${tool.name}`);
           try {
@@ -205,6 +220,50 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
     }
     return server;
   };
+}
+
+/**
+ * One @mcp.resource template: records by key, never a list of them (ADR 0006). Read in the
+ * service's root transaction like a tool call; a record that is not there (or a key that is
+ * not one) is the protocol's resource-not-found error.
+ */
+function registerResource(
+  server: McpServer,
+  resource: ResourceSpec,
+  registry: ExposureRegistry,
+  executor: Executor,
+  options: AdapterOptions,
+): void {
+  const template = new ResourceTemplate(resource.uriTemplate, { list: undefined });
+  const { title, description, mimeType } = resource;
+  server.registerResource(
+    resource.name,
+    template,
+    { title, mimeType, ...(description && { description }) },
+    async (uri, variables) => {
+      const name = serviceOf(registry.spec, {
+        kind: "entity",
+        entity: resource.entity,
+        mode: "get",
+      });
+      const service = options.services[name ?? ""] as TxService | undefined;
+      if (!service) throw new Error(`cap-mcp: no service serves ${resource.entity}`);
+      const key = [variables.key ?? ""].flat().join(",");
+      try {
+        const result = await service.tx((tx) => executor.readResource(resource.entity, key, tx));
+        return {
+          contents: [{ uri: uri.href, mimeType, text: JSON.stringify(result.structuredContent) }],
+        };
+      } catch (error) {
+        const mapped = errorResult(error);
+        if (!mapped) {
+          options.log.error(`reading ${uri.href} failed:`, error);
+          throw error;
+        }
+        throw new ResourceNotFoundError(uri.href, mapped.text);
+      }
+    },
+  );
 }
 
 /** The express handler for /mcp, to mount behind CAP's own middlewares. */

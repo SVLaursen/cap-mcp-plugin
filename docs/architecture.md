@@ -46,9 +46,10 @@ The data passed between them is defined in `src/types.ts`.
 2. The SDK classifies the request (2026-07-28 envelope or 2025 era), rejects unsupported
    versions, and calls the factory, which builds a fresh `McpServer` with the caller's tools
    (registry for `cds.context.model ?? cds.model`, `toolsFor(cds.context.user)`); the server
-   dispatches the JSON-RPC method. Only `tools` is advertised, with `listChanged: false`;
-   `tools/list` and `server/discover` say `cacheScope: private` (lists depend on the user) and
-   `ttlMs` 60 s. No session, no `Mcp-Session-Id`.
+   dispatches the JSON-RPC method. Only what the caller can use is advertised, always with
+   `listChanged: false`: `tools`, and `resources` when some `@mcp.resource` entity is readable
+   for them; `tools/list`, `resources/list`, `resources/templates/list` and `server/discover` say
+   `cacheScope: private` (lists depend on the user) and `ttlMs` 60 s. No session, no `Mcp-Session-Id`.
    2025-era clients get the same tools statelessly: each request (`initialize` included) stands
    alone, answered as SSE; GET and DELETE are 405. They cannot confirm an `@mcp.elicit` call,
    so it is refused with a `CONFIRMATION_REQUIRED` tool error that says why.
@@ -70,6 +71,13 @@ The data passed between them is defined in `src/types.ts`.
    error (failed commits, bugs).
 5. The result goes back as `structuredContent` plus one text block, or as a tool error that
    keeps CAP's `code`, `target` and `details`.
+
+`resources/read` of `cap://<Service>/<Entity>/<key>` (ADR 0006) takes the same path as a `get`
+call: `registry.resourcesFor(user)` gives the templates (one per readable `@mcp.resource`
+entity, no record lists), `executor.readResource(entity, key, tx)` runs in `srv.tx`, and the
+record comes back as one `application/json` content. The key segment is the one tool results
+link to: the value of a single key, or `k1=v1;k2=v2`, URI-encoded. A missing record or a key that
+is not one is the protocol's resource-not-found error (`-32602` with the `uri`).
 
 ## Describe tools and access
 

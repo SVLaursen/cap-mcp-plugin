@@ -226,6 +226,22 @@ export interface ToolSpec {
     | { kind: "compact"; service: string; action: CompactAction };
 }
 
+/**
+ * What resources/templates/list publishes for one @mcp.resource entity: single records by key
+ * (ADR 0006). There is no list of records: resources/list never enumerates tables.
+ */
+export interface ResourceSpec {
+  /** `cap://<Service>/<Entity>/{key}`; composite keys as `k1=v1;k2=v2`. */
+  uriTemplate: string;
+  /** `<Service>_<Entity>`, like tool names. */
+  name: string;
+  title: string;
+  description?: string;
+  mimeType: "application/json";
+  /** Fully qualified entity. */
+  entity: string;
+}
+
 /** The roles/identity the registry filters by. A structural subset of cds.User. */
 export interface UserLike {
   id: string;

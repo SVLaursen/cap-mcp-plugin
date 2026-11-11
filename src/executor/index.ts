@@ -149,6 +149,19 @@ export class Executor {
     return await this.dispatch(tool, args, service);
   }
 
+  /**
+   * One @mcp.resource record, addressed by the `{key}` segment of its URI (ADR 0006): the
+   * value of a single key, or `k1=v1;k2=v2`, URI-encoded. Read as `get` does; anything that is
+   * not such a record is NOT_FOUND or INVALID_ARGUMENT.
+   */
+  async readResource(entityName: string, key: string, service: ServiceLike): Promise<ToolResult> {
+    const entity = this.entities.get(entityName);
+    if (!entity?.resource || !entity.modes.has("get")) {
+      throw new ToolError("NOT_FOUND", `${entityName} has no resources`);
+    }
+    return await this.get(entity, parseResourceKey(entity, key), service);
+  }
+
   private dispatch(tool: ToolSpec, args: Args, service: ServiceLike): Promise<ToolResult> {
     const target = tool.target;
     if (target.kind === "entity") {
@@ -833,6 +846,39 @@ function decodeCursor(cursor: unknown): number {
     // fall through
   }
   throw new ToolError("INVALID_ARGUMENT", "cursor is not one this server returned", "cursor");
+}
+
+/** Integer types whose key values arrive as digits in a URI; others stay strings. */
+const URI_NUMBERS = new Set(["cds.Integer", "cds.UInt8", "cds.Int16", "cds.Int32"]);
+
+/** The inverse of resourceLinks' key: typed as the key fields are, checked by keyOf. */
+function parseResourceKey(entity: EntitySpec, segment: string): Args {
+  const typed = (f: FieldSpec | undefined, raw: string): unknown => {
+    let text: string;
+    try {
+      text = decodeURIComponent(raw);
+    } catch {
+      throw new ToolError("INVALID_ARGUMENT", `${raw} is not a valid key`, f?.name);
+    }
+    if (f && URI_NUMBERS.has(f.cdsType) && /^-?\d+$/.test(text)) return Number(text);
+    if (f?.cdsType === "cds.Boolean" && (text === "true" || text === "false"))
+      return text === "true";
+    return text;
+  };
+  const only = entity.keys.length === 1 ? entity.keys[0] : undefined;
+  if (only) return { [only.name]: typed(only, segment) };
+  const pairs = segment.split(";").map((part) => {
+    const at = part.indexOf("=");
+    const name = at < 0 ? part : part.slice(0, at);
+    return [
+      name,
+      typed(
+        entity.keys.find((k) => k.name === name),
+        part.slice(at + 1),
+      ),
+    ] as const;
+  });
+  return Object.fromEntries(pairs);
 }
 
 /** `cap://<Service>/<Entity>/<key>`; composite keys as `k1=v1;k2=v2` (ADR 0006). */

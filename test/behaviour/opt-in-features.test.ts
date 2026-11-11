@@ -1,5 +1,5 @@
 import { bootDemo, type DemoUser } from "../helpers/demo";
-import { listTools, rpc } from "../helpers/mcp";
+import { listTools, rpc, type Caller } from "../helpers/mcp";
 import { callTool, expectInvalidArgument, page } from "../helpers/tools";
 
 /**
@@ -165,9 +165,73 @@ describe("opt-in: describe and compact", () => {
 type Schema = { properties?: Record<string, { enum?: string[] }> };
 
 describe("opt-in: resources", () => {
-  test.todo("cap://AdminService/Authors/101 reads one author without email");
-  test.todo("resources/list does not enumerate whole tables");
-  test.todo("CatalogService entities (no @mcp.resource) have no resources");
+  const read = (who: Caller, uri: string) => rpc(demo.POST, who, "resources/read", { uri });
+
+  test("cap://AdminService/Authors/101 reads one author without email", async () => {
+    const res = await read("alice", "cap://AdminService/Authors/101");
+    const contents = res.message?.result?.contents as {
+      uri: string;
+      mimeType: string;
+      text: string;
+    }[];
+    expect(contents).toHaveLength(1);
+    expect(contents[0]).toMatchObject({
+      uri: "cap://AdminService/Authors/101",
+      mimeType: "application/json",
+    });
+    const author = JSON.parse(contents[0]?.text ?? "{}") as Record<string, unknown>;
+    expect(author).toMatchObject({ ID: 101, name: "Emily Brontë" });
+    expect(author).not.toHaveProperty("email");
+    // The record a tool links to is the one the resource serves.
+    const got = await callTool("alice", "AdminService_get", {
+      entity: "AdminService.Authors",
+      key: { ID: 101 },
+    });
+    expect(got.links).toEqual([
+      { uri: "cap://AdminService/Authors/101", name: expect.any(String) },
+    ]);
+    expect(author).toEqual(got.structuredContent);
+  });
+
+  test("a missing or malformed key is a resource-not-found error", async () => {
+    // 2026-07-28: resources/read misses are Invalid Params with the uri (no more -32002).
+    for (const uri of ["cap://AdminService/Authors/999", "cap://AdminService/Authors/abc"]) {
+      const res = await read("alice", uri);
+      expect(res.message?.error).toMatchObject({ code: -32602, data: { uri } });
+    }
+  });
+
+  test("resources/list does not enumerate whole tables", async () => {
+    const list = await rpc(demo.POST, "alice", "resources/list");
+    expect(list.message?.result?.resources).toEqual([]);
+    const templates = await rpc(demo.POST, "alice", "resources/templates/list");
+    expect(templates.message?.result?.resourceTemplates).toEqual([
+      expect.objectContaining({
+        uriTemplate: "cap://AdminService/Authors/{key}",
+        name: "AdminService_Authors",
+        mimeType: "application/json",
+      }),
+    ]);
+  });
+
+  test("CatalogService entities (no @mcp.resource) have no resources", async () => {
+    const uri = "cap://CatalogService/Authors/101";
+    const res = await read("alice", uri);
+    expect(res.message?.error).toMatchObject({ code: -32602, data: { uri } });
+    const got = await callTool("bob", "CatalogService_Authors_get", { ID: 101 });
+    expect(got.links).toBeUndefined();
+    // Bob cannot reach AdminService: no templates, and its resource is not found for him.
+    const discover = await rpc(demo.POST, "bob", "server/discover");
+    expect(discover.message?.result?.capabilities).not.toHaveProperty("resources");
+    expect((await read("bob", "cap://AdminService/Authors/101")).message?.error).toBeDefined();
+  });
+
+  test("resources are advertised to those who can read them, without listChanged", async () => {
+    const discover = await rpc(demo.POST, "alice", "server/discover");
+    expect(discover.message?.result?.capabilities).toMatchObject({
+      resources: { listChanged: false },
+    });
+  });
 });
 
 describe("opt-in: prompts", () => {
