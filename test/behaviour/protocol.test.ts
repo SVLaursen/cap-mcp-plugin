@@ -209,6 +209,18 @@ describe("protocol: Origin (DNS rebinding protection)", () => {
       env.mcp = saved;
     }
   });
+
+  test("allowedOrigins that is not a list allows nothing extra (never a substring match)", async () => {
+    const env = cds.env as unknown as { mcp?: { allowedOrigins?: unknown } };
+    const saved = env.mcp;
+    env.mcp = { ...saved, allowedOrigins: "https://shop.com,https://b.com" };
+    try {
+      expect((await listTools(demo.POST, "bob", origin("https://shop.co"))).status).toBe(403);
+      expect((await listTools(demo.POST, "bob", origin("https://shop.com"))).status).toBe(403);
+    } finally {
+      env.mcp = saved;
+    }
+  });
 });
 
 describe("protocol: production default (CAP's restrict_all_services)", () => {
