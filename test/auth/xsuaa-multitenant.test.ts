@@ -26,6 +26,8 @@ describe("auth matrix: multitenant XSUAA", () => {
       resource: "http://acme-bookshop.cfapps.example.com/mcp",
       authorization_servers: [`https://acme.${XSUAA.uaadomain}`],
     });
+    // The document depends on the host, so no cache may hand it to another tenant.
+    expect(metadata.headers["cache-control"]).toBe("no-store");
   });
 
   test("a token the subscriber's subdomain issued is accepted", async () => {

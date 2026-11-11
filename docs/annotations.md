@@ -98,7 +98,10 @@ a file, register it when the plugin asks:
 cds.on("mcp:apps", (apps) => apps.register("ui://bookshop/stock-chart.html", () => html));
 ```
 
-The function runs on every read (sync or async). A UI resource is listed and readable only for
+Register inside the listener, synchronously: the plugin emits `mcp:apps` once, when CAP has
+served the app, and checks the registrations right after it (an `async` listener that awaits
+first still registers, but after the startup warnings). The function you register runs on
+every read and may be async. A UI resource is listed and readable only for
 callers who see a tool that links to it. A missing file is a startup warning, and the tool then
 has no UI link; a registration no `@mcp.ui` links to is a warning and is not served.
 

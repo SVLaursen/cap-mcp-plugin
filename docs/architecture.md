@@ -48,7 +48,8 @@ The data passed between them is defined in `src/types.ts`.
    (registry for `cds.context.model ?? cds.model`, `toolsFor(cds.context.user)`); the server
    dispatches the JSON-RPC method. Only what the caller can use is advertised, always with
    `listChanged: false`: `tools`, `resources` when some `@mcp.resource` entity is readable
-   for them, and `prompts` when a service they can reach has `@mcp.prompts`
+   for them or one of their tools links to an MCP App UI, `completions` when one of those
+   resources has `@mcp.completion`, and `prompts` when a service they can reach has `@mcp.prompts`
    (`registry.promptsFor(user)`; arguments from `promptArgsSchema`, text from `renderPrompt`);
    `tools/list`, `resources/list`, `resources/templates/list`, `prompts/list` and `server/discover` say
    `cacheScope: private` (lists depend on the user) and `ttlMs` 60 s. No session, no `Mcp-Session-Id`.
@@ -70,7 +71,8 @@ The data passed between them is defined in `src/types.ts`.
    (`cds.requires.auth.credentials.url`). In a multitenant XSUAA app the opt-in
    `cds.env.mcp.tenantHostPattern` picks the subscriber's subdomain from the request host and
    names `https://<subdomain>.<uaadomain>` instead (the document is read before login, so the
-   host is all there is to go by); without one it is 404. URLs follow `X-Forwarded-Proto`/`-Host`. No authorization
+   host is all there is to go by). It is sent with `Cache-Control: no-store`, since it depends on
+   the host. An app without an authorization server answers 404. URLs follow `X-Forwarded-Proto`/`-Host`. No authorization
    server endpoints, no DCR.
 3. `tools/list` → `registry.toolsFor(cds.context.user)` for `cds.context.model`.
 4. `tools/call` → the SDK validates args against the tool's input schema →

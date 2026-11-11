@@ -32,8 +32,9 @@ Where the HTML comes from:
   when CAP has served the app. A missing file is logged as a warning, and the tool loses its UI
   link (it keeps working as a plain tool). Paths that leave `app/mcp-apps/` are refused.
 - **Hook:** once the defaults are read, the plugin emits `cds.emit('mcp:apps', apps)`. App code
-  adds or replaces a resource with `apps.register('ui://x/y.html', () => html)` (sync or async,
-  called on every read, so the app decides about caching). No globals (ADR 0005): the app gets
+  adds or replaces a resource with `apps.register('ui://x/y.html', () => html)` (the content
+  function is sync or async, called on every read, so the app decides about caching). The event
+  is a plain emit: listeners register synchronously, before the startup checks run. No globals (ADR 0005): the app gets
   the registry as the event's argument.
 
 A resource is served only to callers who see a tool that links to it, so an admin-only tool's

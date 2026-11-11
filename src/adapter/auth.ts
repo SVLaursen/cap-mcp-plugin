@@ -143,8 +143,9 @@ export function metadataHandler(options: AuthOptions): RequestHandler {
       host: host(req),
       pattern: options.tenantHostPattern,
     });
+    // Built from the request's host (and, multitenant, its subscriber): never from a cache.
     if (!metadata) res.sendStatus(404);
-    else res.json(metadata);
+    else res.set("Cache-Control", "no-store").json(metadata);
   };
 }
 
