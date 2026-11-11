@@ -112,4 +112,11 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 
 Multitenancy and extensibility · structured errors polish · OpenTelemetry and audit logging ·
 long-running actions (tasks extension) · `subscriptions/listen` · binary resources ·
-file-based prompts · row and call budgets · localized titles, descriptions and error messages (`{i18n>…}` texts are left out today; CAP error details carry codes only) · decide whether 4xx errors from remote services are passed to agents verbatim · entities with parameters (`entity P(p: Integer)`; exposed today without a way to pass `p`). Add tasks here when 2.0 is out.
+file-based prompts · localized titles, descriptions and error messages (`{i18n>…}` texts are left out today; CAP error details carry codes only) · decide whether 4xx errors from remote services are passed to agents verbatim · entities with parameters (`entity P(p: Integer)`; exposed today without a way to pass `p`). Add tasks here when 2.0 is out.
+
+- [x] Query tools advertise and use CAP's row limits: `@cds.query.limit` (entity, then service) and `cds.query.limit`, capped by `cds.mcp.limits`. CAP already clamps MCP queries to them; the schema said 200/25 regardless, and CAP's `default` was never used _(`executor.test.ts` › reads)_
+
+Decided against (maintainer, 2026-11-11):
+
+- **Per-tool row budgets** (`@mcp.limits`): CAP's `@cds.query.limit` already applies to MCP queries, the same limit as OData. Operations returning arrays stay uncapped, as over OData; a handler that can return a lot limits its own result.
+- **Call budgets** (rate limits per user and tool): left to the SAP AI Gateway in front of `/mcp`. Every call carries its tool in the `Mcp-Name` header for such a gateway.

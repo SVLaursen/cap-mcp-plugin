@@ -281,6 +281,27 @@ describe("schema-mapper: tool input schemas", () => {
     });
   });
 
+  test.each([
+    ["CAP's limits below ours", { defaultRows: 5, maxRows: 20 }, { maximum: 20, default: 5 }],
+    ["only CAP's max: our default, at most that max", { maxRows: 8 }, { maximum: 8, default: 8 }],
+    ["only CAP's default", { defaultRows: 40 }, { maximum: 50, default: 40 }],
+    [
+      "CAP's limits above ours: ours",
+      { defaultRows: 100, maxRows: 500 },
+      { maximum: 50, default: 50 },
+    ],
+    ["no CAP limits", undefined, { maximum: 50, default: 10 }],
+  ])("query: %s (@cds.query.limit, capped by cds.mcp.limits)", (_name, limits, top) => {
+    const schema = entityInputSchema({ ...Books, limits }, "query", {
+      limits: { maxRows: 50, defaultRows: 10 },
+    });
+    expect((schema.properties as Record<string, unknown>).top).toEqual({
+      type: "integer",
+      minimum: 1,
+      ...top,
+    });
+  });
+
   test("create: readonly fields absent; mandatory fields required", () => {
     expect(entityInputSchema(Books, "create")).toEqual({
       type: "object",

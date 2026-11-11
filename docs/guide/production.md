@@ -107,14 +107,14 @@ annotate OrdersService with @mcp;
 
 ## Settings to review
 
-| Key (`cds.mcp`)      | Why                                                                                 |
-| -------------------- | ----------------------------------------------------------------------------------- |
-| `allowedOrigins`     | Browser origins that may call `/mcp`; any other `Origin` gets 403, see below        |
-| `tenantHostPattern`  | Multitenant XSUAA, see above                                                        |
-| `limits.maxRows`     | Upper bound on `top` per query call (default 200)                                   |
-| `limits.defaultRows` | Page size when the agent gives none (default 25)                                    |
-| `name`, `version`    | Identify the server to clients; set them to tell apps apart                         |
-| `instructions`       | Tell agents how to use your tools; `cds build` copies an instructions file to `gen` |
+| Key (`cds.mcp`)      | Why                                                                                                                             |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `allowedOrigins`     | Browser origins that may call `/mcp`; any other `Origin` gets 403, see below                                                    |
+| `tenantHostPattern`  | Multitenant XSUAA, see above                                                                                                    |
+| `limits.maxRows`     | Upper bound on `top` per query call (default 200); CAP's `@cds.query.limit` per entity and `cds.query.limit.max` cap it further |
+| `limits.defaultRows` | Page size when the agent gives none (default 25)                                                                                |
+| `name`, `version`    | Identify the server to clients; set them to tell apps apart                                                                     |
+| `instructions`       | Tell agents how to use your tools; `cds build` copies an instructions file to `gen`                                             |
 
 All keys are in the [configuration table](../../README.md#configuration).
 

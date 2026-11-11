@@ -35,8 +35,12 @@ describe("v1 regressions", () => {
   });
   test("#2 q search never matches on @mcp.omit fields (an omitted email is not searchable)", async () => {
     // CAP's own search covers every String of Authors, including the omitted email...
-    const odata = await demo.GET("/browse/Authors?$search=example.com&$select=ID", as("bob"));
-    expect(odata.data.value).toHaveLength(4);
+    // ($count: CAP pages Authors at 2, @cds.query.limit in the demo.)
+    const odata = await demo.GET(
+      "/browse/Authors?$search=example.com&$count=true&$top=1",
+      as("bob"),
+    );
+    expect(odata.data["@odata.count"]).toBe(4);
     // ...so q must not, or the agent could probe hidden values.
     const mcp = page(await callTool("bob", "CatalogService_Authors_query", { q: "example.com" }));
     expect(mcp).toEqual({ rows: [], total: 0 });

@@ -175,3 +175,14 @@ export function readInstructions(
     };
   }
 }
+
+/**
+ * Our limits, capped by CAP's global `cds.query.limit.max` (CAP's own default 1000; 0 is "no
+ * limit"), which CAP applies to MCP's queries as to OData's. CAP's global default does not
+ * replace ours: `cds.mcp.limits.defaultRows` is the more specific setting.
+ */
+export function capQueryLimit(limits: Limits, cap?: { max?: number; default?: number }): Limits {
+  const max = cap?.max ?? 1000;
+  if (!max || max >= limits.maxRows) return limits;
+  return { maxRows: max, defaultRows: Math.min(limits.defaultRows, max) };
+}

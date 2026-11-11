@@ -142,6 +142,17 @@ export interface SchemaOptions {
 }
 
 export const DEFAULT_LIMITS: Limits = { maxRows: 200, defaultRows: 25 };
+
+/**
+ * The limits of one entity's query tool: CAP's own (EntitySpec.limits, from @cds.query.limit),
+ * which CAP applies to MCP's queries anyway, capped by ours. The default never exceeds the max.
+ * The schema advertises these and the executor enforces the same.
+ */
+export function queryLimits(entity: EntitySpec, limits: Limits = DEFAULT_LIMITS): Limits {
+  const maxRows = Math.min(limits.maxRows, entity.limits?.maxRows ?? Infinity);
+  const defaultRows = Math.min(maxRows, entity.limits?.defaultRows ?? limits.defaultRows);
+  return { maxRows, defaultRows };
+}
 /** Comparison operators of the query tools' `where`. */
 export const OPERATORS = [
   "eq",
@@ -176,7 +187,7 @@ export function entityInputSchema(
     case "create":
       return createSchema(entity, options, [entity.name]);
     case "query":
-      return querySchema(entity, options.limits ?? DEFAULT_LIMITS);
+      return querySchema(entity, queryLimits(entity, options.limits));
   }
 }
 

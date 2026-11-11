@@ -1,4 +1,10 @@
-import { DEFAULT_LIMITS, OPERATORS, elicitationSchema, type Limits } from "../schema-mapper";
+import {
+  DEFAULT_LIMITS,
+  OPERATORS,
+  elicitationSchema,
+  queryLimits,
+  type Limits,
+} from "../schema-mapper";
 import { view } from "../exposure-registry/access";
 import type {
   EntityMode,
@@ -519,7 +525,9 @@ export class Executor {
       // Keys last, so pages are stable and neither overlap nor skip.
       ...entity.keys.map((k) => ({ ref: [k.name], sort: "asc" })),
     ];
-    const top = integer(args.top ?? this.limits.defaultRows, "top", 1, this.limits.maxRows);
+    // The limits the tool advertises: CAP's @cds.query.limit, capped by cds.mcp.limits.
+    const limits = queryLimits(entity, this.limits);
+    const top = integer(args.top ?? limits.defaultRows, "top", 1, limits.maxRows);
     const offset = decodeCursor(args.cursor);
     const from = { ref: [entity.name] };
     const rows = (await service.run({

@@ -85,6 +85,12 @@ export interface EntitySpec {
    * associations ("author.name"). Empty → no `q`. The executor passes these to CAP explicitly.
    */
   search: string[];
+  /**
+   * CAP's row limits for this entity: @cds.query.limit (default, max) on the entity, else on its
+   * service, key by key. CAP applies them to every query from a request, MCP's too; the query
+   * tool advertises and uses them, capped by cds.mcp.limits. No max: CAP sets none (or `max: 0`).
+   */
+  limits?: { defaultRows?: number; maxRows?: number };
 }
 
 export interface OperationSpec {

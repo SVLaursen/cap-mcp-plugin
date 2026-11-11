@@ -4,7 +4,8 @@ using {sap.capire.bookshop as my} from '../db/schema';
 //   - query + get for Books, Authors, Genres
 //   - all functions (stockByGenre, bookCard)
 // Opt-ins exercised here: @mcp.describe, @mcp on an action, @mcp.ui, @mcp.resource, @mcp.omit,
-// and the names agents see: @mcp.name, @mcp.description, @mcp.hint.
+// and the names agents see: @mcp.name, @mcp.description, @mcp.hint. CAP's @cds.query.limit on
+// Authors sets the page size of its query tool.
 // Deliberately NOT exposed: the `restock` action (no @mcp), Authors.email and Books.costPrice.
 /** Browse the bookshop catalog and place orders. */
 @mcp
@@ -24,6 +25,7 @@ service CatalogService @(path: '/browse') {
 
   @readonly
   @mcp.description: 'Authors of the books in the catalog. Email addresses are never shared.'
+  @cds.query.limit: { default: 2, max: 3 } // CAP's page size, for OData and MCP alike
   entity Authors as projection on my.Authors;
 
   /** Genres, also single-record resources (without key completion). */

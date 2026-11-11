@@ -3,6 +3,7 @@
  * (srv.tx per call, as the adapter will); M4 switches them to go through /mcp.
  */
 import { as, bootDemo } from "../helpers/demo";
+import { listTools } from "../helpers/mcp";
 import { callTool as call, executeDirectly, expectInvalidArgument, page } from "../helpers/tools";
 
 const demo = bootDemo();
@@ -188,6 +189,42 @@ describe("executor: reads", () => {
     ]);
     const books = await call("bob", "CatalogService_Books_query", { top: 1 });
     expect(books.links).toBeUndefined();
+  });
+
+  describe("CAP's row limits (@cds.query.limit: { default: 2, max: 3 } on CatalogService.Authors)", () => {
+    test("the query tool advertises them", async () => {
+      const tools = (await listTools(demo.POST, "bob")).message?.result?.tools as {
+        name: string;
+        inputSchema: { properties: Record<string, unknown> };
+      }[];
+      const top = (name: string) => tools.find((t) => t.name === name)?.inputSchema.properties.top;
+      expect(top("CatalogService_Authors_query")).toEqual({
+        type: "integer",
+        minimum: 1,
+        maximum: 3,
+        default: 2,
+      });
+      // Entities without them keep cds.mcp.limits.
+      expect(top("CatalogService_Books_query")).toMatchObject({ maximum: 200, default: 25 });
+    });
+
+    test("without top, a page has CAP's default size, and paging reaches every row", async () => {
+      const first = page(await call("bob", "CatalogService_Authors_query"));
+      expect(first.rows).toHaveLength(2);
+      expect(first.total).toBe(4);
+      const second = page(
+        await call("bob", "CatalogService_Authors_query", { cursor: first.nextCursor }),
+      );
+      expect(second.rows).toHaveLength(2);
+      expect(second.nextCursor).toBeUndefined();
+    });
+
+    test("top up to CAP's max is served; above it is refused, not silently cut", async () => {
+      expect(page(await call("bob", "CatalogService_Authors_query", { top: 3 })).rows).toHaveLength(
+        3,
+      );
+      expectInvalidArgument(await call("bob", "CatalogService_Authors_query", { top: 4 }));
+    });
   });
 });
 

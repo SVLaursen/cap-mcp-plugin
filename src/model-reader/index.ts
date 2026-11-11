@@ -426,6 +426,37 @@ function readEntity(
         backlink: backlinkOf(element, el.on),
       })),
     search: searchColumns(def, ctx),
+    limits: rowLimits(name, def, ctx.definitions[service], ctx),
+  };
+}
+
+/**
+ * CAP's @cds.query.limit, read the way CAP's paging does (libx/_runtime/common/generic/paging.js):
+ * `default` and `max` each from the entity, else from the service; the bare `@cds.query.limit`
+ * is the default. A max of 0 is "no limit".
+ */
+function rowLimits(
+  name: string,
+  def: Definition,
+  service: Definition | undefined,
+  ctx: Context,
+): EntitySpec["limits"] {
+  const pick = (key: `@${string}`): unknown =>
+    [def, service].map((d) => d?.[key]).find((v) => v !== undefined && v !== null);
+  const whole = (value: unknown, label: string): number | undefined => {
+    if (value === undefined) return undefined;
+    if (typeof value === "number" && Number.isInteger(value) && value >= 0) return value;
+    invalid(ctx, name, `${label} must be a whole number, not ${JSON.stringify(value)}; ignored`);
+    return undefined;
+  };
+  const max = whole(pick("@cds.query.limit.max"), "@cds.query.limit.max");
+  const fallback = pick("@cds.query.limit.default") ?? pick("@cds.query.limit");
+  const dflt = whole(fallback, "@cds.query.limit.default");
+  const defaultRows = dflt === 0 ? undefined : dflt;
+  if (max === undefined && defaultRows === undefined) return undefined;
+  return {
+    ...(defaultRows !== undefined && { defaultRows }),
+    ...(max !== undefined && max > 0 && { maxRows: max }),
   };
 }
 

@@ -47,8 +47,8 @@ OpenTelemetry and audit logging · resources as single records with `resource_li
 ## Later (P2)
 
 Long-running actions via the tasks extension · change notifications via
-`subscriptions/listen` · binary content as resources · role-restricted, file-based prompts ·
-per-tool row and call budgets.
+`subscriptions/listen` · binary content as resources · role-restricted, file-based prompts. (Per-tool row and call budgets: dropped, see the backlog;
+CAP's `@cds.query.limit` and the SAP AI Gateway cover them.)
 
 ## Decided
 

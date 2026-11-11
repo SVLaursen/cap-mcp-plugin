@@ -812,6 +812,60 @@ describe("model-reader: search columns", () => {
   });
 });
 
+describe("model-reader: row limits (CAP's @cds.query.limit)", () => {
+  const read = (source: string) => readModel(compileSnippet(source));
+  const limits = (source: string) =>
+    Object.fromEntries(onlyService(read(source).spec).entities.map((e) => [e.name, e.limits]));
+
+  test("the entity's default and max, as CAP reads them", () => {
+    expect(
+      limits(`
+        @mcp service S {
+          @cds.query.limit: { default: 2, max: 3 } entity A { key ID: Integer; }
+          @cds.query.limit: 10 entity B { key ID: Integer; }
+          entity C { key ID: Integer; }
+        }
+      `),
+    ).toEqual({
+      "S.A": { defaultRows: 2, maxRows: 3 },
+      "S.B": { defaultRows: 10 },
+      "S.C": undefined,
+    });
+  });
+
+  test("the service's limit applies where the entity sets none, key by key", () => {
+    expect(
+      limits(`
+        @mcp @cds.query.limit: { default: 20, max: 50 } service S {
+          @cds.query.limit.max: 30 entity A { key ID: Integer; }
+          entity B { key ID: Integer; }
+        }
+      `),
+    ).toEqual({ "S.A": { defaultRows: 20, maxRows: 30 }, "S.B": { defaultRows: 20, maxRows: 50 } });
+  });
+
+  test("max 0 is CAP's 'no limit', also over the service's", () => {
+    expect(
+      limits(`
+        @mcp @cds.query.limit.max: 50 service S {
+          @cds.query.limit.max: 0 entity A { key ID: Integer; }
+        }
+      `),
+    ).toEqual({ "S.A": {} });
+  });
+
+  test("a value that is not a whole number is reported and ignored", () => {
+    const { spec, diagnostics } = read(`
+      @mcp service S { @cds.query.limit: { default: 'ten', max: 2.5 } entity A { key ID: Integer; } }
+    `);
+    expect(onlyService(spec).entities[0]?.limits).toBeUndefined();
+    expect(diagnostics).toEqual([
+      expect.objectContaining({ level: "error", code: "INVALID_ANNOTATION_VALUE", target: "S.A" }),
+      expect.objectContaining({ level: "error", code: "INVALID_ANNOTATION_VALUE", target: "S.A" }),
+    ]);
+  });
+});
+
 describe("model-reader: @restrict grants", () => {
   test("grants are normalized as CAP does: one event each, WRITE expanded, to defaulting to any", () => {
     const csn = compileSnippet(`

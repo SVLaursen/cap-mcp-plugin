@@ -188,6 +188,14 @@ as a JSON string, which v1 accepted) is an `INVALID_CONFIG` error, after which t
 is used. `limits.defaultRows` is never above `limits.maxRows`. Add keys only with a test and a row
 here.
 
+**Row limits are CAP's too.** CAP's paging applies to MCP's queries as to OData's: `@cds.query.limit:
+{ default, max }` on an entity (else its service) and the global `cds.query.limit.max`. A query
+tool advertises and uses the lower of CAP's and these limits, so an agent asking for more than CAP
+serves gets an `INVALID_ARGUMENT` instead of a silently shorter page. An entity's CAP `default`
+replaces `limits.defaultRows`; CAP's global `cds.query.limit.default` does not. The compact
+`<Service>_query` tool advertises these limits and enforces each entity's own. Operations that
+return arrays are not paged, as over OData.
+
 ## Migrating from v1
 
 v2 reads v1 annotations through a shim, so a v1 app keeps working while you move it over. Each v1

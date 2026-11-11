@@ -12,7 +12,7 @@ import {
   type AuthConfig,
 } from "./adapter/auth";
 import { docCommentHint, exposureReport } from "./cli";
-import { readConfig, readInstructions } from "./config";
+import { capQueryLimit, readConfig, readInstructions } from "./config";
 import { registryCache } from "./exposure-registry";
 import { DEFAULT_LIMITS } from "./schema-mapper";
 
@@ -35,7 +35,12 @@ export interface CdsLike {
   readonly services: Record<string, unknown>;
   readonly middlewares: { before: RequestHandler[] };
   readonly requires: { auth?: AuthConfig };
-  readonly env: { mcp?: unknown; cdsc?: { docs?: boolean }; profiles?: string[] };
+  readonly env: {
+    mcp?: unknown;
+    cdsc?: { docs?: boolean };
+    profiles?: string[];
+    query?: { limit?: { max?: number; default?: number } };
+  };
   /** Used once at startup, to compare the model with its doc comments (ADR 0011). */
   load(files: string | string[], options: { docComment: true; silent: true }): Promise<unknown>;
   readonly i18n: { messages: { at(key: string, locale?: string, args?: unknown): unknown } };
@@ -70,7 +75,7 @@ export function activate(cds: CdsLike): void {
     if (instructions.diagnostic) diagnostics.push(instructions.diagnostic);
     const mcpPath = config.path ?? MCP_PATH;
     const registryFor = registryCache({
-      limits: { ...DEFAULT_LIMITS, ...config.limits },
+      limits: capQueryLimit({ ...DEFAULT_LIMITS, ...config.limits }, cds.env.query?.limit),
       v1,
     });
     const registry = registryFor(cds.model as object);

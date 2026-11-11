@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { readConfig, readInstructions } from "../../src/config";
+import { capQueryLimit, readConfig, readInstructions } from "../../src/config";
 
 /** M6 — cds.env.mcp keys (docs/annotations.md, Configuration): camelCase, checked at startup. */
 describe("configuration (cds.env.mcp)", () => {
@@ -94,6 +94,20 @@ describe("configuration (cds.env.mcp)", () => {
         },
       ],
     });
+  });
+});
+
+describe("CAP's global row limit (cds.query.limit.max)", () => {
+  const ours = { maxRows: 200, defaultRows: 25 };
+
+  test.each([
+    ["CAP's default max (1000) leaves ours", undefined, ours],
+    ["a lower max caps ours and our default", { max: 10 }, { maxRows: 10, defaultRows: 10 }],
+    ["a higher max leaves ours", { max: 5000 }, ours],
+    ["max 0 is CAP's 'no limit'", { max: 0 }, ours],
+    ["CAP's default does not replace ours", { default: 5 }, ours],
+  ])("%s", (_name, limit, expected) => {
+    expect(capQueryLimit(ours, limit)).toEqual(expected);
   });
 });
 
