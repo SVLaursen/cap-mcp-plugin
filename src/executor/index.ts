@@ -440,8 +440,9 @@ export class Executor {
     const bound = op.boundTo ? this.entities.get(op.boundTo) : undefined;
     const keyNames = bound?.keys.map((k) => k.name) ?? [];
     if (options.confirmed && options.confirmedArgs) {
-      // The user's answers to the confirmation form win over the agent's values.
-      const asked = op.params.filter((p) => op.elicit?.includes(p.name)).map((p) => p.name);
+      // The user's answers to the confirmation form win over the agent's values, for the fields
+      // the form had (parameters a form cannot hold keep the agent's value).
+      const asked = Object.keys(elicitationSchema(op, args).properties ?? {});
       const answers = Object.entries(options.confirmedArgs).filter(([k]) => asked.includes(k));
       args = { ...args, ...Object.fromEntries(answers) };
     }

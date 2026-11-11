@@ -90,6 +90,7 @@ describe("confirmation (@mcp.elicit)", () => {
   const elicit = ExposureRegistry.fromModel(
     compileSnippet(`@mcp service E {
       @mcp @mcp.elicit: ['confirm', 'amount'] action pay(amount: Integer, memo: String);
+      @mcp @mcp.elicit: ['tags'] action tag(tags: array of String);
     }`),
   );
   const tool = elicit.toolsFor(user).find((t) => t.name === "E_pay");
@@ -135,6 +136,17 @@ describe("confirmation (@mcp.elicit)", () => {
         confirmedArgs: { amount: "lots" },
       }),
     ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+  });
+
+  test("an asked parameter the form cannot hold (an array) keeps the agent's value", async () => {
+    const tag = elicit.toolsFor(user).find((t) => t.name === "E_tag");
+    if (!tag) throw new Error("no E_tag");
+    const { sent, service } = sending();
+    await new Executor(elicit.spec).execute(tag, { tags: ["a"] }, service, user, {
+      confirmed: true,
+      confirmedArgs: { tags: ["b", "c"] },
+    });
+    expect(sent).toEqual([{ tags: ["a"] }]);
   });
 });
 

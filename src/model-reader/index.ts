@@ -496,7 +496,11 @@ function readElicit(
       );
     }
   }
-  return values.length ? values : undefined;
+  if (!values.length) {
+    invalid(ctx, name, `@mcp.elicit is an empty list; the call is still confirmed`);
+    return ["confirm"];
+  }
+  return values;
 }
 
 /** The scalar, non-ignored, non-omitted elements an agent may see. */

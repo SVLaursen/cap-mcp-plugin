@@ -1127,7 +1127,7 @@ describe("model-reader: diagnostics", () => {
       ["S.pay", ["confirm", "amout"]],
       ["S.go", ["confirm"]],
       ["S.flag", ["confirm"]],
-      ["S.none", undefined],
+      ["S.none", ["confirm"]],
       ["S.odd", ["confirm"]],
     ]);
     expect(diagnostics.filter((d) => d.code === "INVALID_ANNOTATION_VALUE")).toEqual([
@@ -1139,6 +1139,7 @@ describe("model-reader: diagnostics", () => {
           "@mcp.elicit value amout is neither 'confirm' nor a parameter of S.pay; the call is still confirmed",
       },
       expect.objectContaining({ target: "S.go" }),
+      expect.objectContaining({ target: "S.none" }),
       expect.objectContaining({ target: "S.odd" }),
     ]);
   });
