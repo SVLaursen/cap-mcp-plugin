@@ -252,6 +252,7 @@ function readEntity(name: string, service: string, def: Definition, ctx: Context
   const draft = def["@odata.draft.enabled"] === true || def.drafts !== undefined;
   const fields = readFields(def.elements).filter((f) => !draft || !DRAFT_ELEMENTS.has(f.name));
   checkTypes(ctx, name, fields);
+  checkCompletion(name, def, fields, ctx);
   for (const [element, el] of Object.entries(def.elements ?? {})) {
     // CAP copies the annotation onto a managed association's foreign keys; report the element once.
     const foreignKey = el["@odata.foreignKey4"] !== undefined;
@@ -394,6 +395,36 @@ function backlinkOf(element: string, on: unknown): string | undefined {
   return undefined;
 }
 
+/**
+ * @mcp.completion completes the `{key}` of an @mcp.resource template, so it has an effect only
+ * on the single key of such an entity. Elsewhere it is reported, unless CAP copied it here from
+ * the entity this one projects (meant for the services where it does apply).
+ */
+function checkCompletion(name: string, def: Definition, fields: FieldSpec[], ctx: Context): void {
+  const keys = fields.filter((f) => f.key);
+  const completes = def["@mcp.resource"] === true && keys.length === 1;
+  const source = sourceOf(def, ctx)?.elements ?? {};
+  for (const field of fields.filter((f) => f.completion)) {
+    if (completes && field.key) continue;
+    if (source[field.name]?.["@mcp.completion"] === true) continue;
+    const why = !field.key
+      ? "it completes the key of an @mcp.resource entity, and this is not a key"
+      : def["@mcp.resource"] !== true
+        ? "it completes resource keys, and this entity has no @mcp.resource"
+        : "it completes a single key, and this entity's resource key is composite";
+    unusedCompletion(ctx, `${name}:${field.name}`, why);
+  }
+}
+
+function unusedCompletion(ctx: Context, target: string, why: string): void {
+  ctx.diagnostics.push({
+    level: "warn",
+    code: "UNUSED_ANNOTATION",
+    target,
+    message: `@mcp.completion on ${target} has no effect: ${why} (MCP completes resource-template variables and prompt arguments, not tool arguments)`,
+  });
+}
+
 /** An entity's records can be addressed when it has keys and none of them is @mcp.omit. */
 function isAddressable(def: Definition): boolean {
   const keys = Object.values(def.elements ?? {}).filter((el) => el.key);
@@ -411,6 +442,9 @@ function readOperation(
     .filter(([, p]) => (p.items ?? p).type !== "$self") // CAP's binding parameter
     .map(([param, p]) => readField(param, p));
   checkTypes(ctx, name, params);
+  for (const param of params.filter((p) => p.completion)) {
+    unusedCompletion(ctx, `${name}:${param.name}`, "this is a tool argument");
+  }
   return {
     name,
     service,
@@ -422,9 +456,51 @@ function readOperation(
     returns: readReturns(def.returns, ctx),
     requires: roles(def),
     restrict: grants(def)?.map(({ to }) => ({ grant: name.slice(name.lastIndexOf(".") + 1), to })),
-    elicit: strings(def["@mcp.elicit"]),
+    elicit: readElicit(name, def["@mcp.elicit"], params, ctx),
     ui: readUi(name, def, ctx),
   };
+}
+
+/**
+ * `@mcp.elicit`: `['confirm']` and/or parameter names to ask the user for. Any other value is
+ * diagnosed, but whatever was written still asks for confirmation: a typo must never switch it
+ * off. The flag form (`@mcp.elicit` alone) means `['confirm']`; `[]` asks nothing.
+ */
+function readElicit(
+  name: string,
+  value: unknown,
+  params: FieldSpec[],
+  ctx: Context,
+): string[] | undefined {
+  if (value === undefined || value === null || value === false) return undefined;
+  if (value === true) return ["confirm"];
+  if (!Array.isArray(value)) {
+    invalid(
+      ctx,
+      name,
+      `@mcp.elicit must be a list ('confirm' or parameter names); the call is still confirmed`,
+    );
+    return ["confirm"];
+  }
+  const values = strings(value) ?? [];
+  if (values.length < value.length) {
+    invalid(ctx, name, `@mcp.elicit values must be strings; the call is still confirmed`);
+    if (!values.length) return ["confirm"];
+  }
+  for (const v of values) {
+    if (v !== "confirm" && !params.some((p) => p.name === v)) {
+      invalid(
+        ctx,
+        name,
+        `@mcp.elicit value ${v} is neither 'confirm' nor a parameter of ${name}; the call is still confirmed`,
+      );
+    }
+  }
+  if (!values.length) {
+    invalid(ctx, name, `@mcp.elicit is an empty list; the call is still confirmed`);
+    return ["confirm"];
+  }
+  return values;
 }
 
 /** The scalar, non-ignored, non-omitted elements an agent may see. */

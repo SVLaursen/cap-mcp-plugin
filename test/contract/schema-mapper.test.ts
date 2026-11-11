@@ -4,10 +4,12 @@
 import { readModel } from "../../src/model-reader";
 import {
   entityInputSchema,
+  elicitationSchema,
   entityOutputSchema,
   fieldToSchema,
   operationInputSchema,
   operationOutputSchema,
+  promptArgsSchema,
 } from "../../src/schema-mapper";
 import type { EntitySpec, FieldSpec, JsonSchema, ServiceSpec } from "../../src/types";
 import { compileSnippet } from "../helpers/snippet";
@@ -558,6 +560,68 @@ describe("schema-mapper: tool output schemas", () => {
       "S.books": value({ type: "array", items: book }),
       "S.stock": value({ type: ["object", "null"], properties: { stock: nullableInt } }),
       "S.run": undefined,
+    });
+  });
+});
+
+describe("schema-mapper: prompt arguments", () => {
+  test("every input is a required string; numbers and booleans must look like one", () => {
+    const prompt = {
+      name: "p",
+      service: "S",
+      template: "{{n}} {{d}} {{b}} {{s}}",
+      role: "user" as const,
+      inputs: [
+        { key: "n", type: "Integer" },
+        { key: "d", type: "cds.Decimal" },
+        { key: "b", type: "Boolean" },
+        { key: "s", type: "String" },
+      ],
+    };
+    expect(promptArgsSchema(prompt)).toEqual({
+      type: "object",
+      properties: {
+        n: { type: "string", pattern: "^-?\\d+$" },
+        d: { type: "string", pattern: "^-?\\d+(\\.\\d+)?$" },
+        b: { enum: ["true", "false"] },
+        s: { type: "string" },
+      },
+      required: ["n", "d", "b", "s"],
+      additionalProperties: false,
+    });
+  });
+});
+
+describe("schema-mapper: confirmation forms (@mcp.elicit)", () => {
+  const [service] = readModel(
+    compileSnippet(`@mcp service S {
+      @mcp @mcp.elicit: ['confirm'] action go(n: Integer);
+      @mcp @mcp.elicit: ['confirm', 'n', 'note', 'when', 'list', 'size']
+      action edit(n: Integer @mandatory, note: String(20), when: Date, list: array of String,
+                  size: String enum { S; M; }, other: Boolean);
+    }`),
+  ).spec.services;
+  const op = (name: string) => {
+    const found = service?.operations.find((o) => o.name === `S.${name}`);
+    if (!found) throw new Error(`no S.${name}`);
+    return found;
+  };
+
+  test("['confirm'] asks for nothing but the user's yes", () => {
+    expect(elicitationSchema(op("go"), { n: 1 })).toEqual({ type: "object", properties: {} });
+  });
+
+  test("parameter names are asked for, pre-filled with the agent's values", () => {
+    expect(elicitationSchema(op("edit"), { n: 3, note: "hi", other: true })).toEqual({
+      type: "object",
+      properties: {
+        n: { type: "integer", minimum: -2147483648, maximum: 2147483647, default: 3 },
+        note: { type: "string", maxLength: 20, default: "hi" },
+        when: { type: "string", format: "date" },
+        // Arrays cannot be asked for in a form; the agent's value stands.
+        size: { type: "string", enum: ["S", "M"] },
+      },
+      required: ["n"],
     });
   });
 });

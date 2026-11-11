@@ -1,11 +1,13 @@
-import { DEFAULT_LIMITS, OPERATORS, type Limits } from "../schema-mapper";
+import { DEFAULT_LIMITS, OPERATORS, elicitationSchema, type Limits } from "../schema-mapper";
 import { view } from "../exposure-registry/access";
 import type {
   EntityMode,
   EntitySpec,
   ExposureSpec,
   FieldSpec,
+  JsonSchema,
   OperationSpec,
+  PromptSpec,
   ServiceSpec,
   ToolSpec,
   UserLike,
@@ -38,9 +40,14 @@ export interface ExecutorOptions {
   limits?: Limits;
 }
 
-/** Per call. `confirmed`: the user confirmed this call (@mcp.elicit, MRTR in M5). */
+/** Per call: whether the user confirmed it (@mcp.elicit, through MRTR), and with what values. */
 export interface CallOptions {
   confirmed?: boolean;
+  /**
+   * The values the user gave in the confirmation form. Only the operation's @mcp.elicit
+   * parameters are taken from it; they replace the agent's values and are checked like them.
+   */
+  confirmedArgs?: Record<string, unknown>;
 }
 
 /**
@@ -60,12 +67,27 @@ export function errorResult(error: unknown): ToolResult | undefined {
  */
 export class ToolError extends Error {
   constructor(
-    readonly code: "INVALID_ARGUMENT" | "NOT_FOUND" | "CONFIRMATION_REQUIRED",
+    readonly code:
+      "INVALID_ARGUMENT" | "NOT_FOUND" | "CONFIRMATION_REQUIRED" | "CONFIRMATION_DECLINED",
     message: string,
     readonly target?: string,
   ) {
     super(message);
     this.name = "ToolError";
+  }
+}
+
+/**
+ * An @mcp.elicit operation that was not confirmed (nothing ran). Carries the form to show the
+ * user: a client that can elicit asks with it (MRTR `input_required`) and retries.
+ */
+export class ConfirmationRequired extends ToolError {
+  constructor(
+    message: string,
+    readonly request: { message: string; requestedSchema: JsonSchema },
+  ) {
+    super("CONFIRMATION_REQUIRED", message);
+    this.name = "ConfirmationRequired";
   }
 }
 
@@ -147,6 +169,40 @@ export class Executor {
       );
     }
     return await this.dispatch(tool, args, service);
+  }
+
+  /**
+   * One @mcp.resource record, addressed by the `{key}` segment of its URI (ADR 0006): the
+   * value of a single key, or `k1=v1;k2=v2`, URI-encoded. Read as `get` does; anything that is
+   * not such a record is NOT_FOUND or INVALID_ARGUMENT.
+   */
+  async readResource(entityName: string, key: string, service: ServiceLike): Promise<ToolResult> {
+    const entity = this.entities.get(entityName);
+    if (!entity?.resource || !entity.modes.has("get")) {
+      throw new ToolError("NOT_FOUND", `${entityName} has no resources`);
+    }
+    return await this.get(entity, parseResourceKey(entity, key), service);
+  }
+
+  /**
+   * Values for the `{key}` of an @mcp.resource template whose key has @mcp.completion: keys
+   * that start with `value`, in key order, as the caller may read them (CAP applies @restrict).
+   * MCP returns at most 100; one more is fetched so the SDK can say `hasMore`.
+   */
+  async completeKey(entityName: string, value: string, service: ServiceLike): Promise<string[]> {
+    const entity = this.entities.get(entityName);
+    const key = entity?.keys.length === 1 ? entity.keys[0] : undefined;
+    if (!entity?.resource || !key?.completion) return [];
+    const rows = (await service.run({
+      SELECT: {
+        from: { ref: [entity.name] },
+        columns: [ref(key.name)],
+        ...(value && { where: [{ func: "startswith", args: [keyText(key), { val: value }] }] }),
+        orderBy: [{ ...ref(key.name), sort: "asc" }],
+        limit: { rows: { val: MAX_COMPLETIONS + 1 } },
+      },
+    })) as Args[] | undefined;
+    return (rows ?? []).map((row) => String(row[key.name]));
   }
 
   private dispatch(tool: ToolSpec, args: Args, service: ServiceLike): Promise<ToolResult> {
@@ -383,6 +439,13 @@ export class Executor {
   ): Promise<ToolResult> {
     const bound = op.boundTo ? this.entities.get(op.boundTo) : undefined;
     const keyNames = bound?.keys.map((k) => k.name) ?? [];
+    if (options.confirmed && options.confirmedArgs) {
+      // The user's answers to the confirmation form win over the agent's values, for the fields
+      // the form had (parameters a form cannot hold keep the agent's value).
+      const asked = Object.keys(elicitationSchema(op, args).properties ?? {});
+      const answers = Object.entries(options.confirmedArgs).filter(([k]) => asked.includes(k));
+      args = { ...args, ...Object.fromEntries(answers) };
+    }
     allowOnly(args, [...keyNames, ...op.params.map((p) => p.name)]);
     const data: Args = {};
     for (const p of op.params) {
@@ -396,10 +459,12 @@ export class Executor {
       data[p.name] = v;
     }
     if (op.elicit?.length && !options.confirmed) {
-      throw new ToolError(
-        "CONFIRMATION_REQUIRED",
-        `${op.title} needs the user's confirmation before it runs`,
-      );
+      const key = bound ? ` for ${JSON.stringify(pickKeys(args, keyNames))}` : "";
+      const given = Object.keys(data).length ? ` with ${JSON.stringify(data)}` : "";
+      throw new ConfirmationRequired(`${op.title} needs the user's confirmation before it runs`, {
+        message: `Confirm ${op.title}${key}${given}?`,
+        requestedSchema: elicitationSchema(op, data),
+      });
     }
     const event = op.name.slice(op.name.lastIndexOf(".") + 1);
     const returned = bound
@@ -678,6 +743,18 @@ const COMPARISONS: Record<string, string> = {
   lt: "<",
   le: "<=",
 };
+/** Key types stored as text; others are cast, so every database can compare a prefix. */
+const TEXT_KEYS = new Set(["cds.String", "cds.LargeString", "cds.UUID"]);
+
+function keyText(key: FieldSpec) {
+  return TEXT_KEYS.has(key.cdsType)
+    ? ref(key.name)
+    : { ...ref(key.name), cast: { type: "cds.String" } };
+}
+
+/** `completion/complete` returns at most 100 values (MCP spec). */
+export const MAX_COMPLETIONS = 100;
+
 const TEXT_FUNCTIONS = new Set(["contains", "startswith", "endswith"]);
 const STRING_TYPES = new Set(["cds.String", "cds.LargeString"]);
 
@@ -833,6 +910,51 @@ function decodeCursor(cursor: unknown): number {
     // fall through
   }
   throw new ToolError("INVALID_ARGUMENT", "cursor is not one this server returned", "cursor");
+}
+
+/** Integer types whose key values arrive as digits in a URI; others stay strings. */
+const URI_NUMBERS = new Set(["cds.Integer", "cds.UInt8", "cds.Int16", "cds.Int32"]);
+
+/** The inverse of resourceLinks' key: typed as the key fields are, checked by keyOf. */
+function parseResourceKey(entity: EntitySpec, segment: string): Args {
+  const typed = (f: FieldSpec | undefined, raw: string): unknown => {
+    let text: string;
+    try {
+      text = decodeURIComponent(raw);
+    } catch {
+      throw new ToolError("INVALID_ARGUMENT", `${raw} is not a valid key`, f?.name);
+    }
+    if (f && URI_NUMBERS.has(f.cdsType) && /^-?\d+$/.test(text)) return Number(text);
+    if (f?.cdsType === "cds.Boolean" && (text === "true" || text === "false"))
+      return text === "true";
+    return text;
+  };
+  const only = entity.keys.length === 1 ? entity.keys[0] : undefined;
+  if (only) return { [only.name]: typed(only, segment) };
+  const pairs = segment.split(";").map((part) => {
+    const at = part.indexOf("=");
+    const name = at < 0 ? part : part.slice(0, at);
+    return [
+      name,
+      typed(
+        entity.keys.find((k) => k.name === name),
+        part.slice(at + 1),
+      ),
+    ] as const;
+  });
+  return Object.fromEntries(pairs);
+}
+
+/**
+ * The text of an @mcp.prompts entry with its arguments filled in: each `{{key}}` of an input
+ * becomes the argument's value (already checked against promptArgsSchema). Other braces stay.
+ */
+export function renderPrompt(prompt: PromptSpec, args: Record<string, string>): string {
+  const keys = new Set(prompt.inputs.map((input) => input.key));
+  // One pass over the template, so an argument's own text is never filled in again.
+  return prompt.template.replace(/\{\{([^{}]*)\}\}/g, (whole, key: string) =>
+    keys.has(key) ? (args[key] ?? "") : whole,
+  );
 }
 
 /** `cap://<Service>/<Entity>/<key>`; composite keys as `k1=v1;k2=v2` (ADR 0006). */

@@ -1,4 +1,11 @@
-import type { EntityMode, EntitySpec, FieldSpec, JsonSchema, OperationSpec } from "../types";
+import type {
+  EntityMode,
+  EntitySpec,
+  FieldSpec,
+  JsonSchema,
+  OperationSpec,
+  PromptSpec,
+} from "../types";
 
 /**
  * schema-mapper (milestone M1)
@@ -84,6 +91,42 @@ export function fieldToSchema(field: FieldSpec): JsonSchema {
   if (max !== undefined) schema.maximum = max;
   if (field.description) schema.description = field.description;
   return schema;
+}
+
+/** What an elicitation form may say about one primitive field (MCP's restricted schema). */
+const FORM_KEYWORDS = new Set([
+  "type",
+  "description",
+  "minLength",
+  "maxLength",
+  "format",
+  "minimum",
+  "maximum",
+  "enum",
+]);
+const FORM_TYPES = new Set(["string", "integer", "number", "boolean"]);
+const FORM_FORMATS = new Set(["email", "uri", "date", "date-time"]);
+
+/**
+ * The form that asks the user to confirm an @mcp.elicit operation. `confirm` asks for nothing
+ * but a yes; listed parameter names are asked for too, pre-filled with the agent's values, so
+ * the user sees and may change them. Parameters a form cannot hold (arrays, structures, types
+ * without one JSON type) are not asked for; the agent's value stands.
+ */
+export function elicitationSchema(op: OperationSpec, args: Record<string, unknown>): JsonSchema {
+  const asked = op.params.filter((p) => op.elicit?.includes(p.name) && !p.many);
+  const properties: Record<string, JsonSchema> = {};
+  for (const p of asked) {
+    const full = fieldToSchema(p);
+    if (typeof full.type !== "string" || !FORM_TYPES.has(full.type)) continue;
+    const form = Object.fromEntries(Object.entries(full).filter(([k]) => FORM_KEYWORDS.has(k)));
+    if (typeof form.format === "string" && !FORM_FORMATS.has(form.format)) delete form.format;
+    const given = args[p.name];
+    if (given !== undefined && given !== null) form.default = given;
+    properties[p.name] = form;
+  }
+  const required = asked.filter((p) => p.mandatory && properties[p.name]).map((p) => p.name);
+  return { type: "object", properties, ...(required.length && { required }) };
 }
 
 /** Row limits for the query tool, from cds.env.mcp.limits (docs/annotations.md). */
@@ -285,6 +328,37 @@ export function entityOutputSchema(entity: EntitySpec, mode: EntityMode): JsonSc
         required: ["deleted"],
       };
   }
+}
+
+/** Prompt arguments are strings: the pattern a value of each CDS type must match. */
+const PROMPT_PATTERNS: Record<string, string> = {
+  Integer: "^-?\\d+$",
+  Int16: "^-?\\d+$",
+  Int32: "^-?\\d+$",
+  Int64: "^-?\\d+$",
+  UInt8: "^\\d+$",
+  Decimal: "^-?\\d+(\\.\\d+)?$",
+  Double: "^-?\\d+(\\.\\d+)?$",
+};
+
+/**
+ * The arguments of an @mcp.prompts entry. Prompt arguments are strings on the wire, so every
+ * input is a string that must look like its type (an Integer like an integer). All inputs are
+ * required: the template uses each.
+ */
+export function promptArgsSchema(prompt: PromptSpec): JsonSchema {
+  const property = (type: string): JsonSchema => {
+    const local = type.replace(/^cds\./, "");
+    if (local === "Boolean") return { enum: ["true", "false"] };
+    const pattern = PROMPT_PATTERNS[local];
+    return pattern ? { type: "string", pattern } : { type: "string" };
+  };
+  return {
+    type: "object",
+    properties: Object.fromEntries(prompt.inputs.map((i) => [i.key, property(i.type)])),
+    required: prompt.inputs.map((i) => i.key),
+    additionalProperties: false,
+  };
 }
 
 /**

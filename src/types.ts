@@ -162,6 +162,8 @@ export type DiagnosticCode =
   | "UNUSED_ANNOTATION"
   /** Two tools would get the same name (also across services); both are left out. */
   | "TOOL_NAME_CLASH"
+  /** Two services' @mcp.prompts use the same name; neither prompt is exposed. */
+  | "PROMPT_NAME_CLASH"
   /** A tool name outside MCP's [A-Za-z0-9._-]{1,128}; the tool is left out. */
   | "INVALID_TOOL_NAME"
   /** A tool name over 64 characters, which some LLM tool APIs reject; still exposed. */
@@ -224,6 +226,24 @@ export interface ToolSpec {
     | { kind: "operation"; operation: string }
     | { kind: "describe"; service: string }
     | { kind: "compact"; service: string; action: CompactAction };
+}
+
+/**
+ * What resources/templates/list publishes for one @mcp.resource entity: single records by key
+ * (ADR 0006). There is no list of records: resources/list never enumerates tables.
+ */
+export interface ResourceSpec {
+  /** `cap://<Service>/<Entity>/{key}`; composite keys as `k1=v1;k2=v2`. */
+  uriTemplate: string;
+  /** `<Service>_<Entity>`, like tool names. */
+  name: string;
+  title: string;
+  description?: string;
+  mimeType: "application/json";
+  /** Fully qualified entity. */
+  entity: string;
+  /** The single key has @mcp.completion: `completion/complete` offers values for `{key}`. */
+  completion: boolean;
 }
 
 /** The roles/identity the registry filters by. A structural subset of cds.User. */

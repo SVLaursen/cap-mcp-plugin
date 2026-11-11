@@ -373,6 +373,29 @@ describe("model-reader: opt-in", () => {
     ]);
   });
 
+  test("@mcp.completion has an effect only on the single key of an @mcp.resource entity", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        @mcp.resource entity Authors { key ID: Integer @mcp.completion; name: String; }
+        entity Books { key ID: Integer @mcp.completion; @mcp.completion genre: String; }
+        @mcp.resource entity Pairs { key a: String @mcp.completion; key b: Integer; }
+        @mcp action order(@mcp.completion book: Integer);
+      }
+    `);
+    const unused = readModel(csn).diagnostics.filter((d) => d.code === "UNUSED_ANNOTATION");
+    expect(unused.map((d) => d.target).sort()).toEqual([
+      "S.Books:ID",
+      "S.Books:genre",
+      "S.Pairs:a",
+      "S.order:book",
+    ]);
+    // MCP completes prompt arguments and resource-template variables, never tool arguments.
+    expect(unused.find((d) => d.target === "S.order:book")).toMatchObject({
+      level: "warn",
+      message: expect.stringMatching(/tool arguments/),
+    });
+  });
+
   test("@mcp.describe on a service sets describe: true; default is false", () => {
     const csn = compileSnippet(`@mcp @mcp.describe service S {} @mcp service T {}`);
     expect(readModel(csn).spec.services.map((s) => [s.name, s.describe])).toEqual([
@@ -1085,6 +1108,39 @@ describe("model-reader: diagnostics", () => {
       { level: "error", code: "INVALID_ANNOTATION_VALUE", target: "S" },
       { level: "error", code: "INVALID_ANNOTATION_VALUE", target: "S" },
       { level: "error", code: "INVALID_ANNOTATION_VALUE", target: "S" },
+    ]);
+  });
+
+  test("@mcp.elicit values other than 'confirm' and parameter names are diagnosed; it still confirms", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        @mcp @mcp.elicit: ['confirm', 'amout'] action pay(amount: Integer);
+        @mcp @mcp.elicit: 'confirm' action go();
+        @mcp @mcp.elicit action flag();
+        @mcp @mcp.elicit: [] action none();
+        @mcp @mcp.elicit: [1] action odd();
+      }
+    `);
+    const { spec, diagnostics } = readModel(csn);
+    // Anything that asks for confirmation keeps asking: a typo must never switch it off.
+    expect(onlyService(spec).operations.map((o) => [o.name, o.elicit])).toEqual([
+      ["S.pay", ["confirm", "amout"]],
+      ["S.go", ["confirm"]],
+      ["S.flag", ["confirm"]],
+      ["S.none", ["confirm"]],
+      ["S.odd", ["confirm"]],
+    ]);
+    expect(diagnostics.filter((d) => d.code === "INVALID_ANNOTATION_VALUE")).toEqual([
+      {
+        level: "error",
+        code: "INVALID_ANNOTATION_VALUE",
+        target: "S.pay",
+        message:
+          "@mcp.elicit value amout is neither 'confirm' nor a parameter of S.pay; the call is still confirmed",
+      },
+      expect.objectContaining({ target: "S.go" }),
+      expect.objectContaining({ target: "S.none" }),
+      expect.objectContaining({ target: "S.odd" }),
     ]);
   });
 

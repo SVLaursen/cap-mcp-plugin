@@ -17,3 +17,4 @@ supersedes the old one; don't edit history.
 | [0009](0009-single-mcp-route-behind-cap-middleware.md) | One `/mcp` route behind CAP's middlewares, for all services            | accepted                   |
 | [0010](0010-dual-era-stateless-sdk-handler.md)         | One stateless SDK handler for 2026-07-28 and 2025-era clients          | accepted                   |
 | [0011](0011-doc-comments-are-the-apps-choice.md)       | Doc comments are the app's choice; the plugin does not set `cdsc.docs` | accepted                   |
+| [0012](0012-mcp-apps-without-ext-apps-runtime.md)      | MCP Apps without a runtime dependency on `ext-apps`                    | accepted                   |

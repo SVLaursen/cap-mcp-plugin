@@ -15,16 +15,36 @@ export function isProduction(): boolean {
 /** The parts of `cds.requires.auth` the plugin reads. */
 export interface AuthConfig {
   kind?: string;
-  credentials?: { url?: string };
+  credentials?: { url?: string; uaadomain?: string };
   /** CAP: in production, services without @requires need an authenticated user unless false. */
   restrict_all_services?: boolean;
 }
 
 const OAUTH_KINDS = new Set(["jwt", "xsuaa", "ias", "jwt-auth", "xsuaa-auth", "ias-auth"]);
 
-/** The authorization server clients get tokens from, if the app uses OAuth-based auth. */
-export function authorizationServer(auth: AuthConfig | undefined): string | undefined {
+/** The host a request came to, and `cds.env.mcp.tenantHostPattern` (multitenant XSUAA). */
+export interface TenantHost {
+  host?: string;
+  pattern?: RegExp;
+}
+
+/** A DNS label: what an XSUAA subdomain is, and all we put into a URL from a Host header. */
+const SUBDOMAIN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
+
+/**
+ * The authorization server clients get tokens from, if the app uses OAuth-based auth: the bound
+ * `credentials.url`. In a multitenant XSUAA app each subscriber logs in at its own subdomain;
+ * with a `tenantHostPattern` (first capture group: the subdomain, as the approuter's
+ * TENANT_HOST_PATTERN) a matching host gets `https://<subdomain>.<uaadomain>`.
+ */
+export function authorizationServer(
+  auth: AuthConfig | undefined,
+  tenant: TenantHost = {},
+): string | undefined {
   if (!auth?.kind || !OAUTH_KINDS.has(auth.kind)) return undefined;
+  const subdomain = tenant.host && tenant.pattern?.exec(tenant.host)?.[1];
+  const domain = auth.credentials?.uaadomain;
+  if (subdomain && domain && SUBDOMAIN.test(subdomain)) return `https://${subdomain}.${domain}`;
   return auth.credentials?.url;
 }
 
@@ -46,16 +66,20 @@ function forwarded(req: Request, name: string): string | undefined {
  */
 function origin(req: Request): string {
   const proto = forwarded(req, "x-forwarded-proto") ?? req.protocol;
-  const host = forwarded(req, "x-forwarded-host") ?? req.get("host");
-  return `${proto}://${host}`;
+  return `${proto}://${host(req)}`;
+}
+
+function host(req: Request): string | undefined {
+  return forwarded(req, "x-forwarded-host") ?? req.get("host");
 }
 
 /** The RFC 9728 document for /mcp, or undefined when there is no authorization server. */
 export function protectedResourceMetadata(
   resource: string,
   auth: AuthConfig | undefined,
+  tenant: TenantHost = {},
 ): Record<string, unknown> | undefined {
-  const server = authorizationServer(auth);
+  const server = authorizationServer(auth, tenant);
   if (!server) return undefined;
   return { resource, authorization_servers: [server], bearer_methods_supported: ["header"] };
 }
@@ -65,6 +89,8 @@ export interface AuthOptions {
   path: string;
   /** `cds.requires.auth`, read per request. */
   auth(): AuthConfig | undefined;
+  /** `cds.env.mcp.tenantHostPattern`, compiled; none by default. */
+  tenantHostPattern?: RegExp;
 }
 
 export interface GateOptions extends AuthOptions {
@@ -113,9 +139,13 @@ export function authErrors(options: AuthOptions): ErrorRequestHandler {
 /** GET handler for the RFC 9728 document; 404 when the app has no authorization server. */
 export function metadataHandler(options: AuthOptions): RequestHandler {
   return (req, res) => {
-    const metadata = protectedResourceMetadata(`${origin(req)}${options.path}`, options.auth());
+    const metadata = protectedResourceMetadata(`${origin(req)}${options.path}`, options.auth(), {
+      host: host(req),
+      pattern: options.tenantHostPattern,
+    });
+    // Built from the request's host (and, multitenant, its subscriber): never from a cache.
     if (!metadata) res.sendStatus(404);
-    else res.json(metadata);
+    else res.set("Cache-Control", "no-store").json(metadata);
   };
 }
 

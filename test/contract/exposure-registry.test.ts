@@ -576,3 +576,70 @@ describe("exposure-registry: caching", () => {
     expect(r.diagnostics.map((d) => d.code)).toEqual(["UNKNOWN_ANNOTATION"]);
   });
 });
+
+describe("exposure-registry: resources", () => {
+  test("@mcp.resource entities get a template per record key, for users who may read them", () => {
+    const r = registry(`
+      namespace my;
+      @mcp service S {
+        /** People. */
+        @mcp.resource entity People { key ID: Integer; name: String; }
+        @mcp.resource @requires: 'admin' entity Secrets { key a: String; key b: Integer; }
+        @mcp.resource entity Keyless { name: String; }
+        entity Plain { key ID: Integer; }
+      }
+    `);
+    expect(r.resourcesFor(user())).toEqual([
+      {
+        uriTemplate: "cap://my.S/People/{key}",
+        name: "S_People",
+        title: "my.S.People",
+        description: "People.",
+        mimeType: "application/json",
+        entity: "my.S.People",
+        completion: false,
+      },
+    ]);
+    expect(r.resourcesFor(user("admin")).map((t) => t.uriTemplate)).toEqual([
+      "cap://my.S/People/{key}",
+      "cap://my.S/Secrets/{key}",
+    ]);
+  });
+});
+
+test("a resource whose single key has @mcp.completion offers key completion", () => {
+  const r = registry(`@mcp service S {
+    @mcp.resource entity A { key ID: Integer @mcp.completion; }
+    @mcp.resource entity B { key ID: Integer; }
+  }`);
+  expect(r.resourcesFor(user()).map((x) => [x.name, x.completion])).toEqual([
+    ["S_A", true],
+    ["S_B", false],
+  ]);
+});
+
+describe("exposure-registry: prompts", () => {
+  const prompted = `
+    @mcp @mcp.prompts: [{ name: 'open', template: 'Hi' }, { name: 'twice', template: 'A' }]
+    service Open {}
+    @mcp @requires: 'admin' @mcp.prompts: [{ name: 'closed', template: 'Ho' }, { name: 'twice', template: 'B' }]
+    service Closed {}
+  `;
+
+  test("prompts of a service are listed for users who can reach the service", () => {
+    const r = registry(prompted);
+    expect(r.promptsFor(user()).map((p) => p.name)).toEqual(["open"]);
+    expect(r.promptsFor(user("admin")).map((p) => p.name)).toEqual(["closed", "open"]);
+  });
+
+  test("two prompts with the same name clash: neither is listed", () => {
+    const r = registry(prompted);
+    expect(r.promptsFor(user("admin")).map((p) => p.name)).not.toContain("twice");
+    expect(r.diagnostics).toContainEqual({
+      level: "error",
+      code: "PROMPT_NAME_CLASH",
+      target: "twice",
+      message: "Closed and Open both have a prompt named twice; neither is exposed",
+    });
+  });
+});

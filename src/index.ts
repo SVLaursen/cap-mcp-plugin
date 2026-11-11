@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { Application, RequestHandler } from "express";
 import { mcpHandler, type RequestContext } from "./adapter";
+import { loadAppFiles } from "./adapter/apps";
 import {
   authErrors,
   checkOrigin,
@@ -17,12 +18,16 @@ import { DEFAULT_LIMITS, type Limits } from "./schema-mapper";
 export interface CdsLike {
   on(event: "served", handler: () => void): unknown;
   on(event: string, handler: (...args: never[]) => void): unknown;
+  emit(event: string, ...args: unknown[]): unknown;
   log(module: string): {
     info(...args: unknown[]): void;
+    warn(...args: unknown[]): void;
     debug(...args: unknown[]): void;
     error(...args: unknown[]): void;
   };
   readonly app: Application;
+  /** The app's root folder; MCP App files are read from `<root>/app/mcp-apps/`. */
+  readonly root: string;
   readonly context?: RequestContext;
   readonly model?: unknown;
   readonly services: Record<string, unknown>;
@@ -39,6 +44,11 @@ export interface McpConfig {
   version?: string;
   allowedOrigins?: string[];
   limits?: Partial<Limits>;
+  /**
+   * Multitenant XSUAA: a regular expression over the request host whose first capture group is
+   * the subscriber's subdomain (like the approuter's TENANT_HOST_PATTERN). Off by default.
+   */
+  tenantHostPattern?: string;
 }
 
 export const MCP_PATH = "/mcp";
@@ -62,6 +72,15 @@ export function activate(cds: CdsLike): void {
     const config = cds.env.mcp ?? {};
     const mcpPath = config.path ?? MCP_PATH;
     const registryFor = registryCache({ limits: { ...DEFAULT_LIMITS, ...config.limits } });
+    // MCP Apps (ADR 0012): files for the app's @mcp.ui links, then the app's own registrations.
+    const linked = registryFor(cds.model as object)
+      .spec.services.flatMap((s) => s.operations.map((o) => o.ui))
+      .filter((uri): uri is string => uri !== undefined);
+    const apps = loadAppFiles(cds.root, linked, log);
+    cds.emit("mcp:apps", apps);
+    for (const uri of apps.uris())
+      if (!linked.includes(uri))
+        log.warn(`MCP App ${uri} is registered but no @mcp.ui links to it`);
     const handler = mcpHandler({
       serverInfo: {
         name: config.name ?? "@gavdi/cap-mcp",
@@ -70,6 +89,7 @@ export function activate(cds: CdsLike): void {
       context: () => cds.context,
       model: () => cds.model as object,
       registryFor,
+      apps,
       services: cds.services,
       translate: (key, locale, args) => {
         const text = cds.i18n.messages.at(key, locale, args);
@@ -77,7 +97,14 @@ export function activate(cds: CdsLike): void {
       },
       log,
     });
-    const auth = { path: mcpPath, auth: () => cds.requires.auth };
+    const auth = {
+      path: mcpPath,
+      auth: () => cds.requires.auth,
+      // A pattern that is not a regular expression fails startup, loudly.
+      ...(config.tenantHostPattern && {
+        tenantHostPattern: new RegExp(config.tenantHostPattern, "i"),
+      }),
+    };
     // RFC 9728 metadata is public: clients read it to find out how to authenticate.
     cds.app.get(metadataPath(mcpPath), metadataHandler(auth));
     // All methods: the SDK answers GET/DELETE (2025 session operations) with 405.

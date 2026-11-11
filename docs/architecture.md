@@ -46,18 +46,33 @@ The data passed between them is defined in `src/types.ts`.
 2. The SDK classifies the request (2026-07-28 envelope or 2025 era), rejects unsupported
    versions, and calls the factory, which builds a fresh `McpServer` with the caller's tools
    (registry for `cds.context.model ?? cds.model`, `toolsFor(cds.context.user)`); the server
-   dispatches the JSON-RPC method. Only `tools` is advertised, with `listChanged: false`;
-   `tools/list` and `server/discover` say `cacheScope: private` (lists depend on the user) and
-   `ttlMs` 60 s. No session, no `Mcp-Session-Id`.
+   dispatches the JSON-RPC method. Only what the caller can use is advertised, always with
+   `listChanged: false`: `tools`, `resources` when some `@mcp.resource` entity is readable
+   for them or one of their tools links to an MCP App UI, `completions` when one of those
+   resources has `@mcp.completion`, and `prompts` when a service they can reach has `@mcp.prompts`
+   (`registry.promptsFor(user)`; arguments from `promptArgsSchema`, text from `renderPrompt`);
+   `tools/list`, `resources/list`, `resources/templates/list`, `prompts/list` and `server/discover` say
+   `cacheScope: private` (lists depend on the user) and `ttlMs` 60 s. No session, no `Mcp-Session-Id`.
    2025-era clients get the same tools statelessly: each request (`initialize` included) stands
    alone, answered as SSE; GET and DELETE are 405. They cannot confirm an `@mcp.elicit` call,
    so it is refused with a `CONFIRMATION_REQUIRED` tool error that says why.
+   A 2026-07-28 client with the `elicitation` capability confirms through MRTR: the executor
+   throws `ConfirmationRequired` (carrying the form, from `elicitationSchema`) before anything
+   runs, the adapter answers `input_required` with `requestState` = a SHA-256 digest of (tool,
+   arguments, user id), and the retry's `inputResponses.confirm` becomes
+   `execute(…, { confirmed, confirmedArgs })` only when its echoed `requestState` equals the
+   digest of the retry itself. The digest is recomputed and compared, never decoded, so it needs
+   no shared key across instances; it cannot stop a client that fakes the user's answer (nothing
+   server-side can), only accepts for a call nobody was asked about.
    A 401 (CAP's `next(401)`, e.g. an invalid token) becomes CAP's own login challenge
    (`req._login`, Basic for mocked/basic auth) or, for XSUAA/JWT/IAS,
    `WWW-Authenticate: Bearer resource_metadata="<origin>/.well-known/oauth-protected-resource/mcp"`.
    That RFC 9728 document is public and names the bound authorization server
-   (`cds.requires.auth.credentials.url`; the provider's, even for subscriber tenants: see the
-   backlog); without one it is 404. URLs follow `X-Forwarded-Proto`/`-Host`. No authorization
+   (`cds.requires.auth.credentials.url`). In a multitenant XSUAA app the opt-in
+   `cds.env.mcp.tenantHostPattern` picks the subscriber's subdomain from the request host and
+   names `https://<subdomain>.<uaadomain>` instead (the document is read before login, so the
+   host is all there is to go by). It is sent with `Cache-Control: no-store`, since it depends on
+   the host. An app without an authorization server answers 404. URLs follow `X-Forwarded-Proto`/`-Host`. No authorization
    server endpoints, no DCR.
 3. `tools/list` → `registry.toolsFor(cds.context.user)` for `cds.context.model`.
 4. `tools/call` → the SDK validates args against the tool's input schema →
@@ -70,6 +85,25 @@ The data passed between them is defined in `src/types.ts`.
    error (failed commits, bugs).
 5. The result goes back as `structuredContent` plus one text block, or as a tool error that
    keeps CAP's `code`, `target` and `details`.
+
+`resources/read` of `cap://<Service>/<Entity>/<key>` (ADR 0006) takes the same path as a `get`
+call: `registry.resourcesFor(user)` gives the templates (one per readable `@mcp.resource`
+entity, no record lists), `executor.readResource(entity, key, tx)` runs in `srv.tx`, and the
+record comes back as one `application/json` content. The key segment is the one tool results
+link to: the value of a single key, or `k1=v1;k2=v2`, URI-encoded. A missing record or a key that
+is not one is the protocol's resource-not-found error (`-32602` with the `uri`).
+
+A resource whose single key has `@mcp.completion` (`ResourceSpec.completion`) makes the adapter
+register its own `completion/complete` handler (and the `completions` capability):
+`executor.completeKey(entity, value, tx)` runs a `startswith` SELECT of the key (cast to a string
+unless it is one) in `srv.tx`, and the adapter answers up to 100 values with `hasMore`. Not the
+SDK's template callbacks: they report `total` as the number of values fetched.
+
+MCP App UIs (`@mcp.ui`, ADR 0012) are plain resources, registered per request by the adapter
+(`adapter/apps.ts`): `activate()` reads `app/mcp-apps/<path>` for each linked `ui://` URI once
+CAP has served the app, then emits `mcp:apps` so app code can register more. Per request, a tool
+keeps its UI link only if the resource has content, and the caller can list and read exactly the
+UIs their tools link to. No dependency on `@modelcontextprotocol/ext-apps` at runtime.
 
 ## Describe tools and access
 
