@@ -97,7 +97,7 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 - [x] v1 shim: map v1 annotations and config, emit `V1_ANNOTATION` / `V1_DEFAULT_CHANGED`
 - [x] Characterisation: v1 demo annotations produce equivalent v2 tools (compatibility checklist)
 - [x] User docs: "expose a service in 5 minutes", "lock it down for production", "debug a missing tool"
-- [ ] Review: run the `reviewer` agent on M6
+- [x] Review: run the `reviewer` agent on M6
 
 ## M7 — Release 2.0
 
