@@ -5,8 +5,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 /**
- * M7 — the package as npm publishes it: only the runtime files, and an app with exactly those
- * files installed serves MCP, also under the app's own Jest (cds.test). lib/ is built once for the behaviour tests (test/build-lib.js).
+ * The package as npm publishes it: only the runtime files, and an app with exactly those files
+ * installed serves MCP, also under the app's own Jest (cds.test). lib/ is built once for the
+ * behaviour tests (test/build-lib.js).
  */
 const ROOT = path.join(__dirname, "..", "..");
 let files: string[];

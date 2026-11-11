@@ -1,7 +1,7 @@
 import { DEFAULT_LIMITS, OPERATORS, type Limits } from "../schema-mapper";
 import type { CompactAction, EntityMode, OperationSpec, ServiceSpec, ToolSpec } from "../types";
 import { typeName } from "../util";
-import { Hints, READ, HINTS, ACTION, shortName, withDescription } from "./tools";
+import { type Hints, READ, HINTS, ACTION, shortName, withDescription } from "./tools";
 
 /**
  * The plugin's own tools for a service: `<Service>_describe` (@mcp.describe) and the compact

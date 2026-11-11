@@ -123,4 +123,11 @@ describe("executor: describe tools", () => {
       expect.objectContaining({ name: "Shop.Secrets", keys: ["ID"] }),
     );
   });
+
+  test("describe_entity needs an entity: without one it is refused, not the first one described", async () => {
+    const none = await describe_(alice, "Shop_describe_entity", {});
+    expect(none.structuredContent).toEqual({
+      error: expect.objectContaining({ code: "INVALID_ARGUMENT", target: "entity" }),
+    });
+  });
 });

@@ -50,7 +50,14 @@ export async function callOperation(
   const fields = op.returns.fields?.map((f) => f.name);
   // Only the fields the return type exposes (no @mcp.omit ones the handler happened to read).
   const shape = (item: unknown) => (fields && isObject(item) ? project(item, fields) : item);
-  if (!op.returns.many) return result({ value: shape(returned ?? null) });
+  if (!op.returns.many) {
+    // A handler bug, not the agent's: fail the call (logged, rolled back) and pass nothing on.
+    if (Array.isArray(returned)) {
+      const type = op.returns.entity ?? "record";
+      throw new Error(`${op.name} returned a list, but its return type is a single ${type}`);
+    }
+    return result({ value: shape(returned ?? null) });
+  }
   // A list operation whose handler returns nothing returned an empty list (the schema says array).
   return result({ value: (Array.isArray(returned) ? returned : []).map(shape) });
 }

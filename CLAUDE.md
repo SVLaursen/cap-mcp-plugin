@@ -46,7 +46,7 @@ npm run typecheck         # tsc --noEmit (src + test)
 npm run lint              # eslint (includes the no-global-cds / no-cds-mock rules)
 npm run format:fix        # prettier
 npm run check             # typecheck + lint + test: run before every commit
-npm run build             # compile src/ to lib/ (cds-plugin.js loads lib/ outside Jest)
+npm run build             # compile src/ to lib/ (cds-plugin.js always loads lib/; tests load src/)
 npm run demo              # cds watch on the demo app at http://localhost:4004
 npm run inspect           # MCP Inspector, once the adapter exists (M4)
 ```
@@ -69,8 +69,8 @@ src/
   cli/                  cds add mcp, cds build task, startup report
 test/
   helpers/              snippet.ts (compile CDS), demo.ts (cds.test + users), mcp.ts (JSON-RPC)
-  contract/             M1–M2 pure tests
-  behaviour/            M3–M5 end-to-end against the demo app
+  contract/             pure tests over CDS snippets
+  behaviour/            end-to-end against the demo app (cds.test, over /mcp)
   regression/           one test per v1 finding
   auth/                 auth parity matrix (v1.9 PR #163)
 demo/                   bookshop app; every v2 feature has an annotated target (demo/README.md)

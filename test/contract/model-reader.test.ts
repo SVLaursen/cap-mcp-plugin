@@ -881,7 +881,9 @@ describe("model-reader: row limits (CAP's @cds.query.limit)", () => {
   });
 
   // CAP's own reading, from its paging handler: the reader must agree with it, or the tools
-  // advertise limits CAP does not apply. A CAP release that changes the rules fails here.
+  // advertise limits CAP does not apply. A CAP release that changes the rules fails here. The
+  // path is CAP-internal (no public API gives the page size): if a 10.x minor moves the file,
+  // this test fails without the rules changing; find getPageSize again and update the path.
   const { getPageSize } = jest.requireActual<{
     getPageSize(def: unknown): { default: number; max: number };
   }>("@sap/cds/libx/_runtime/common/generic/paging.js");

@@ -33,6 +33,21 @@ test.each([
   expect(schemaError(tool.outputSchema, result.structuredContent)).toBeUndefined();
 });
 
+test("a handler that returns a list for a single-record return type fails the call; nothing is passed on", async () => {
+  const shop = ExposureRegistry.fromModel(
+    compileSnippet(`@mcp service S {
+      entity Books { key ID: Integer; title: String; @mcp.omit secret: String; }
+      function book() returns Books;
+    }`),
+  );
+  const tool = shop.toolsFor(user).find((t) => t.name === "S_book");
+  if (!tool) throw new Error("S_book is missing");
+  const listed = returning([{ ID: 1, title: "A", secret: "x" }]);
+  await expect(new Executor(shop.spec).execute(tool, {}, listed, user)).rejects.toThrow(
+    "S.book returned a list, but its return type is a single S.Books",
+  );
+});
+
 describe("resources", () => {
   const keyed = ExposureRegistry.fromModel(
     compileSnippet(`@mcp service R {
