@@ -135,6 +135,8 @@ describe("opt-in: describe and compact", () => {
       "AdminService_get",
       "AdminService_list_entities",
       "AdminService_query",
+      // An @mcp.ui operation keeps its own tool in a compact service.
+      "AdminService_stockReport",
       "AdminService_update",
     ]);
     const all = ["AdminService.Books", "AdminService.Authors", "AdminService.Genres"];
@@ -215,6 +217,7 @@ describe("opt-in: resources", () => {
         name: "AdminService_Authors",
         mimeType: "application/json",
       }),
+      expect.objectContaining({ uriTemplate: "cap://CatalogService/Genres/{key}" }),
     ]);
   });
 
@@ -224,10 +227,11 @@ describe("opt-in: resources", () => {
     expect(res.message?.error).toMatchObject({ code: -32602, data: { uri } });
     const got = await callTool("bob", "CatalogService_Authors_get", { ID: 101 });
     expect(got.links).toBeUndefined();
-    // Bob cannot reach AdminService: no templates, and its resource is not found for him.
-    // (He still has resources: the MCP App UIs of his CatalogService tools.)
+    // Bob cannot reach AdminService: not its template, and its resource is not found for him.
     const templates = await rpc(demo.POST, "bob", "resources/templates/list");
-    expect(templates.message?.result?.resourceTemplates).toEqual([]);
+    expect(templates.message?.result?.resourceTemplates).toEqual([
+      expect.objectContaining({ uriTemplate: "cap://CatalogService/Genres/{key}" }),
+    ]);
     expect((await read("bob", "cap://AdminService/Authors/101")).message?.error).toBeDefined();
   });
 
@@ -319,10 +323,24 @@ describe("opt-in: MCP Apps (issue #133)", () => {
     expect(res.message?.result).toMatchObject({
       contents: [{ mimeType: MIME, text: expect.stringContaining("Stock by genre") }],
     });
-    // Only UI linked from the caller's tools is served.
-    expect((await read("ui://bookshop/nothing.html")).message?.error).toMatchObject({
-      code: -32602,
+  });
+
+  test("a UI is listed and readable only for callers who see a tool that links to it", async () => {
+    const uri = "ui://bookshop/stock-report.html"; // AdminService.stockReport: admins only
+    const uris = async (who: Caller) =>
+      (
+        (await rpc(demo.POST, who, "resources/list")).message?.result?.resources as {
+          uri: string;
+        }[]
+      ).map((r) => r.uri);
+    expect(await uris("alice")).toContain(uri);
+    expect(
+      (await rpc(demo.POST, "alice", "resources/read", { uri })).message?.result,
+    ).toMatchObject({
+      contents: [{ uri, mimeType: MIME, text: expect.stringContaining("low on stock") }],
     });
+    expect(await uris("bob")).not.toContain(uri);
+    expect((await read(uri)).message?.error).toMatchObject({ code: -32602 });
   });
 });
 
@@ -428,12 +446,20 @@ describe("opt-in: completion", () => {
     expect(discover.message?.result?.capabilities).toHaveProperty("completions");
   });
 
-  test("resources without @mcp.completion, and callers who cannot read them, get no completions", async () => {
+  test("callers who cannot read a resource get no completions for it", async () => {
     // Bob cannot reach AdminService: there is no such template for him.
     expect(
       (await complete("bob", "cap://AdminService/Authors/{key}", "1")).message?.error,
     ).toBeDefined();
+  });
+
+  test("a resource without @mcp.completion completes nothing, and is no reason for the capability", async () => {
+    // CatalogService.Genres is a resource without @mcp.completion; it is all bob can read.
+    // With nothing to complete for him, the server does not offer completion/complete at all.
+    const res = await complete("bob", "cap://CatalogService/Genres/{key}", "1");
+    expect(res.message?.error).toMatchObject({ code: -32601 });
     const discover = await rpc(demo.POST, "bob", "server/discover");
+    expect(discover.message?.result?.capabilities).toHaveProperty("resources");
     expect(discover.message?.result?.capabilities).not.toHaveProperty("completions");
   });
 });

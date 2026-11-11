@@ -6,6 +6,7 @@ using {sap.capire.bookshop as my} from '../db/schema';
 //   - @mcp.resource on Authors: one record by key as cap://AdminService/Authors/<ID>
 //   - @mcp.completion on Authors:ID: completes that template's key
 //   - @mcp.prompts on the service
+//   - @mcp.ui on stockReport: an MCP App only admins can list or read
 //   - @mcp: false on AuditNotes, @cds.api.ignore on Genres.parent
 // Service-level @requires: only admins see or call anything here.
 /** Catalog maintenance for admins. */
@@ -40,6 +41,10 @@ service AdminService @(path: '/admin') {
 
   @mcp: false
   entity AuditNotes as projection on my.AuditNotes;
+
+  /** Books with less stock than the threshold. An MCP App only admins see (keeps its own tool). */
+  @mcp.ui: 'ui://bookshop/stock-report.html'
+  function stockReport(threshold : Integer) returns array of Books;
 }
 
 annotate AdminService.Books with {

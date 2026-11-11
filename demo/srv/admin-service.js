@@ -21,6 +21,10 @@ module.exports = class AdminService extends cds.ApplicationService {
       }
     });
 
+    this.on("stockReport", (req) =>
+      SELECT.from(Books).where({ stock: { "<": req.data.threshold ?? 5 } }),
+    );
+
     return super.init();
   }
 };

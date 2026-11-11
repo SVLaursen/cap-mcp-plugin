@@ -25,10 +25,11 @@ you can also run it with `npm run demo` from the repo root (OData at http://loca
 | Draft-enabled writes                                      | `OrdersService.Orders`                                                                                         |
 | Draft activation handler (`before SAVE`)                  | `OrdersService.Orders`: numbers new orders (`orderNo`); `REASON_TOO_LONG` when `reason` exceeds 200 characters |
 | `@mcp.deepInsert`                                         | `OrdersService.Orders.items`                                                                                   |
-| `@mcp.resource`                                           | `AdminService.Authors`                                                                                         |
+| `@mcp.resource`                                           | `AdminService.Authors` (with key completion), `CatalogService.Genres` (without)                                |
 | `@mcp.prompts`                                            | `AdminService` (`restock-plan`)                                                                                |
 | `@mcp.ui` (MCP Apps, issue #133)                          | `CatalogService.bookCard` → `app/mcp-apps/book-card.html`                                                      |
 | `cds.on('mcp:apps')` hook (UI from code)                  | `CatalogService.stockByGenre` → `ui://bookshop/stock-chart.html`, registered in `server.js`                    |
+| `@mcp.ui` on an admin-only operation (UI visibility)      | `AdminService.stockReport` → `app/mcp-apps/stock-report.html`                                                  |
 | `@mcp.elicit` (confirmation)                              | `OrdersService.Orders.cancel`                                                                                  |
 | `@mcp.completion`                                         | `AdminService.Authors:ID` (completes the `cap://AdminService/Authors/{key}` template)                          |
 | `@mcp.describe`                                           | `CatalogService`                                                                                               |

@@ -3,7 +3,7 @@ using {sap.capire.bookshop as my} from '../db/schema';
 // MCP exposure (v2): `@mcp` on the service gives the read-only baseline:
 //   - query + get for Books, Authors, Genres
 //   - all functions (stockByGenre, bookCard)
-// Opt-ins exercised here: @mcp.describe, @mcp on an action, @mcp.ui, @mcp.omit.
+// Opt-ins exercised here: @mcp.describe, @mcp on an action, @mcp.ui, @mcp.resource, @mcp.omit.
 // Deliberately NOT exposed: the `restock` action (no @mcp), Authors.email and Books.costPrice.
 /** Browse the bookshop catalog and place orders. */
 @mcp
@@ -24,7 +24,9 @@ service CatalogService @(path: '/browse') {
   @readonly
   entity Authors as projection on my.Authors;
 
+  /** Genres, also single-record resources (without key completion). */
   @readonly
+  @mcp.resource
   entity Genres  as projection on my.Genres;
 
   /** Leave feedback. No key: MCP offers query and create only. */
