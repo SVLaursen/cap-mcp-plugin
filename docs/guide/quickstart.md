@@ -50,6 +50,33 @@ and 2025-era clients alike, without sessions.
   ones CAP would let _that user_ call (`@requires`, `@restrict`), so log in as the user you
   want to test.
 
+### Clients that only speak stdio
+
+Some desktop clients only start local processes and talk to them over stdio. The plugin has no
+stdio command of its own (cds-dk does not let plugins add a `cds mcp` command, and stdio has no
+authentication). Run the app as usual and let a bridge such as the community package
+[`mcp-remote`](https://www.npmjs.com/package/mcp-remote) forward stdio to the HTTP endpoint:
+
+```json
+{
+  "mcpServers": {
+    "bookshop": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "http://localhost:4004/mcp",
+        "--header",
+        "Authorization: Basic YWxpY2U6YWxpY2U="
+      ]
+    }
+  }
+}
+```
+
+Keep `cds watch` running while the client uses it. The header logs the bridge in as a mocked user
+(here `alice:alice`, base64-encoded); leave it out with `dummy` auth. CAP authenticates the bridge
+like any other HTTP client, so the client sees exactly what that user may use.
+
 ## 4. Opt in to more
 
 Each of these needs its own annotation (docs/annotations.md has the full list):

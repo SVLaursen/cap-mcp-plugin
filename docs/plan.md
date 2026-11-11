@@ -40,7 +40,7 @@ you need to build v2.
 ## Should-haves (P1), 2.x
 
 Draft-aware writes · multitenancy and extensibility · compact generic tool mode
-(`@mcp.compact`) · `cds add mcp`, stdio `cds mcp`, startup exposure report · confirmation via
+(`@mcp.compact`) · `cds add mcp`, stdio via a bridge (no `cds mcp`, decided in M6), startup exposure report · confirmation via
 MRTR (`@mcp.elicit`) · argument completion (`@mcp.completion`) · structured CAP errors ·
 OpenTelemetry and audit logging · resources as single records with `resource_link`.
 

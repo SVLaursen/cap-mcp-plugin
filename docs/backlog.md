@@ -91,7 +91,7 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 - [x] Startup report groups a diagnostic that CAP propagated to several projections (one typo in a db entity is reported once per projection today)
 - [x] Startup report: say when an exposed definition has a doc comment in the source but `cdsc.docs` is off, and how to turn it on (ADR 0011)
 - [x] `cds add mcp` facet
-- [ ] `cds mcp` stdio entry point
+- [x] `cds mcp` stdio entry point: not built (maintainer decision). Documented instead: `cds watch` plus a bridge such as `mcp-remote` (docs/guide/quickstart.md). Rule for any future stdio entry point: anonymous by default, `--user <id>` only from `cds.requires.auth.users` with mocked/basic auth, refused in production (docs/architecture.md, stdio)
 - [x] Config keys finalised in `docs/annotations.md` (camelCase, via `cds.env` only)
 - [x] `cds build` copies the `instructions` file into the deployed app (v1 parity, `docs/v1-reference.md`)
 - [x] v1 shim: map v1 annotations and config, emit `V1_ANNOTATION` / `V1_DEFAULT_CHANGED`

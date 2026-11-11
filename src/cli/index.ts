@@ -5,7 +5,8 @@ import type { Diagnostic, FieldSpec, UserLike } from "../types";
  * cli (milestone M6)
  *
  * - `cds add mcp`: adds the dependency, `@mcp` on the chosen service, and an mcp config block.
- * - stdio entry point for local desktop clients.
+ * - `cds build` task for the instructions file (cli/build.ts).
+ * - No stdio entry point: stdio clients use a bridge to /mcp (docs/architecture.md, stdio).
  * - Startup exposure report: "serving N tools, M resources, P prompts at /mcp" plus every
  *   Diagnostic from the model reader and the registry.
  */
