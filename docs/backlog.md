@@ -83,7 +83,7 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 - [x] Completion: `@mcp.completion` completes `@mcp.resource` key templates; MCP has no tool-argument completion, so parameters get a diagnostic _(completion)_
 - [x] Auth matrix: XSUAA/IAS × secret/certificate, IAS-only + AMS _(`auth-matrix.test.ts`; the AMS row adds roles the way AMS's middleware does, without `@sap/ams` policy evaluation, which needs `@sap/ams-dev`)_
 - [x] Multitenant XSUAA: opt-in `cds.env.mcp.tenantHostPattern` maps the request host to the subscriber's authorization server (`https://<subdomain>.<uaadomain>`); without it, or without a match, the metadata names `credentials.url` (M4 review)
-- [ ] Review: run the `reviewer` agent on M5
+- [x] Review: run the `reviewer` agent on M5 (fixed: confirmation bound to the call via `requestState`, no internal error text outside tools/call, real tests for UI visibility and completion absence, key cast and no wrong `total` in completion, elicit form fields only, empty `@mcp.elicit`, no-store auth metadata, prompt rendering, symlinks; left as accepted in ADR 0012: UI links for clients without MCP Apps support)
 
 ## M6 — Developer experience and v1 compatibility
 
