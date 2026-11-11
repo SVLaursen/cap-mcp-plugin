@@ -134,3 +134,7 @@ The [annotation reference](annotations.md) lists every annotation. Then:
 - [Resources, prompts, confirmation and completion](features.md)
 - [MCP Apps](mcp-apps.md): interactive UI for a tool's result
 - [Authentication and production](production.md): read this before you deploy
+
+## Next
+
+To see every feature at work, take [a tour of the demo app](demo-tour.md).

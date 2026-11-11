@@ -92,7 +92,12 @@ export function activate(cds: CdsLike): void {
       apps,
       services: cds.services,
       translate: (key, locale, args) => {
-        const text = cds.i18n.messages.at(key, locale, args);
+        // at(key, args) when there is no locale: CAP reads a non-string 2nd argument as args, so
+        // at(key, undefined, args) would drop the arguments ("Only {1} in stock").
+        const text = locale
+          ? cds.i18n.messages.at(key, locale, args)
+          : // cds-types only declare at(key, locale?, args?); the runtime also takes at(key, args).
+            (cds.i18n.messages.at as (key: string, args: unknown) => unknown)(key, args);
         return typeof text === "string" ? text : undefined;
       },
       log,

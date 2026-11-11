@@ -45,7 +45,10 @@
     "mcp": {
       "allowedOrigins": [
         "http://localhost:6274"
-      ]
+      ],
+      "instructions": {
+        "file": "mcp-instructions.md"
+      }
     }
   }
 }

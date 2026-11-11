@@ -32,8 +32,9 @@ describe("executor: operations", () => {
 
   test("CAP error messages are translated as over OData, in the caller's language", async () => {
     const seen: string[] = [];
-    for (const language of ["en", "de"]) {
-      const headers = { "accept-language": language };
+    // undefined: no Accept-Language at all, so CAP's default locale applies.
+    for (const language of ["en", "de", undefined]) {
+      const headers: Record<string, string> = language ? { "accept-language": language } : {};
       const odataOrder = await demo.POST(
         "/browse/submitOrder",
         { book: 201, quantity: 5000 },

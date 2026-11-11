@@ -174,6 +174,7 @@ replaces `auth: 'none'`. See [Migrating from v1](docs/guide/migrating-from-v1.md
      these relative links also work on npmjs.com (or make them absolute). -->
 
 - [Getting started](docs/guide/getting-started.md)
+- [A tour of the demo app](docs/guide/demo-tour.md)
 - [Annotation reference](docs/guide/annotations.md)
 - [Resources, prompts, confirmation and completion](docs/guide/features.md)
 - [MCP Apps](docs/guide/mcp-apps.md)
