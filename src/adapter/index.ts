@@ -37,9 +37,9 @@ import { promptArgsSchema } from "../schema-mapper";
 import type { ExposureSpec, PromptSpec, ResourceSpec, ToolSpec, UserLike } from "../types";
 
 /**
- * adapter (milestone M4)
+ * adapter
  *
- * The MCP protocol edge: JSON-RPC over Streamable HTTP (and stdio, M6), built on the MCP
+ * The MCP protocol edge: JSON-RPC over Streamable HTTP, built on the MCP
  * TypeScript SDK v2 (@modelcontextprotocol/server), which implements the 2026-07-28 spec.
  *
  * Contract:

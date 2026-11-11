@@ -100,7 +100,7 @@ export class ConfirmationRequired extends ToolError {
 type Args = Record<string, unknown>;
 
 /**
- * executor (milestone M3)
+ * executor
  *
  * Turns a validated tool call into CQN objects and runs it through the CAP service.
  *
@@ -193,12 +193,8 @@ export class Executor {
   /**
    * Values for the `{key}` of an @mcp.resource template whose key has @mcp.completion: keys
    * that start with `value`, in key order, as the caller may read them (CAP applies @restrict).
-   * MCP returns at most 100; one more is fetched so the SDK can say `hasMore`.
-   */
-  /**
-   * Keys of an @mcp.resource entity starting with `value`, for completion/complete: at most
-   * MCP's 100, and never more than the entity's query limits, since CAP pages this query too.
-   * When CAP's max is below 101 a full page cannot show that more exist, so those are counted.
+   * At most MCP's 100, and never more than the entity's query limits, since CAP pages this query
+   * too. One more than kept shows `hasMore`; when CAP's max is below 101 a full page is counted.
    */
   async completeKey(
     entityName: string,
@@ -420,7 +416,8 @@ export class Executor {
 
   /**
    * What a service exposes to this caller: its reachable entities (fields without @mcp.omit,
-   * which never reach the spec) and operations. Nothing outside the service (v1 finding #3).
+   * which never reach the spec) and operations. Nothing outside the service: an agent must not
+   * learn about entities it cannot use.
    */
   private async describe(
     name: string,
@@ -564,7 +561,7 @@ export class Executor {
         limit: { rows: { val: top }, offset: { val: offset } },
       },
     })) as Args[];
-    // A separate count: no limit, offset or order (v1 finding #6).
+    // A separate count, without limit, offset or order: counting the page would give its size.
     const counted = (await service.run({
       SELECT: {
         one: true,

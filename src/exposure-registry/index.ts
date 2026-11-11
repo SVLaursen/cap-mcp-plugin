@@ -25,7 +25,7 @@ import type {
 } from "../types";
 
 /**
- * exposure-registry (milestone M2)
+ * exposure-registry
  *
  * Builds the tool list from an ExposureSpec and filters it per request.
  *
@@ -343,7 +343,8 @@ function operationTool(service: ServiceSpec, op: OperationSpec, bound?: EntitySp
   };
 }
 
-/** `<Service>_describe`: what this service exposes over MCP, and nothing else (v1 finding #3). */
+/** `<Service>_describe`: what this service exposes over MCP, and nothing else: no other
+ * service's entities, no db-layer names, no omitted fields. */
 function describeTool(service: ServiceSpec): ToolSpec {
   return {
     name: `${shortName(service.name)}_describe`,

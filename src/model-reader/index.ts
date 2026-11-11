@@ -14,7 +14,7 @@ import type {
 import { isMappedType } from "../schema-mapper";
 
 /**
- * model-reader (milestone M1)
+ * model-reader
  *
  * Turns a compiled, linked CSN plus @mcp annotations into an ExposureSpec.
  *
@@ -904,7 +904,6 @@ function writtenAt(name: string, key: string, ctx: Context, element?: string): s
   return element ? `${at}:${element}` : at;
 }
 
-/** Unknown and v1 keys on one definition, each with its diagnostic. */
 /** The V1_ANNOTATION message for a v1 key: what the shim mapped it to, or why it is dropped. */
 function v1Message(key: string, value: unknown, where: V1Where): string | undefined {
   const { target } = where;

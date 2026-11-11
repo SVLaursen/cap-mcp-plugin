@@ -8,13 +8,13 @@ import type {
 } from "../types";
 
 /**
- * schema-mapper (milestone M1)
+ * schema-mapper
  *
  * Maps FieldSpecs to JSON Schema 2020-12 for tool inputs and outputs.
  *
  * Contract:
  * - Pure, no dependencies.
- * - One lookup table from CDS builtin to JSON Schema; no string-suffix tricks like v1's "Optional".
+ * - One lookup table from CDS builtin to JSON Schema; no type names matched by suffix.
  * - Carries constraints: enum, maxLength (length), minimum/maximum (@assert.range),
  *   precision-safe Decimal/Int64 as strings, format for Date/Time/DateTime/Timestamp/UUID.
  * - Readonly fields never appear in write input schemas. Keys are required on get/update/delete.

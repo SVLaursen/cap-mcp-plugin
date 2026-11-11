@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 /**
- * `cds add mcp` (M6): `@mcp` on the chosen services, the dependency, and an mcp config block.
+ * `cds add mcp`: `@mcp` on the chosen services, the dependency, and an mcp config block.
  *
  * The plan is pure (what to write); `mcpFacet` runs it inside cds-dk, which hands plugins its
  * `cds.add.Plugin` base class. Nothing already configured is overwritten.

@@ -153,7 +153,7 @@ export function metadataHandler(options: AuthOptions): RequestHandler {
  * Streamable HTTP: servers MUST validate Origin (DNS rebinding). A request without Origin (a
  * native client, a server-side bridge) passes; with one, it must be listed in
  * `cds.env.mcp.allowedOrigins`. There is no implicit "own" origin: it would have to come from the
- * Host header, which a DNS-rebinding page controls (maintainer decision, M7 conformance).
+ * Host header, which a DNS-rebinding page controls.
  */
 export function checkOrigin(allowed: () => string[] | undefined): RequestHandler {
   return (req, res, next) => {

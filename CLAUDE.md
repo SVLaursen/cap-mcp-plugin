@@ -57,7 +57,7 @@ Demo users (mocked auth): `alice/alice` (admin), `bob/bob` (no roles), `carol/ca
 
 ```
 src/
-  index.ts              activate(cds): wires the plugin into CAP (placeholder until M4)
+  index.ts              activate(cds): wires the plugin into CAP
   types.ts              ExposureSpec, EntitySpec, ToolSpec, … — the module contract
   model-reader/         M1  CSN + @mcp → ExposureSpec (pure)
   schema-mapper/        M1  FieldSpec → JSON Schema 2020-12 (pure)
