@@ -192,7 +192,7 @@ v2 reads v1 annotations through a shim, so a v1 app keeps working while you move
 annotation is an explicit opt-in, so the shim maps it to its v2 equivalent and reports a
 `V1_ANNOTATION` warning saying what to write instead. v1 config never switches anything on in v2
 (ADR 0004): what the app got from it, or from a v1 default, and no longer gets is a
-`V1_DEFAULT_CHANGED` warning naming the annotation that keeps it. Both show in the startup report.
+`V1_DEFAULT_CHANGED` warning naming the annotation that keeps it. Both show in the startup report. `docs/v1-compatibility.md` walks through v1's own demo app, tool by tool.
 
 | v1                                                       | v2 (what the shim does)                                                                                                                |
 | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
