@@ -371,9 +371,13 @@ function searchColumns(def: Definition, ctx: Context, depth = 0): string[] {
 
 /** The entity a projection or view selects from, if any. */
 function sourceOf(def: Definition, ctx: Context): Definition | undefined {
-  const from = def.projection?.from ?? def.query?.SELECT?.from;
-  const ref = from?.ref?.[0];
-  return typeof ref === "string" ? ctx.definitions[ref] : undefined;
+  const from = sourceName(def);
+  return from ? ctx.definitions[from] : undefined;
+}
+
+function sourceName(def: Definition): string | undefined {
+  const ref = (def.projection?.from ?? def.query?.SELECT?.from)?.ref?.[0];
+  return typeof ref === "string" ? ref : undefined;
 }
 
 /**
@@ -620,56 +624,102 @@ function bound(value: unknown): number | undefined {
 /**
  * Report unknown and v1 `@mcp.*` keys anywhere in the model, exposed or not, so a typo is never
  * a silent no-op. Targets: `Def`, `Def:element`, `Def.boundOp`, `Op:param`.
+ *
+ * CAP copies an entity's (and its elements') annotations to every projection of it. A key
+ * copied that way is reported once, where it was written, naming the copies.
  */
 function checkAnnotations(ctx: Context): void {
+  const reported = new Map<string, Diagnostic>();
+  const copies = new Map<string, string[]>();
+  const check = (target: string, def: Definition, writtenAt?: (key: string) => string) => {
+    for (const [key, diagnostic] of checkKeys(target, def)) {
+      const origin = writtenAt?.(key) ?? target;
+      if (origin === target) {
+        ctx.diagnostics.push(diagnostic);
+        reported.set(`${target} ${key}`, diagnostic);
+      } else copies.set(`${origin} ${key}`, [...(copies.get(`${origin} ${key}`) ?? []), target]);
+    }
+  };
   for (const [name, def] of Object.entries(ctx.definitions)) {
     if (def.kind === "entity" && isGenerated(name, def, ctx.definitions)) continue;
-    checkKeys(ctx, name, def);
+    check(name, def, (key) => writtenAt(name, key, ctx));
     for (const [element, el] of Object.entries(def.elements ?? {})) {
-      checkKeys(ctx, `${name}:${element}`, el);
+      check(`${name}:${element}`, el, (key) => writtenAt(name, key, ctx, element));
     }
     // Only entities have bound actions; a linked service also lists its unbound ones here.
     const bound = def.kind === "entity" ? def.actions : undefined;
     for (const [action, op] of Object.entries(bound ?? {})) {
-      checkKeys(ctx, `${name}.${action}`, op);
+      check(`${name}.${action}`, op);
       for (const [param, p] of Object.entries(op.params ?? {})) {
-        checkKeys(ctx, `${name}.${action}:${param}`, p);
+        check(`${name}.${action}:${param}`, p);
       }
     }
     for (const [param, p] of Object.entries(def.params ?? {})) {
-      checkKeys(ctx, `${name}:${param}`, p);
+      check(`${name}:${param}`, p);
     }
+  }
+  for (const [at, targets] of copies) {
+    const diagnostic = reported.get(at);
+    if (diagnostic) diagnostic.message += ` (CAP copied it to ${targets.sort().join(", ")})`;
   }
 }
 
-function checkKeys(ctx: Context, target: string, def: Definition): void {
+/**
+ * Where an annotation on `name` (or its `element`) was written: the furthest entity down the
+ * projection chain that has the same value, so a copy is traced back to its origin.
+ */
+function writtenAt(name: string, key: string, ctx: Context, element?: string): string {
+  const value = (def: Definition | undefined) =>
+    JSON.stringify((element ? def?.elements?.[element] : def)?.[key as `@${string}`]);
+  let at = name;
+  for (let depth = 0; depth < 32; depth++) {
+    const from = sourceName(ctx.definitions[at] ?? {});
+    if (!from || value(ctx.definitions[from]) !== value(ctx.definitions[at])) break;
+    at = from;
+  }
+  return element ? `${at}:${element}` : at;
+}
+
+/** Unknown and v1 keys on one definition, each with its diagnostic. */
+function checkKeys(target: string, def: Definition): [string, Diagnostic][] {
+  const found: [string, Diagnostic][] = [];
   for (const key of Object.keys(def)) {
     if (key !== "@mcp" && !key.startsWith("@mcp.")) continue;
     const v1 = V1[key];
     if (v1) {
-      ctx.diagnostics.push({
-        level: "warn",
-        code: "V1_ANNOTATION",
-        target,
-        message: `${key} is a v1 annotation: ${v1}`,
-      });
+      found.push([
+        key,
+        {
+          level: "warn",
+          code: "V1_ANNOTATION",
+          target,
+          message: `${key} is a v1 annotation: ${v1}`,
+        },
+      ]);
     } else if (key === "@mcp.resource" && Array.isArray(def[key])) {
-      ctx.diagnostics.push({
-        level: "warn",
-        code: "V1_ANNOTATION",
-        target,
-        message:
-          "@mcp.resource with a list of query options is v1; use the query tool. In v2, @mcp.resource means single records by key",
-      });
+      found.push([
+        key,
+        {
+          level: "warn",
+          code: "V1_ANNOTATION",
+          target,
+          message:
+            "@mcp.resource with a list of query options is v1; use the query tool. In v2, @mcp.resource means single records by key",
+        },
+      ]);
     } else if (!KNOWN.has(key)) {
-      ctx.diagnostics.push({
-        level: "warn",
-        code: "UNKNOWN_ANNOTATION",
-        target,
-        message: `Unknown annotation ${key} on ${target}; it has no effect`,
-      });
+      found.push([
+        key,
+        {
+          level: "warn",
+          code: "UNKNOWN_ANNOTATION",
+          target,
+          message: `Unknown annotation ${key} on ${target}; it has no effect`,
+        },
+      ]);
     }
   }
+  return found;
 }
 
 function checkTypes(ctx: Context, owner: string, fields: FieldSpec[]): void {

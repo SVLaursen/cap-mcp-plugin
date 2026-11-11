@@ -88,7 +88,7 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 ## M6 — Developer experience and v1 compatibility
 
 - [x] Startup exposure report and diagnostics output (`cli`)
-- [ ] Startup report groups a diagnostic that CAP propagated to several projections (one typo in a db entity is reported once per projection today)
+- [x] Startup report groups a diagnostic that CAP propagated to several projections (one typo in a db entity is reported once per projection today)
 - [ ] Startup report: say when an exposed definition has a doc comment in the source but `cdsc.docs` is off, and how to turn it on (ADR 0011)
 - [ ] `cds add mcp` facet
 - [ ] `cds mcp` stdio entry point

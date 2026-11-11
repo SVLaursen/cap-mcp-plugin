@@ -124,7 +124,9 @@ argument.
 The model reader and the exposure registry report these. When CAP has served the app, the plugin
 logs a startup report on the `mcp` channel: `serving N tools, M resources, P prompts at /mcp`
 (everything the app exposes, counted for a user with every role), then each diagnostic as
-`CODE target: message`, errors first, at its own level. Targets are written
+`CODE target: message`, errors first, at its own level. An unknown or v1 key that CAP copied to
+projections is reported once, where it was written, with the copies listed in its message.
+Targets are written
 `Def`, `Def:element`, `Entity.boundOperation` or `Operation:param`.
 
 | Code                           | Level | When                                                                                                                                                                                                                                                                                                                                                         | Effect                                                                                     |

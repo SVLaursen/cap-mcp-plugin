@@ -956,6 +956,44 @@ describe("model-reader: diagnostics", () => {
     ]);
   });
 
+  test("an unknown key CAP copied to projections is reported once, where it was written, naming the copies", () => {
+    const csn = compileSnippet(`
+      namespace db;
+      @mcp.descibe entity Books { key ID: Integer; @mcp.hnit title: String; }
+      @mcp service A { entity Books as projection on db.Books; }
+      service B { entity Books as projection on A.Books; }
+    `);
+    const { diagnostics } = readModel(csn);
+    expect(diagnostics).toEqual([
+      {
+        level: "warn",
+        code: "UNKNOWN_ANNOTATION",
+        target: "db.Books",
+        message:
+          "Unknown annotation @mcp.descibe on db.Books; it has no effect (CAP copied it to db.A.Books, db.B.Books)",
+      },
+      {
+        level: "warn",
+        code: "UNKNOWN_ANNOTATION",
+        target: "db.Books:title",
+        message:
+          "Unknown annotation @mcp.hnit on db.Books:title; it has no effect (CAP copied it to db.A.Books:title, db.B.Books:title)",
+      },
+    ]);
+  });
+
+  test("a key written again on a projection with a different value is its own diagnostic", () => {
+    const csn = compileSnippet(`
+      namespace db;
+      @mcp.descibe: 'a' entity Books { key ID: Integer; }
+      @mcp service A { @mcp.descibe: 'b' entity Books as projection on db.Books; }
+    `);
+    expect(codes(readModel(csn).diagnostics)).toEqual([
+      { level: "warn", code: "UNKNOWN_ANNOTATION", target: "db.A.Books" },
+      { level: "warn", code: "UNKNOWN_ANNOTATION", target: "db.Books" },
+    ]);
+  });
+
   test("v1-only annotations (@mcp.wrap.tools, @mcp.usePrimaryKey) yield V1_ANNOTATION", () => {
     const csn = compileSnippet(`
       @mcp service S {
