@@ -57,6 +57,7 @@ annotate AdminService.Authors with {
   email @mcp.omit;
 };
 
-annotate AdminService.Genres with {
+// CAP's page size; in this @mcp.compact service, AdminService_query applies it per entity.
+annotate AdminService.Genres with @cds.query.limit: { default: 1, max: 2 } {
   parent @cds.api.ignore;
 };

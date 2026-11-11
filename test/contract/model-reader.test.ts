@@ -844,6 +844,32 @@ describe("model-reader: row limits (CAP's @cds.query.limit)", () => {
     ).toEqual({ "S.A": { defaultRows: 20, maxRows: 30 }, "S.B": { defaultRows: 20, maxRows: 50 } });
   });
 
+  test("the entity's bare @cds.query.limit (its default) wins over the service's default", () => {
+    expect(
+      limits(`
+        @mcp @cds.query.limit: { default: 20, max: 50 } service S {
+          @cds.query.limit: 5 entity A { key ID: Integer; }
+        }
+      `),
+    ).toEqual({ "S.A": { defaultRows: 5, maxRows: 50 } });
+  });
+
+  test("a bad value on the service is reported once, on the service", () => {
+    const { diagnostics } = read(`
+      @mcp @cds.query.limit: 'ten' service S {
+        entity A { key ID: Integer; }
+        entity B { key ID: Integer; }
+      }
+    `);
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: "INVALID_ANNOTATION_VALUE",
+        target: "S",
+        message: expect.stringContaining("@cds.query.limit must be"),
+      }),
+    ]);
+  });
+
   test("max 0 is CAP's 'no limit', also over the service's", () => {
     expect(
       limits(`

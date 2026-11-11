@@ -190,11 +190,13 @@ here.
 
 **Row limits are CAP's too.** CAP's paging applies to MCP's queries as to OData's: `@cds.query.limit:
 { default, max }` on an entity (else its service) and the global `cds.query.limit.max`. A query
-tool advertises and uses the lower of CAP's and these limits, so an agent asking for more than CAP
-serves gets an `INVALID_ARGUMENT` instead of a silently shorter page. An entity's CAP `default`
-replaces `limits.defaultRows`; CAP's global `cds.query.limit.default` does not. The compact
-`<Service>_query` tool advertises these limits and enforces each entity's own. Operations that
-return arrays are not paged, as over OData.
+tool advertises and uses the lower of CAP's limits and these, so an agent asking for more than CAP
+serves gets an `INVALID_ARGUMENT` instead of a silently shorter page. The entity's (or its
+service's) CAP `default` replaces `limits.defaultRows`; CAP's global `cds.query.limit.default`
+does not, and a CAP `default: 0` counts as unset. MCP can be stricter than OData but never looser:
+the global `cds.query.limit.max` caps every entity here, even one whose own `max` is higher. The
+compact `<Service>_query` tool advertises these limits and enforces each entity's own. Resource
+key completion stays within them too. Operations that return arrays are not paged, as over OData.
 
 ## Migrating from v1
 

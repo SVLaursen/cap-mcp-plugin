@@ -156,14 +156,21 @@ describe("resource key completion", () => {
       @mcp.resource entity Ones { key ID: Integer @mcp.completion; }
       @mcp.resource entity Plain { key ID: Integer; }
       @mcp.resource entity Codes { key code: String @mcp.completion; }
+      @cds.query.limit.max: 20
+      @mcp.resource entity Paged { key ID: Integer @mcp.completion; }
     }`),
   );
-  const rows = (n: number): ServiceLike & { query?: unknown } => {
+  /** CAP with n matching keys, paging at max rows as its paging handler would. */
+  const rows = (n: number, max = Infinity): ServiceLike & { query?: unknown } => {
     const service: ServiceLike & { query?: unknown } = {
       name: "R",
       run: async (q) => {
+        const select = (q as { SELECT: { one?: boolean; limit?: { rows: { val: number } } } })
+          .SELECT;
+        if (select.one) return { total: n };
         service.query = q;
-        return Array.from({ length: n }, (_, i) => ({ ID: 100 + i }));
+        const asked = Math.min(select.limit?.rows.val ?? Infinity, max);
+        return Array.from({ length: Math.min(n, asked) }, (_, i) => ({ ID: 100 + i }));
       },
       send: async () => undefined,
     };
@@ -173,7 +180,7 @@ describe("resource key completion", () => {
   test("asks CAP for keys starting with the value, in key order, one more than MCP's 100", async () => {
     const service = rows(3);
     const done = await new Executor(model.spec).completeKey("R.Ones", "10", service);
-    expect(done).toEqual(["100", "101", "102"]);
+    expect(done).toEqual({ values: ["100", "101", "102"], hasMore: false });
     expect(service.query).toEqual({
       SELECT: {
         from: { ref: ["R.Ones"] },
@@ -202,14 +209,26 @@ describe("resource key completion", () => {
   test("an empty value lists the first keys, without a filter", async () => {
     const service = rows(101);
     const done = await new Executor(model.spec).completeKey("R.Ones", "", service);
-    // The SDK keeps 100 and says hasMore when there are 101.
-    expect(done).toHaveLength(101);
+    expect(done.values).toHaveLength(100);
+    expect(done.hasMore).toBe(true);
     expect((service.query as { SELECT: { where?: unknown } }).SELECT.where).toBeUndefined();
+  });
+
+  test("under CAP's own max (@cds.query.limit.max: 20), a full page is counted, not silently cut", async () => {
+    const more = await new Executor(model.spec).completeKey("R.Paged", "", rows(30, 20));
+    expect(more.values).toHaveLength(20);
+    expect(more.hasMore).toBe(true);
+    const exact = await new Executor(model.spec).completeKey("R.Paged", "", rows(20, 20));
+    expect(exact).toEqual({ values: expect.any(Array), hasMore: false });
+    expect(exact.values).toHaveLength(20);
   });
 
   test("entities without key completion complete nothing, and CAP is not asked", async () => {
     const service = rows(3);
-    expect(await new Executor(model.spec).completeKey("R.Plain", "1", service)).toEqual([]);
+    expect(await new Executor(model.spec).completeKey("R.Plain", "1", service)).toEqual({
+      values: [],
+      hasMore: false,
+    });
     expect(service.query).toBeUndefined();
   });
 });

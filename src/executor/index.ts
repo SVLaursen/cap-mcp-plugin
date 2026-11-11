@@ -195,20 +195,45 @@ export class Executor {
    * that start with `value`, in key order, as the caller may read them (CAP applies @restrict).
    * MCP returns at most 100; one more is fetched so the SDK can say `hasMore`.
    */
-  async completeKey(entityName: string, value: string, service: ServiceLike): Promise<string[]> {
+  /**
+   * Keys of an @mcp.resource entity starting with `value`, for completion/complete: at most
+   * MCP's 100, and never more than the entity's query limits, since CAP pages this query too.
+   * When CAP's max is below 101 a full page cannot show that more exist, so those are counted.
+   */
+  async completeKey(
+    entityName: string,
+    value: string,
+    service: ServiceLike,
+  ): Promise<{ values: string[]; hasMore: boolean }> {
     const entity = this.entities.get(entityName);
     const key = entity?.keys.length === 1 ? entity.keys[0] : undefined;
-    if (!entity?.resource || !key?.completion) return [];
-    const rows = (await service.run({
+    if (!entity?.resource || !key?.completion) return { values: [], hasMore: false };
+    const from = { ref: [entity.name] };
+    const where = value ? [{ func: "startswith", args: [keyText(key), { val: value }] }] : [];
+    const wanted = Math.min(MAX_COMPLETIONS, queryLimits(entity, this.limits).maxRows);
+    // One more than we keep shows there are more, if CAP serves that many.
+    const asked = wanted === MAX_COMPLETIONS ? wanted + 1 : wanted;
+    const rows = ((await service.run({
       SELECT: {
-        from: { ref: [entity.name] },
+        from,
         columns: [ref(key.name)],
-        ...(value && { where: [{ func: "startswith", args: [keyText(key), { val: value }] }] }),
+        ...(where.length && { where }),
         orderBy: [{ ...ref(key.name), sort: "asc" }],
-        limit: { rows: { val: MAX_COMPLETIONS + 1 } },
+        limit: { rows: { val: asked } },
       },
-    })) as Args[] | undefined;
-    return (rows ?? []).map((row) => String(row[key.name]));
+    })) ?? []) as Args[];
+    const values = rows.slice(0, wanted).map((row) => String(row[key.name]));
+    if (rows.length > wanted) return { values, hasMore: true };
+    if (asked > wanted || rows.length < wanted) return { values, hasMore: false };
+    const counted = (await service.run({
+      SELECT: {
+        one: true,
+        from,
+        columns: [{ func: "count", args: ["*"], as: "total" }],
+        ...(where.length && { where }),
+      },
+    })) as { total: number | string } | undefined;
+    return { values, hasMore: Number(counted?.total ?? 0) > wanted };
   }
 
   private dispatch(tool: ToolSpec, args: Args, service: ServiceLike): Promise<ToolResult> {

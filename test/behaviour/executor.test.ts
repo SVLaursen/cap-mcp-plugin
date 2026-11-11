@@ -219,6 +219,16 @@ describe("executor: reads", () => {
       expect(second.nextCursor).toBeUndefined();
     });
 
+    test("the compact query tool applies each entity's own (AdminService.Genres: default 1, max 2)", async () => {
+      const query = (args: Record<string, unknown>) =>
+        call("alice", "AdminService_query", { entity: "AdminService.Genres", ...args });
+      expect(page(await query({})).rows).toHaveLength(1);
+      expect(page(await query({ top: 2 })).rows).toHaveLength(2);
+      const refused = await query({ top: 3 });
+      expectInvalidArgument(refused);
+      expect(refused.text).toContain("from 1 to 2");
+    });
+
     test("top up to CAP's max is served; above it is refused, not silently cut", async () => {
       expect(page(await call("bob", "CatalogService_Authors_query", { top: 3 })).rows).toHaveLength(
         3,

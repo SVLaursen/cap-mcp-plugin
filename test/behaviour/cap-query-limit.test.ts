@@ -4,12 +4,13 @@ import { callTool, listTools } from "../helpers/mcp";
 
 /**
  * CAP's global row limit (`cds.query.limit.max`) caps the query tools' `top` the way it caps
- * OData's `$top`. Set before the demo is served, as an app's package.json would.
+ * OData's `$top`: the tools advertise it and the executor asks for no more. Set after bootDemo()
+ * registers the boot and before it runs (beforeAll), as an app's package.json would.
  */
 const demo = bootDemo();
 (cds.env as unknown as { query: { limit: Record<string, number> } }).query.limit.max = 4;
 
-test("the global max caps what the tools advertise and what CAP returns", async () => {
+test("the global max caps what the tools advertise and the page they ask CAP for", async () => {
   const tools = (await listTools(demo.POST, "bob")).message?.result?.tools as {
     name: string;
     inputSchema: { properties: { top: unknown } };

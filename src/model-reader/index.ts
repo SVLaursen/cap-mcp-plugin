@@ -426,32 +426,42 @@ function readEntity(
         backlink: backlinkOf(element, el.on),
       })),
     search: searchColumns(def, ctx),
-    limits: rowLimits(name, def, ctx.definitions[service], ctx),
+    limits: rowLimits(name, def, service, ctx),
   };
 }
 
 /**
  * CAP's @cds.query.limit, read the way CAP's paging does (libx/_runtime/common/generic/paging.js):
- * `default` and `max` each from the entity, else from the service; the bare `@cds.query.limit`
- * is the default. A max of 0 is "no limit".
+ * `max` from the entity, else the service; the default from the entity's `default` or bare
+ * `@cds.query.limit`, else the service's. A max of 0 is "no limit"; a default of 0 is unset.
  */
 function rowLimits(
   name: string,
   def: Definition,
-  service: Definition | undefined,
+  service: string,
   ctx: Context,
 ): EntitySpec["limits"] {
-  const pick = (key: `@${string}`): unknown =>
-    [def, service].map((d) => d?.[key]).find((v) => v !== undefined && v !== null);
-  const whole = (value: unknown, label: string): number | undefined => {
-    if (value === undefined) return undefined;
-    if (typeof value === "number" && Number.isInteger(value) && value >= 0) return value;
-    invalid(ctx, name, `${label} must be a whole number, not ${JSON.stringify(value)}; ignored`);
-    return undefined;
+  const own = (d: Definition | undefined, target: string) => {
+    const whole = (key: `@${string}`): number | undefined => {
+      const value = d?.[key];
+      if (value === undefined || value === null) return undefined;
+      if (typeof value === "number" && Number.isInteger(value) && value >= 0) return value;
+      const message = `${key} must be a whole number, not ${JSON.stringify(value)}; ignored`;
+      // A service's value is read for each of its entities: report it once.
+      if (!ctx.diagnostics.some((x) => x.target === target && x.message === message)) {
+        invalid(ctx, target, message);
+      }
+      return undefined;
+    };
+    return {
+      max: whole("@cds.query.limit.max"),
+      default: whole("@cds.query.limit.default") ?? whole("@cds.query.limit"),
+    };
   };
-  const max = whole(pick("@cds.query.limit.max"), "@cds.query.limit.max");
-  const fallback = pick("@cds.query.limit.default") ?? pick("@cds.query.limit");
-  const dflt = whole(fallback, "@cds.query.limit.default");
+  const entity = own(def, name);
+  const fromService = own(ctx.definitions[service], service);
+  const max = entity.max ?? fromService.max;
+  const dflt = entity.default ?? fromService.default;
   const defaultRows = dflt === 0 ? undefined : dflt;
   if (max === undefined && defaultRows === undefined) return undefined;
   return {

@@ -108,15 +108,18 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 - [ ] Set `repository`, `homepage` and `bugs` in package.json, the README's absolute links and the npm trusted-publisher entry once the repository is decided (maintainer: pinned, awaiting Gavdi)
 - [x] Review: run the `reviewer` agent on M7 (fixed: a stable release needs an explicit `stable` input and a `repository`, so `patch` from 2.0.0-alpha.x cannot publish 2.0.0 as `latest` by accident; pinned npm, no dependency cache in the release job, CI token read-only; the release hook runs coverage and conformance; lib/ built once per test run (two files raced) and cleaned before every build; no source maps pointing at unpublished src/; the package test boots an app and lists tools; the unused `zod` dependency removed; conformance script stops the demo on signals. Left as is: release-it publishes before it pushes (first run should be a prerelease, documented in release.yml); v1's workflow should publish with its own dist-tag before v2 takes `latest` (v1 repository))
 
-## 2.x (P1) and later (P2)
-
-Multitenancy and extensibility · structured errors polish · OpenTelemetry and audit logging ·
-long-running actions (tasks extension) · `subscriptions/listen` · binary resources ·
-file-based prompts · localized titles, descriptions and error messages (`{i18n>…}` texts are left out today; CAP error details carry codes only) · decide whether 4xx errors from remote services are passed to agents verbatim · entities with parameters (`entity P(p: Integer)`; exposed today without a way to pass `p`). Add tasks here when 2.0 is out.
+## After 2.0
 
 - [x] Query tools advertise and use CAP's row limits: `@cds.query.limit` (entity, then service) and `cds.query.limit`, capped by `cds.mcp.limits`. CAP already clamps MCP queries to them; the schema said 200/25 regardless, and CAP's `default` was never used _(`executor.test.ts` › reads)_
+- [x] Review: run the `reviewer` agent on it (fixed: CAP's default precedence, entity's bare value before the service's default; a bad service value reported once; key completion stays within CAP's max and reports `hasMore`; a compact-tool test and demo target. Left as is: MCP can be stricter than OData when the global max is below an entity's own, documented in docs/annotations.md)
 
 Decided against (maintainer, 2026-11-11):
 
 - **Per-tool row budgets** (`@mcp.limits`): CAP's `@cds.query.limit` already applies to MCP queries, the same limit as OData. Operations returning arrays stay uncapped, as over OData; a handler that can return a lot limits its own result.
 - **Call budgets** (rate limits per user and tool): left to the SAP AI Gateway in front of `/mcp`. Every call carries its tool in the `Mcp-Name` header for such a gateway.
+
+## 2.x (P1) and later (P2)
+
+Multitenancy and extensibility · structured errors polish · OpenTelemetry and audit logging ·
+long-running actions (tasks extension) · `subscriptions/listen` · binary resources ·
+file-based prompts · localized titles, descriptions and error messages (`{i18n>…}` texts are left out today; CAP error details carry codes only) · decide whether 4xx errors from remote services are passed to agents verbatim · entities with parameters (`entity P(p: Integer)`; exposed today without a way to pass `p`). Add tasks here when 2.0 is out.

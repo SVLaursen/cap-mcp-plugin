@@ -26,7 +26,6 @@ import { isProduction } from "./auth";
 import {
   ConfirmationRequired,
   Executor,
-  MAX_COMPLETIONS,
   ToolError,
   errorResult,
   renderPrompt,
@@ -411,15 +410,10 @@ function registerCompletion(
       return { completion: { values: [], hasMore: false } };
     }
     try {
-      const values = await resourceService(resource, registry, options).tx((tx) =>
+      const completion = await resourceService(resource, registry, options).tx((tx) =>
         executor.completeKey(resource.entity, argument.value, tx),
       );
-      return {
-        completion: {
-          values: values.slice(0, MAX_COMPLETIONS),
-          hasMore: values.length > MAX_COMPLETIONS,
-        },
-      };
+      return { completion };
     } catch (error) {
       if (errorResult(error)) return { completion: { values: [], hasMore: false } };
       throw internalError(`completing ${resource.uriTemplate} failed:`, error, options);
