@@ -102,8 +102,9 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 ## M7 — Release 2.0
 
 - [ ] MCP conformance suite in CI (`@modelcontextprotocol/conformance`)
-- [ ] Coverage thresholds met (`jest.config.js`)
+- [x] Coverage thresholds met (`jest.config.js`): measured and set to 94/88/96/95 (statements/branches/functions/lines), enforced in CI by `npm run test:coverage`
 - [ ] Release workflow (port v1's release-it + trusted publishing)
+- [ ] Review: run the `reviewer` agent on M7
 
 ## 2.x (P1) and later (P2)
 

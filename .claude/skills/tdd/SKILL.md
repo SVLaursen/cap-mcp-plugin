@@ -22,8 +22,7 @@ Never write implementation code that no failing test demands.
 - Contract test: compile a minimal snippet with `compileSnippet` and assert on the whole relevant
   output (`toEqual`). Behaviour test: use `bootDemo()`, `as(user)`, `rpc`/`callTool`.
 - Run only that file: `npx jest path/to/file -t "<test name>"`.
-- It must fail **for the right reason**: an assertion about the behaviour, or
-  `NotImplementedError` from the stub. A typo, import error or crashing helper is not red;
+- It must fail **for the right reason**: an assertion about the behaviour. A typo, import error or crashing helper is not red;
   fix it and re-run.
 
 ## 3. Green

@@ -30,7 +30,11 @@ module.exports = {
   ],
   testTimeout: 30000,
   collectCoverageFrom: ["src/**/*.ts"],
+  // Measured at the 2.0 release (M7), rounded down: statements 94.9, branches 88.4, functions
+  // 96.2, lines 95.5. Not counted: the `cds add mcp` facet's run() and the `cds build` task
+  // (src/cli/add.ts, src/cli/build.ts), which test/behaviour/cds-cli.test.ts runs through the real
+  // cds-dk CLI in a child process, against lib/. CI runs `npm run test:coverage`.
   coverageThreshold: {
-    global: { lines: 90, branches: 85, functions: 90, statements: 90 },
+    global: { statements: 94, branches: 88, functions: 96, lines: 95 },
   },
 };

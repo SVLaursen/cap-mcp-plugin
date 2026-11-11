@@ -111,5 +111,9 @@ The recipe (`test/helpers/issuer.ts`):
 
 ## Coverage
 
-Thresholds in `jest.config.js` (90/85/90/90) apply once modules are implemented. Coverage is a
-consequence of TDD here, not a target to chase.
+`npm run test:coverage` (what CI runs) fails below the thresholds in `jest.config.js`
+(statements 94, branches 88, functions 96, lines 95: what 2.0 measured, rounded down). The
+`cds add` facet and the build task run in a child process (`cds-cli.test.ts`), so coverage does
+not count them. Most of what stays uncovered is the executor's own argument checks, which the SDK's
+schema validation reaches first. Coverage is a consequence of TDD here, not a target to chase:
+never weaken a test to keep a number.
