@@ -162,8 +162,9 @@ Targets are written
 ## Setup: `cds add mcp`
 
 With the plugin installed (`npm add @gavdi/cap-mcp`), `cds add mcp --service CatalogService`
-writes `annotate CatalogService with @mcp;` to `srv/mcp.cds` (adding to the file if it exists),
-adds the dependency if it is missing, and an `mcp` block with the app's name and version.
+writes `annotate CatalogService with @mcp;` to `srv/mcp.cds` (adding to the file if it exists;
+external services are never candidates),
+adds the dependency if it is in neither `dependencies` nor `devDependencies`, and an `mcp` block with the app's name and version.
 `--service` takes a comma-separated list and is required when the app has several services;
 `--docs` also sets `cdsc.docs` (ADR 0011). Existing config values are never overwritten.
 

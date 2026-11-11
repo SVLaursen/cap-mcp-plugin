@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 /**
@@ -26,6 +26,8 @@ export interface FacetPlan {
   cds: string;
   /** The app's package.json with the additions. */
   packageJson: Record<string, unknown>;
+  /** What the developer should know (an option that had no effect). */
+  notes: string[];
 }
 
 type Json = Record<string, unknown>;
@@ -40,8 +42,16 @@ export function planMcpFacet(input: FacetInput): FacetPlan {
   if (unknown) throw new Error(`No service ${unknown} (${list})`);
 
   const app = input.app;
+  const installed = isObject(app.devDependencies) && input.plugin.name in app.devDependencies;
+  const notes: string[] = [];
+  const cdsConfig = isObject(app.cds) ? app.cds : {};
+  if (input.docs && isObject(cdsConfig.cdsc) && cdsConfig.cdsc.docs === false) {
+    notes.push(
+      "cdsc.docs is already false in package.json; left as is. Set it to true to use doc comments as MCP descriptions",
+    );
+  }
   const additions: Json = {
-    dependencies: { [input.plugin.name]: `^${input.plugin.version}` },
+    ...(!installed && { dependencies: { [input.plugin.name]: `^${input.plugin.version}` } }),
     cds: {
       mcp: { name: app.name, version: app.version },
       ...(input.docs && { cdsc: { docs: true } }),
@@ -54,6 +64,7 @@ export function planMcpFacet(input: FacetInput): FacetPlan {
       "// Writes, resources, prompts and more are opt-in per definition: see the @gavdi/cap-mcp docs.\n" +
       chosen.map((s) => `annotate ${s} with @mcp;\n`).join(""),
     packageJson: keepExisting(app, additions),
+    notes,
   };
 }
 
@@ -100,29 +111,38 @@ export function mcpFacet(cds: FacetCds, plugin: FacetInput["plugin"]) {
     async run() {
       const csn = await cds.load("*");
       const services = Object.entries(csn.definitions ?? {})
-        .filter(([, def]) => def.kind === "service" && !fromDependency(def))
+        .filter(([, def]) => def.kind === "service" && !fromDependency(def) && !isExternal(def))
         .map(([name]) => name);
       const pkgFile = path.join(cds.root, "package.json");
       const { service, docs } = cds.cli.options;
+      const app = JSON.parse(readFileSync(pkgFile, "utf8")) as Record<string, unknown>;
       const plan = planMcpFacet({
         services,
         chosen: typeof service === "string" ? service.split(",").map((s) => s.trim()) : undefined,
-        app: JSON.parse(readFileSync(pkgFile, "utf8")) as Record<string, unknown>,
+        app,
         plugin,
         docs: docs === true,
       });
-      writeFileSync(pkgFile, JSON.stringify(plan.packageJson, null, 2) + "\n");
+      // Only touch package.json when something was added.
+      if (JSON.stringify(plan.packageJson) !== JSON.stringify(app))
+        writeFileSync(pkgFile, JSON.stringify(plan.packageJson, null, 2) + "\n");
+      for (const note of plan.notes) console.warn(`[cds add mcp] ${note}`);
       const file = path.join(cds.root, plan.file);
+      mkdirSync(path.dirname(file), { recursive: true });
       if (!existsSync(file)) return writeFileSync(file, plan.cds);
-      // Keep what is there; add only the annotations it does not have yet.
+      // Keep what is there; add only the annotations it does not have yet (comments do not count).
       const existing = readFileSync(file, "utf8");
-      const added = plan.cds
-        .split("\n")
-        .filter((l) => l.startsWith("annotate ") && !existing.includes(l));
+      const lines = new Set(existing.split("\n").map((l) => l.trim()));
+      const added = plan.cds.split("\n").filter((l) => l.startsWith("annotate ") && !lines.has(l));
       if (added.length)
         writeFileSync(file, existing.replace(/\n?$/, "\n") + added.join("\n") + "\n");
     }
   };
+}
+
+/** Imported external services (`cds import`) are other systems' APIs, not the app's to expose. */
+function isExternal(def: object): boolean {
+  return (def as Record<string, unknown>)["@cds.external"] !== undefined;
 }
 
 /** Services that come with a dependency (another plugin's model) are not the app's to annotate. */

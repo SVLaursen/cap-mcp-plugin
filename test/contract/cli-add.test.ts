@@ -59,3 +59,18 @@ describe("cds add mcp", () => {
     );
   });
 });
+
+describe("cds add mcp: review fixes (M6)", () => {
+  test("a plugin already in devDependencies is not added again", () => {
+    const dev = { ...app, devDependencies: { "@gavdi/cap-mcp": "file:.." } };
+    expect(planMcpFacet({ ...base, app: dev }).packageJson.dependencies).toEqual(app.dependencies);
+  });
+
+  test("--docs over an explicit cdsc.docs: false keeps it and says so", () => {
+    const off = { ...app, cds: { cdsc: { docs: false } } };
+    expect(planMcpFacet({ ...base, app: off, docs: true }).notes).toEqual([
+      "cdsc.docs is already false in package.json; left as is. Set it to true to use doc comments as MCP descriptions",
+    ]);
+    expect(planMcpFacet({ ...base, docs: true }).notes).toEqual([]);
+  });
+});

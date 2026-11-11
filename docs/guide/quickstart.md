@@ -9,15 +9,17 @@ npm add @gavdi/cap-mcp
 cds add mcp --service CatalogService
 ```
 
-`cds add mcp` writes `srv/mcp.cds`:
+`cds add mcp` adds this line to `srv/mcp.cds` (creating the file if needed), next to your
+existing service definition:
 
 ```cds
-service CatalogService { entity Books { key ID : Integer; title : String; } }
-annotate CatalogService with @mcp;
+service CatalogService { entity Books { key ID : Integer; title : String; } } // yours, unchanged
+annotate CatalogService with @mcp; // added
 ```
 
 and adds an `mcp` block (your app's name and version) to `package.json`. With several services,
-`--service` is required, so exposing a service is always your decision. Add `--docs` to use
+`--service` is required, so exposing a service is always your decision. External services
+(imported with `cds import`) are never offered. Add `--docs` to use
 your `/** doc comments */` as tool descriptions (this also adds them to OData `$metadata`).
 
 `@mcp` on a service gives the **read-only baseline**: a query and a get tool for each entity,

@@ -56,7 +56,8 @@ beforeAll(() => {
   );
   writeFileSync(
     path.join(app, "srv", "cat.cds"),
-    "service CatalogService { entity Books { key ID: Integer; } }\nservice AdminService { entity Notes { key ID: Integer; } }\n",
+    "service CatalogService { entity Books { key ID: Integer; } }\nservice AdminService { entity Notes { key ID: Integer; } }\n" +
+      "@cds.external service ExternalAPI { entity Things { key ID: Integer; } }\n",
   );
 }, 60_000);
 afterAll(() => app && rmSync(app, { recursive: true, force: true }));
@@ -73,10 +74,24 @@ test("cds add mcp --service CatalogService annotates it and adds the mcp config"
   expect(csn.definitions.AdminService["@mcp"]).toBeUndefined();
 }, 60_000);
 
+test("external services are not candidates", () => {
+  expect(() => cds("add", "mcp", "--service", "ExternalAPI")).toThrow(
+    /No service ExternalAPI \(AdminService, CatalogService\)/,
+  );
+});
+
 test("running it again for another service adds to srv/mcp.cds instead of replacing it", () => {
+  // A commented-out line is not an annotation that is already there.
+  const file = path.join(app, "srv", "mcp.cds");
+  writeFileSync(file, readFileSync(file, "utf8") + "// annotate AdminService with @mcp;\n");
+  const pkg = path.join(app, "package.json");
+  const before = readFileSync(pkg, "utf8").replace(/\n$/, "") + "   \n"; // unusual formatting
+  writeFileSync(pkg, before);
   cds("add", "mcp", "--service", "AdminService");
-  const file = readFileSync(path.join(app, "srv", "mcp.cds"), "utf8");
-  expect(file.match(/annotate \w+ with @mcp;/g)).toEqual([
+  // Nothing to add to package.json: it is left byte for byte.
+  expect(readFileSync(pkg, "utf8")).toBe(before);
+  const updated = readFileSync(file, "utf8");
+  expect(updated.match(/^annotate \w+ with @mcp;/gm)).toEqual([
     "annotate CatalogService with @mcp;",
     "annotate AdminService with @mcp;",
   ]);
