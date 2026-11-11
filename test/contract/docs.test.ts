@@ -28,6 +28,7 @@ test("the user guides are all there", () => {
   expect(GUIDES.sort()).toEqual(
     [
       "annotations.md",
+      "demo-tour.md",
       "features.md",
       "getting-started.md",
       "mcp-apps.md",

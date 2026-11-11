@@ -3,6 +3,9 @@
 A small CAP app that gives every v2 feature an annotated target. Tests boot it with `cds.test`;
 you can also run it with `npm run demo` from the repo root (OData at http://localhost:4004).
 
+For a guided walk through every feature with MCP Inspector, see
+[A tour of the demo app](../docs/guide/demo-tour.md).
+
 ## Users (mocked auth)
 
 | User  | Password | Roles   | Can see                                                   |
