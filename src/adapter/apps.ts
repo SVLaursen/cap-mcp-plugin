@@ -78,11 +78,19 @@ export function loadAppFiles(
   uris: Iterable<string>,
   log: { warn(...args: unknown[]): void },
 ): McpApps {
+  return readAppFiles(root, uris, (_uri, text) => log.warn(text));
+}
+
+function readAppFiles(
+  root: string,
+  uris: Iterable<string>,
+  problem: (uri: string, text: string) => void,
+): McpApps {
   const apps = new McpApps();
   const dir = path.resolve(root, "app", "mcp-apps");
   const inside = (file: string, base: string) => file.startsWith(base + path.sep);
   const outside = (uri: string) =>
-    log.warn(`MCP App ${uri} is not a file under app/mcp-apps; the tool has no UI`);
+    problem(uri, `MCP App ${uri} is not a file under app/mcp-apps; the tool has no UI`);
   for (const uri of new Set(uris)) {
     const relative = filePath(uri);
     const file = relative === undefined ? undefined : path.resolve(dir, relative);
@@ -98,7 +106,7 @@ export function loadAppFiles(
       html = readFileSync(real, "utf8");
     } catch {
       const shown = path.relative(root, file).split(path.sep).join("/");
-      log.warn(`MCP App ${uri} has no file at ${shown}; the tool has no UI`);
+      problem(uri, `MCP App ${uri} has no file at ${shown}; the tool has no UI`);
       continue;
     }
     if (!inside(real, realpathSync(dir))) {
@@ -107,6 +115,26 @@ export function loadAppFiles(
     }
     apps.register(uri, () => html);
   }
+  return apps;
+}
+
+/**
+ * Startup: read the files for the linked URIs, let app code register more (the `mcp:apps`
+ * event), then warn about linked URIs that still have no content and registrations nothing
+ * links to. A missing file that app code supplies is not a problem.
+ */
+export function setUpApps(
+  root: string,
+  linked: string[],
+  emit: (apps: AppRegistry) => void,
+  log: { warn(...args: unknown[]): void },
+): McpApps {
+  const problems = new Map<string, string>();
+  const apps = readAppFiles(root, linked, (uri, text) => problems.set(uri, text));
+  emit(apps);
+  for (const [uri, text] of problems) if (!apps.content(uri)) log.warn(text);
+  for (const uri of apps.uris())
+    if (!linked.includes(uri)) log.warn(`MCP App ${uri} is registered but no @mcp.ui links to it`);
   return apps;
 }
 

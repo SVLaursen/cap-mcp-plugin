@@ -102,7 +102,7 @@ Register inside the listener, synchronously: the plugin emits `mcp:apps` once, w
 served the app, and checks the registrations right after it (an `async` listener that awaits
 first still registers, but after the startup warnings). The function you register runs on
 every read and may be async. A UI resource is listed and readable only for
-callers who see a tool that links to it. A missing file is a startup warning, and the tool then
+callers who see a tool that links to it. A missing file is a startup warning (unless app code registers that URI), and the tool then
 has no UI link; a registration no `@mcp.ui` links to is a warning and is not served.
 
 **Completion** (`@mcp.completion` on the key of a single-key `@mcp.resource` entity): a client
@@ -121,7 +121,10 @@ argument.
 
 ## Diagnostics
 
-The model reader and the exposure registry report these; the startup report (M6) prints them. Targets are written
+The model reader and the exposure registry report these. When CAP has served the app, the plugin
+logs a startup report on the `mcp` channel: `serving N tools, M resources, P prompts at /mcp`
+(everything the app exposes, counted for a user with every role), then each diagnostic as
+`CODE target: message`, errors first, at its own level. Targets are written
 `Def`, `Def:element`, `Entity.boundOperation` or `Operation:param`.
 
 | Code                           | Level | When                                                                                                                                                                                                                                                                                                                                                         | Effect                                                                                     |

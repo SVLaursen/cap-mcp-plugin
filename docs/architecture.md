@@ -33,7 +33,7 @@ The data passed between them is defined in `src/types.ts`.
 
 ## Request lifecycle
 
-1. `activate(cds)` mounts one `/mcp` route (all methods) on `served`. A request whose `Origin`
+1. `activate(cds)` logs the startup report (`cli`: counts and every diagnostic) and mounts one `/mcp` route (all methods) on `served`. A request whose `Origin`
    is neither the app's own nor in `cds.env.mcp.allowedOrigins` gets 403 (DNS rebinding); the
    rest go through `cds.middlewares.before` (ADR 0009). That chain authenticates the request and sets `cds.context` (user, tenant,
    locale, model). Other plugins' middleware (e.g. `@sap/ams`) runs here too, with no special
@@ -101,7 +101,8 @@ SDK's template callbacks: they report `total` as the number of values fetched.
 
 MCP App UIs (`@mcp.ui`, ADR 0012) are plain resources, registered per request by the adapter
 (`adapter/apps.ts`): `activate()` reads `app/mcp-apps/<path>` for each linked `ui://` URI once
-CAP has served the app, then emits `mcp:apps` so app code can register more. Per request, a tool
+CAP has served the app, then emits `mcp:apps` so app code can register more, and only then warns about linked URIs
+that still have no content. Per request, a tool
 keeps its UI link only if the resource has content, and the caller can list and read exactly the
 UIs their tools link to. No dependency on `@modelcontextprotocol/ext-apps` at runtime.
 

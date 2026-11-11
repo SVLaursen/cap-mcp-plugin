@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { APP_MIME_TYPE, McpApps, appMeta, loadAppFiles } from "../../src/adapter/apps";
+import { APP_MIME_TYPE, McpApps, appMeta, loadAppFiles, setUpApps } from "../../src/adapter/apps";
 
 /** ext-apps is ESM-only, so read its server constants in a child Node process (ADR 0012). */
 function extAppsConstants(): { mime: string; metaKey: string } {
@@ -62,6 +62,26 @@ describe("MCP Apps (ADR 0012)", () => {
     const apps = loadAppFiles(root, ["ui://shop/link.html"], log);
     expect(apps.uris()).toEqual([]);
     expect(warnings).toEqual([expect.stringMatching(/not a file under app\/mcp-apps/)]);
+  });
+
+  test("startup warns about a missing file only if app code does not register that UI either", () => {
+    const linked = ["ui://shop/missing.html", "ui://shop/from-code.html"];
+    const apps = setUpApps(
+      root,
+      linked,
+      (registry) => {
+        registry.register("ui://shop/from-code.html", () => "<p>code</p>");
+        registry.register("ui://shop/unlinked.html", () => "<p>nobody links here</p>");
+      },
+      log,
+    );
+    expect(apps.uris()).toEqual(["ui://shop/from-code.html", "ui://shop/unlinked.html"]);
+    expect(warnings).toEqual([
+      expect.stringMatching(/ui:\/\/shop\/missing\.html has no file/),
+      expect.stringMatching(
+        /ui:\/\/shop\/unlinked\.html is registered but no @mcp\.ui links to it/,
+      ),
+    ]);
   });
 
   test("register adds or replaces a resource; only ui:// URIs are accepted", async () => {

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { Application, RequestHandler } from "express";
 import { mcpHandler, type RequestContext } from "./adapter";
-import { loadAppFiles } from "./adapter/apps";
+import { setUpApps } from "./adapter/apps";
 import {
   authErrors,
   checkOrigin,
@@ -11,6 +11,7 @@ import {
   requireUser,
   type AuthConfig,
 } from "./adapter/auth";
+import { exposureReport } from "./cli";
 import { registryCache } from "./exposure-registry";
 import { DEFAULT_LIMITS, type Limits } from "./schema-mapper";
 
@@ -72,15 +73,13 @@ export function activate(cds: CdsLike): void {
     const config = cds.env.mcp ?? {};
     const mcpPath = config.path ?? MCP_PATH;
     const registryFor = registryCache({ limits: { ...DEFAULT_LIMITS, ...config.limits } });
+    const registry = registryFor(cds.model as object);
+    for (const line of exposureReport(registry, mcpPath)) log[line.level](line.text);
     // MCP Apps (ADR 0012): files for the app's @mcp.ui links, then the app's own registrations.
-    const linked = registryFor(cds.model as object)
-      .spec.services.flatMap((s) => s.operations.map((o) => o.ui))
+    const linked = registry.spec.services
+      .flatMap((s) => s.operations.map((o) => o.ui))
       .filter((uri): uri is string => uri !== undefined);
-    const apps = loadAppFiles(cds.root, linked, log);
-    cds.emit("mcp:apps", apps);
-    for (const uri of apps.uris())
-      if (!linked.includes(uri))
-        log.warn(`MCP App ${uri} is registered but no @mcp.ui links to it`);
+    const apps = setUpApps(cds.root, linked, (registry) => cds.emit("mcp:apps", registry), log);
     const handler = mcpHandler({
       serverInfo: {
         name: config.name ?? "@gavdi/cap-mcp",
