@@ -73,10 +73,96 @@ describe("opt-in: baseline", () => {
 });
 
 describe("opt-in: describe and compact", () => {
-  test.todo("CatalogService_describe lists only CatalogService's exposed entities and fields");
-  test.todo("the describe tool never mentions costPrice, email, AuditNotes or db-layer entities");
-  test.todo("AdminService (compact) exposes the generic tool set, scoped to its entities");
+  type Described = {
+    entities: { name: string; fields: { name: string }[] }[];
+    operations: { name: string }[];
+  };
+
+  test("CatalogService_describe lists only CatalogService's exposed entities and fields", async () => {
+    const described = (await callTool("bob", "CatalogService_describe"))
+      .structuredContent as Described;
+    expect(described.entities.map((e) => e.name)).toEqual([
+      "CatalogService.Books",
+      "CatalogService.Authors",
+      "CatalogService.Genres",
+      "CatalogService.Feedback",
+    ]);
+    expect(described.operations.map((o) => o.name)).toEqual([
+      "CatalogService.stockByGenre",
+      "CatalogService.bookCard",
+      "CatalogService.submitOrder",
+    ]);
+    const authors = described.entities.find((e) => e.name === "CatalogService.Authors");
+    expect(authors?.fields.map((f) => f.name)).toEqual([
+      "createdAt",
+      "createdBy",
+      "modifiedAt",
+      "modifiedBy",
+      "ID",
+      "name",
+      "dateOfBirth",
+      "placeOfBirth",
+    ]);
+  });
+
+  test("the describe tool never mentions costPrice, email, AuditNotes or db-layer entities", async () => {
+    for (const who of ["alice", "bob"] as const) {
+      const whole = await callTool(who, "CatalogService_describe");
+      const books = await callTool(who, "CatalogService_describe", {
+        entity: "CatalogService.Books",
+      });
+      for (const result of [whole, books]) {
+        expect(result.isError).toBeUndefined();
+        expect(result.text).not.toMatch(
+          /costPrice|email|AuditNotes|sap\.capire|AdminService|OrdersService/,
+        );
+      }
+    }
+  });
+
+  test("AdminService (compact) exposes the generic tool set, scoped to its entities", async () => {
+    const res = await listTools(demo.POST, "alice");
+    const tools = (res.message?.result?.tools as { name: string; inputSchema: Schema }[]).filter(
+      (t) => t.name.startsWith("AdminService_"),
+    );
+    // No per-entity tools; no call_operation (AdminService has no operations).
+    expect(tools.map((t) => t.name)).toEqual([
+      "AdminService_create",
+      "AdminService_delete",
+      "AdminService_describe_entity",
+      "AdminService_get",
+      "AdminService_list_entities",
+      "AdminService_query",
+      "AdminService_update",
+    ]);
+    const all = ["AdminService.Books", "AdminService.Authors", "AdminService.Genres"];
+    const enumOf = (name: string) =>
+      tools.find((t) => t.name === name)?.inputSchema.properties?.entity?.enum;
+    for (const name of ["AdminService_describe_entity", "AdminService_get", "AdminService_query"]) {
+      expect(enumOf(name)).toEqual(all);
+    }
+    // Writes only where @mcp.wrap.modes allows them.
+    for (const name of ["AdminService_create", "AdminService_update", "AdminService_delete"]) {
+      expect(enumOf(name)).toEqual(["AdminService.Books"]);
+    }
+    // A write to an entity without the mode is refused before CAP is asked.
+    expectInvalidArgument(
+      await callTool("alice", "AdminService_delete", {
+        entity: "AdminService.Authors",
+        key: { ID: 101 },
+      }),
+    );
+    // The compact set works end to end.
+    const book = await callTool("alice", "AdminService_get", {
+      entity: "AdminService.Books",
+      key: { ID: 201 },
+    });
+    expect(book.structuredContent).toMatchObject({ ID: 201 });
+    expect(book.structuredContent).not.toHaveProperty("costPrice");
+  });
 });
+
+type Schema = { properties?: Record<string, { enum?: string[] }> };
 
 describe("opt-in: resources", () => {
   test.todo("cap://AdminService/Authors/101 reads one author without email");
