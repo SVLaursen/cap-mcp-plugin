@@ -9,6 +9,7 @@ import type {
   PromptSpec,
   ReturnSpec,
   ServiceSpec,
+  V1Options,
 } from "../types";
 import { isMappedType } from "../schema-mapper";
 
@@ -110,14 +111,42 @@ const KNOWN = new Set([
   "@mcp.compact",
 ]);
 
-/** v1 annotations that v2 dropped or renamed, with what to use instead (docs/annotations.md). */
-const V1: Record<string, string> = {
-  "@mcp.wrap.tools": "query/get tools are the default for an exposed entity; use @mcp",
-  "@mcp.tool": "use @mcp on the action; functions are baseline under @mcp on the service",
-  "@mcp.usePrimaryKey": "dropped; keys are always the entity keys",
+/** v1 annotations that v2 maps (to @mcp) or drops, with what to write instead (docs/annotations.md). */
+const V1: Record<string, (target: string, value: unknown) => string> = {
+  "@mcp.wrap.tools": (target, value) =>
+    value === true
+      ? `@mcp.wrap.tools is v1: mapped to @mcp on ${target}. Write @mcp instead`
+      : "@mcp.wrap.tools is v1 and has no effect: an entity is exposed by @mcp",
+  "@mcp.tool": (target, value) =>
+    value === true
+      ? `@mcp.tool is v1: mapped to @mcp on ${target}. Write @mcp instead`
+      : "@mcp.tool is v1 and has no effect: an operation is exposed by @mcp",
+  "@mcp.usePrimaryKey": () =>
+    "@mcp.usePrimaryKey is v1 and has no effect: keys are always the entity keys",
+  "@mcp.wrap.name": () =>
+    "@mcp.wrap.name is v1 and has no effect: tool names are <Service>_<Entity>_<mode>; use @mcp.name for the title",
 };
+const V1_HINT = /^@mcp\.wrap\.hint(\.(query|get|create|update|delete))?$/;
+/** v1's `wrap_entity_modes` default. */
+const V1_WRAP_MODES = ["query", "get", "create", "update"];
 
-export function readModel(csn: unknown): ModelReadResult {
+/**
+ * The v1 annotation that opts a definition in (v1 shim), if any: `@mcp.tool: true`,
+ * `@mcp.wrap.tools: true`, or the list form of `@mcp.resource`.
+ */
+function v1OptIn(def: Definition): `@${string}` | undefined {
+  if (def["@mcp.tool"] === true) return "@mcp.tool";
+  if (def["@mcp.wrap.tools"] === true) return "@mcp.wrap.tools";
+  if (Array.isArray(def["@mcp.resource"])) return "@mcp.resource";
+  return undefined;
+}
+
+export interface ReadOptions {
+  /** What a v1 app's config said (v1 shim); only used for V1_DEFAULT_CHANGED. */
+  v1?: V1Options;
+}
+
+export function readModel(csn: unknown, options: ReadOptions = {}): ModelReadResult {
   const ctx: Context = { definitions: (csn as Csn).definitions ?? {}, diagnostics: [] };
   checkAnnotations(ctx);
   const services = Object.entries(ctx.definitions)
@@ -125,7 +154,52 @@ export function readModel(csn: unknown): ModelReadResult {
     .map(([name, def]) => readService(name, def, ctx))
     .filter((s): s is ServiceSpec => s !== undefined);
   checkUnused(ctx, services);
+  checkV1Defaults(ctx, services, options.v1);
   return { spec: { services }, diagnostics: ctx.diagnostics };
+}
+
+/**
+ * v1 shim: what a v1 app got by default (or from v1 config) and no longer gets. Writes from
+ * `wrap_entity_modes`, tools from `wrap_entities_to_actions`, and the describe tool.
+ */
+function checkV1Defaults(ctx: Context, services: ServiceSpec[], v1: V1Options = {}): void {
+  const exposed = new Set(services.flatMap((s) => s.entities.map((e) => e.name)));
+  const changed = (target: string, message: string) =>
+    ctx.diagnostics.push({ level: "warn", code: "V1_DEFAULT_CHANGED", target, message });
+  const serviceNames = Object.entries(ctx.definitions)
+    .filter(([, def]) => def.kind === "service")
+    .map(([name]) => name);
+  for (const [name, def] of Object.entries(ctx.definitions)) {
+    if (def.kind !== "entity" || !serviceNames.some((s) => name.startsWith(`${s}.`))) continue;
+    const wrapped =
+      def["@mcp.wrap.tools"] === true ||
+      (v1.wrapEntitiesToActions === true &&
+        def["@mcp.resource"] !== undefined &&
+        def["@mcp.wrap.tools"] !== false);
+    if (!wrapped) continue;
+    if (!exposed.has(name)) {
+      changed(
+        name,
+        `v1 gave ${name} query and get tools (wrap_entities_to_actions); v2 does not. Add @mcp to the entity to keep them`,
+      );
+      continue;
+    }
+    if (def["@mcp.wrap.modes"] !== undefined) continue;
+    const lost = (v1.wrapEntityModes ?? V1_WRAP_MODES).filter((m) => m !== "query" && m !== "get");
+    if (lost.length === 0) continue;
+    changed(
+      name,
+      `v1 also gave ${name} ${lost.join(", ")} tools (wrap_entity_modes); v2 gives query and get only. Add @mcp.wrap.modes: [${lost.map((m) => `'${m}'`).join(", ")}] to keep them`,
+    );
+  }
+  const v1App =
+    Object.keys(v1).length > 0 || ctx.diagnostics.some((d) => d.code === "V1_ANNOTATION");
+  if (v1App && v1.describe !== false) {
+    changed(
+      "cds.mcp.enable_model_description",
+      "v1 served the cap_describe_model tool by default; v2 does not. Add @mcp.describe to a service for a describe tool scoped to it",
+    );
+  }
 }
 
 /**
@@ -187,9 +261,9 @@ function readService(service: string, def: Definition, ctx: Context): ServiceSpe
     if (member.kind === "entity") {
       // CAP-generated entities are not baseline, but an explicit @mcp on one still counts.
       const generated = isGenerated(name, member, ctx.definitions);
-      if (generated && !(isOptedIn(member) && !isCopied(member, "@mcp", ctx))) continue;
+      const ownOptIn = isOwnOptIn(member, ctx);
+      if (generated && !ownOptIn) continue;
       // Outside an @mcp service, only an @mcp written here counts, not one CAP copied in.
-      const ownOptIn = isOptedIn(member) && !isCopied(member, "@mcp", ctx);
       if (optedIn || ownOptIn) entities.push(readEntity(name, service, member, ctx));
       const addressable = isAddressable(member);
       for (const [action, op] of Object.entries(member.actions ?? {})) {
@@ -486,7 +560,7 @@ function readElicit(
     );
     return ["confirm"];
   }
-  const values = strings(value) ?? [];
+  const values = mapV1Input(name, strings(value) ?? [], params, ctx);
   if (values.length < value.length) {
     invalid(ctx, name, `@mcp.elicit values must be strings; the call is still confirmed`);
     if (!values.length) return ["confirm"];
@@ -505,6 +579,24 @@ function readElicit(
     return ["confirm"];
   }
   return values;
+}
+
+/** v1's `@mcp.elicit: ['input']` asked for every parameter: map it to their names (v1 shim). */
+function mapV1Input(name: string, values: string[], params: FieldSpec[], ctx: Context): string[] {
+  if (!values.includes("input") || params.some((p) => p.name === "input")) return values;
+  const names = params.map((p) => p.name);
+  ctx.diagnostics.push({
+    level: "warn",
+    code: "V1_ANNOTATION",
+    target: name,
+    message: names.length
+      ? `@mcp.elicit 'input' is v1: mapped to the parameter names (${names.join(", ")}). List them instead`
+      : `@mcp.elicit 'input' is v1: mapped to 'confirm' (${name} has no parameters). Write ['confirm'] instead`,
+  });
+  const mapped = values.flatMap((v) =>
+    v === "input" ? (names.length ? names : ["confirm"]) : [v],
+  );
+  return [...new Set(mapped)];
 }
 
 /** The scalar, non-ignored, non-omitted elements an agent may see. */
@@ -681,32 +773,25 @@ function writtenAt(name: string, key: string, ctx: Context, element?: string): s
 }
 
 /** Unknown and v1 keys on one definition, each with its diagnostic. */
+/** The V1_ANNOTATION message for a v1 key: what the shim mapped it to, or why it is dropped. */
+function v1Message(key: string, target: string, value: unknown): string | undefined {
+  const known = V1[key];
+  if (known) return known(target, value);
+  if (V1_HINT.test(key))
+    return `${key} is v1 and has no effect: use @mcp.description on the entity`;
+  if (key === "@mcp.resource" && Array.isArray(value)) {
+    return `@mcp.resource with a list of query options is v1: mapped to @mcp on ${target} (query and get tools). Write @mcp instead; in v2, @mcp.resource means single records by key`;
+  }
+  return undefined;
+}
+
 function checkKeys(target: string, def: Definition): [string, Diagnostic][] {
   const found: [string, Diagnostic][] = [];
   for (const key of Object.keys(def)) {
     if (key !== "@mcp" && !key.startsWith("@mcp.")) continue;
-    const v1 = V1[key];
+    const v1 = v1Message(key, target, def[key as `@${string}`]);
     if (v1) {
-      found.push([
-        key,
-        {
-          level: "warn",
-          code: "V1_ANNOTATION",
-          target,
-          message: `${key} is a v1 annotation: ${v1}`,
-        },
-      ]);
-    } else if (key === "@mcp.resource" && Array.isArray(def[key])) {
-      found.push([
-        key,
-        {
-          level: "warn",
-          code: "V1_ANNOTATION",
-          target,
-          message:
-            "@mcp.resource with a list of query options is v1; use the query tool. In v2, @mcp.resource means single records by key",
-        },
-      ]);
+      found.push([key, { level: "warn", code: "V1_ANNOTATION", target, message: v1 }]);
     } else if (!KNOWN.has(key)) {
       found.push([
         key,
@@ -744,8 +829,16 @@ function exposesOperation(op: Definition, serviceOptedIn: boolean): boolean {
   return isOptedIn(op) || (op.kind === "function" && serviceOptedIn);
 }
 
+/** `@mcp`, or a v1 annotation the shim maps to it (v1OptIn). */
 function isOptedIn(def: Definition): boolean {
-  return def["@mcp"] === true;
+  return def["@mcp"] === true || v1OptIn(def) !== undefined;
+}
+
+/** Opted in here, not by an annotation CAP copied from the projected entity. */
+function isOwnOptIn(def: Definition, ctx: Context): boolean {
+  if (def["@mcp"] === true) return !isCopied(def, "@mcp", ctx);
+  const v1 = v1OptIn(def);
+  return v1 !== undefined && !isCopied(def, v1, ctx);
 }
 
 /** CAP propagates @mcp.omit to generated foreign keys and through projections. */

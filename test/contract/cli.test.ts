@@ -22,7 +22,7 @@ describe("startup exposure report", () => {
   test("diagnostics follow (config first), errors first, each with its code and target", () => {
     const registry = registryOf(`
       @mcp service S {
-        @mcp.wrap.tools entity Books { key ID: Integer; }
+        @mcp.hnit entity Books { key ID: Integer; }
         @mcp.wrap.modes: ['upsert'] entity Authors { key ID: Integer; }
       }
     `);
@@ -44,7 +44,7 @@ describe("startup exposure report", () => {
       },
       {
         level: "warn",
-        text: expect.stringMatching(/^V1_ANNOTATION S\.Books: .*@mcp\.wrap\.tools/),
+        text: expect.stringMatching(/^UNKNOWN_ANNOTATION S\.Books: .*@mcp\.hnit/),
       },
     ]);
   });

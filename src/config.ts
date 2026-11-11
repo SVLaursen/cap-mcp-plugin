@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { DEFAULT_LIMITS, type Limits } from "./schema-mapper";
-import type { Diagnostic } from "./types";
+import type { Diagnostic, V1Options } from "./types";
 
 /**
  * `cds.env.mcp` (docs/annotations.md, Configuration): camelCase keys, read through cds.env only.
@@ -48,11 +48,36 @@ const LIMITS: Record<keyof Limits, Check> = {
   defaultRows: positiveInteger,
 };
 
+/** v1 config keys (snake_case and friends): reported with what replaces them, never applied. */
+const V1_KEYS: Record<string, string> = {
+  auth: "/mcp uses the app's CAP authentication (cds.requires.auth; dummy or mocked for local use)",
+  capabilities: "v2 lists never change while serving (listChanged: false)",
+  wrap_entities_to_actions: "use @mcp on the service or entity",
+  wrap_entity_modes: "writes need @mcp.wrap.modes on the entity",
+  enable_model_description: "use @mcp.describe on a service",
+};
+
+/** What the v1 keys said, for the model reader's V1_DEFAULT_CHANGED checks. */
+function v1Options(raw: Record<string, unknown>): V1Options | undefined {
+  const v1: V1Options = {};
+  const modes = raw.wrap_entity_modes;
+  if (Array.isArray(modes) && modes.every(isString)) v1.wrapEntityModes = modes;
+  if (typeof raw.wrap_entities_to_actions === "boolean")
+    v1.wrapEntitiesToActions = raw.wrap_entities_to_actions;
+  if (typeof raw.enable_model_description === "boolean") v1.describe = raw.enable_model_description;
+  return Object.keys(raw).some((key) => key in V1_KEYS) ? v1 : undefined;
+}
+
 function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-export function readConfig(raw: unknown): { config: McpConfig; diagnostics: Diagnostic[] } {
+export function readConfig(raw: unknown): {
+  config: McpConfig;
+  /** Set when the block has v1 keys (v1 shim). */
+  v1?: V1Options;
+  diagnostics: Diagnostic[];
+} {
   const diagnostics: Diagnostic[] = [];
   const unknown = (target: string) =>
     diagnostics.push({
@@ -79,6 +104,15 @@ export function readConfig(raw: unknown): { config: McpConfig; diagnostics: Diag
       config.limits = readLimits(value, invalid, unknown);
       continue;
     }
+    if (key in V1_KEYS) {
+      diagnostics.push({
+        level: "warn",
+        code: "V1_DEFAULT_CHANGED",
+        target,
+        message: `${target} is v1 and ignored: ${V1_KEYS[key]}`,
+      });
+      continue;
+    }
     const check = CHECKS[key as keyof typeof CHECKS];
     if (!check) {
       unknown(target);
@@ -88,7 +122,7 @@ export function readConfig(raw: unknown): { config: McpConfig; diagnostics: Diag
     if (expected) invalid(target, `${target} must be ${expected}; using the default`);
     else config[key] = value;
   }
-  return { config: config as McpConfig, diagnostics };
+  return { config: config as McpConfig, v1: v1Options(raw), diagnostics };
 }
 
 function readLimits(

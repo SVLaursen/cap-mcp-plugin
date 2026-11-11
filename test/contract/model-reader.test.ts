@@ -1002,7 +1002,8 @@ describe("model-reader: diagnostics", () => {
         @mcp.tool action order();
       }
     `);
-    const { diagnostics } = readModel(csn);
+    // The shim's V1_DEFAULT_CHANGED checks are pinned in v1-shim.test.ts.
+    const diagnostics = readModel(csn).diagnostics.filter((d) => d.code === "V1_ANNOTATION");
     expect(codes(diagnostics)).toEqual([
       { level: "warn", code: "V1_ANNOTATION", target: "S.Books" },
       { level: "warn", code: "V1_ANNOTATION", target: "S.Books" },

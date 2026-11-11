@@ -182,6 +182,19 @@ export type DiagnosticCode =
   /** A cds.env.mcp value of the wrong shape; the key's default is used. */
   | "INVALID_CONFIG";
 
+/**
+ * What a v1 app's config said (v1 shim). Never switches anything on: only used to report what
+ * the app got from v1 and no longer gets (V1_DEFAULT_CHANGED).
+ */
+export interface V1Options {
+  /** `wrap_entity_modes` (v1 default: query, get, create, update). */
+  wrapEntityModes?: string[];
+  /** `wrap_entities_to_actions`: v1 wrapped every @mcp.resource entity as tools. */
+  wrapEntitiesToActions?: boolean;
+  /** `enable_model_description` (v1 default: true). */
+  describe?: boolean;
+}
+
 /** Reported at startup so developers see why something is (not) exposed. */
 export interface Diagnostic {
   level: "info" | "warn" | "error";

@@ -65,11 +65,14 @@ export function activate(cds: CdsLike): void {
   const log = cds.log("mcp");
   cds.on("served", async () => {
     // Read once the app's env is complete (profiles applied).
-    const { config, diagnostics } = readConfig(cds.env.mcp);
+    const { config, v1, diagnostics } = readConfig(cds.env.mcp);
     const instructions = readInstructions(config.instructions, cds.root);
     if (instructions.diagnostic) diagnostics.push(instructions.diagnostic);
     const mcpPath = config.path ?? MCP_PATH;
-    const registryFor = registryCache({ limits: { ...DEFAULT_LIMITS, ...config.limits } });
+    const registryFor = registryCache({
+      limits: { ...DEFAULT_LIMITS, ...config.limits },
+      v1,
+    });
     const registry = registryFor(cds.model as object);
     for (const line of exposureReport(registry, mcpPath, diagnostics)) log[line.level](line.text);
     // MCP Apps (ADR 0012): files for the app's @mcp.ui links, then the app's own registrations.

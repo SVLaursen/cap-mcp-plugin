@@ -94,7 +94,7 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 - [ ] `cds mcp` stdio entry point
 - [x] Config keys finalised in `docs/annotations.md` (camelCase, via `cds.env` only)
 - [x] `cds build` copies the `instructions` file into the deployed app (v1 parity, `docs/v1-reference.md`)
-- [ ] v1 shim: map v1 annotations and config, emit `V1_ANNOTATION` / `V1_DEFAULT_CHANGED`
+- [x] v1 shim: map v1 annotations and config, emit `V1_ANNOTATION` / `V1_DEFAULT_CHANGED`
 - [ ] Characterisation: v1 demo annotations produce equivalent v2 tools (compatibility checklist)
 - [ ] User docs: "expose a service in 5 minutes", "lock it down for production", "debug a missing tool"
 

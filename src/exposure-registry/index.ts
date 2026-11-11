@@ -21,6 +21,7 @@ import type {
   ServiceSpec,
   ToolSpec,
   UserLike,
+  V1Options,
 } from "../types";
 
 /**
@@ -40,6 +41,8 @@ import type {
 
 export interface RegistryOptions {
   limits?: Limits;
+  /** What a v1 app's config said (v1 shim): only for V1_DEFAULT_CHANGED diagnostics. */
+  v1?: V1Options;
 }
 
 type Hints = ToolSpec["annotations"];
@@ -119,7 +122,7 @@ export class ExposureRegistry {
 
   /** Read a compiled model and build its registry; diagnostics cover both steps. */
   static fromModel(model: unknown, options: RegistryOptions = {}): ExposureRegistry {
-    const { spec, diagnostics } = readModel(model);
+    const { spec, diagnostics } = readModel(model, { v1: options.v1 });
     return new ExposureRegistry(spec, options, diagnostics);
   }
 
