@@ -63,8 +63,10 @@ The data passed between them is defined in `src/types.ts`.
    (`req._login`, Basic for mocked/basic auth) or, for XSUAA/JWT/IAS,
    `WWW-Authenticate: Bearer resource_metadata="<origin>/.well-known/oauth-protected-resource/mcp"`.
    That RFC 9728 document is public and names the bound authorization server
-   (`cds.requires.auth.credentials.url`; the provider's, even for subscriber tenants: see the
-   backlog); without one it is 404. URLs follow `X-Forwarded-Proto`/`-Host`. No authorization
+   (`cds.requires.auth.credentials.url`). In a multitenant XSUAA app the opt-in
+   `cds.env.mcp.tenantHostPattern` picks the subscriber's subdomain from the request host and
+   names `https://<subdomain>.<uaadomain>` instead (the document is read before login, so the
+   host is all there is to go by); without one it is 404. URLs follow `X-Forwarded-Proto`/`-Host`. No authorization
    server endpoints, no DCR.
 3. `tools/list` → `registry.toolsFor(cds.context.user)` for `cds.context.model`.
 4. `tools/call` → the SDK validates args against the tool's input schema →

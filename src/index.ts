@@ -44,6 +44,11 @@ export interface McpConfig {
   version?: string;
   allowedOrigins?: string[];
   limits?: Partial<Limits>;
+  /**
+   * Multitenant XSUAA: a regular expression over the request host whose first capture group is
+   * the subscriber's subdomain (like the approuter's TENANT_HOST_PATTERN). Off by default.
+   */
+  tenantHostPattern?: string;
 }
 
 export const MCP_PATH = "/mcp";
@@ -92,7 +97,14 @@ export function activate(cds: CdsLike): void {
       },
       log,
     });
-    const auth = { path: mcpPath, auth: () => cds.requires.auth };
+    const auth = {
+      path: mcpPath,
+      auth: () => cds.requires.auth,
+      // A pattern that is not a regular expression fails startup, loudly.
+      ...(config.tenantHostPattern && {
+        tenantHostPattern: new RegExp(config.tenantHostPattern, "i"),
+      }),
+    };
     // RFC 9728 metadata is public: clients read it to find out how to authenticate.
     cds.app.get(metadataPath(mcpPath), metadataHandler(auth));
     // All methods: the SDK answers GET/DELETE (2025 session operations) with 405.

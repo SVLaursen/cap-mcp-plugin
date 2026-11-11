@@ -147,14 +147,15 @@ The model reader and the exposure registry report these; the startup report (M6)
 
 camelCase, read through `cds.env` only (profiles work as usual). No key turns a feature on.
 
-| Key                  | Default                          | Meaning                                                                            |
-| -------------------- | -------------------------------- | ---------------------------------------------------------------------------------- |
-| `path`               | `/mcp`                           | Endpoint path                                                                      |
-| `allowedOrigins`     | none                             | Browser origins other than the app's own that may call `/mcp` (others get 403)     |
-| `name`, `version`    | `@gavdi/cap-mcp` and its version | Server identity in `server/discover` and `initialize`; set them to tell apps apart |
-| `instructions`       | none                             | String, or `{ file }` (M6, not read yet)                                           |
-| `limits.maxRows`     | `200`                            | Upper bound for `top`                                                              |
-| `limits.defaultRows` | `25`                             | Default page size                                                                  |
+| Key                  | Default                          | Meaning                                                                                                                                                                                                                                                                         |
+| -------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `path`               | `/mcp`                           | Endpoint path                                                                                                                                                                                                                                                                   |
+| `allowedOrigins`     | none                             | Browser origins other than the app's own that may call `/mcp` (others get 403)                                                                                                                                                                                                  |
+| `name`, `version`    | `@gavdi/cap-mcp` and its version | Server identity in `server/discover` and `initialize`; set them to tell apps apart                                                                                                                                                                                              |
+| `tenantHostPattern`  | none                             | Multitenant XSUAA: a regular expression over the host the client called; its first capture group is the subscriber's subdomain (as the approuter's `TENANT_HOST_PATTERN`). The RFC 9728 metadata then names `https://<subdomain>.<uaadomain>`; no match keeps `credentials.url` |
+| `instructions`       | none                             | String, or `{ file }` (M6, not read yet)                                                                                                                                                                                                                                        |
+| `limits.maxRows`     | `200`                            | Upper bound for `top`                                                                                                                                                                                                                                                           |
+| `limits.defaultRows` | `25`                             | Default page size                                                                                                                                                                                                                                                               |
 
 Read once, when CAP has served the app (`allowedOrigins` per request). Final key list is settled in M6; add keys only with a test and a row here.
 

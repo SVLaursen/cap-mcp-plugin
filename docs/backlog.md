@@ -82,7 +82,7 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 - [x] Confirmation via MRTR `input_required` _(confirmation)_
 - [x] Completion: `@mcp.completion` completes `@mcp.resource` key templates; MCP has no tool-argument completion, so parameters get a diagnostic _(completion)_
 - [x] Auth matrix: XSUAA/IAS × secret/certificate, IAS-only + AMS _(`auth-matrix.test.ts`)_
-- [ ] Multitenant XSUAA: RFC 9728 metadata names the provider's `credentials.url`; subscribers authenticate at their own subdomain, so derive the authorization server from the tenant (M4 review)
+- [x] Multitenant XSUAA: opt-in `cds.env.mcp.tenantHostPattern` maps the request host to the subscriber's authorization server (`https://<subdomain>.<uaadomain>`); without it, or without a match, the metadata names `credentials.url` (M4 review)
 - [ ] Review: run the `reviewer` agent on M5
 
 ## M6 — Developer experience and v1 compatibility
