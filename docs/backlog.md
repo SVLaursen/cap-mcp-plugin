@@ -102,7 +102,6 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 - [ ] MCP conformance suite in CI (`@modelcontextprotocol/conformance`)
 - [ ] Coverage thresholds met (`jest.config.js`)
 - [ ] Release workflow (port v1's release-it + trusted publishing)
-- [ ] Publish `2.0.0`
 
 ## 2.x (P1) and later (P2)
 
