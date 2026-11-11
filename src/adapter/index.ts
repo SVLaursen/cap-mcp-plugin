@@ -1,15 +1,25 @@
 import {
+  CLIENT_CAPABILITIES_META_KEY,
   McpServer,
   ResourceNotFoundError,
   ResourceTemplate,
   createMcpHandler,
   fromJsonSchema,
+  inputRequired,
+  inputResponse,
 } from "@modelcontextprotocol/server";
-import type { CallToolResult, McpServerFactory } from "@modelcontextprotocol/server";
+import type {
+  CallToolResult,
+  ElicitInputParams,
+  InputRequiredResult,
+  McpServerFactory,
+  ServerContext,
+} from "@modelcontextprotocol/server";
 import { toNodeHandler } from "@modelcontextprotocol/node";
 import type { RequestHandler } from "express";
 import { isProduction } from "./auth";
 import {
+  ConfirmationRequired,
   Executor,
   ToolError,
   errorResult,
@@ -156,17 +166,47 @@ function localized(error: unknown, translate: Translate | undefined, locale?: st
   return error;
 }
 
+/** The confirmation form's key in `inputRequests` / `inputResponses`. */
+const CONFIRM = "confirm";
+
+/** Whether this 2026-07-28 request's client declared it can show forms (elicitation). */
+function canElicit(ctx: ServerContext): boolean {
+  const envelope = ctx.mcpReq.envelope as Record<string, unknown> | undefined;
+  const capabilities = envelope?.[CLIENT_CAPABILITIES_META_KEY] as
+    { elicitation?: { form?: unknown; url?: unknown } } | undefined;
+  const elicitation = capabilities?.elicitation;
+  // `elicitation: {}` means form support (the rule from before modes existed).
+  return !!elicitation && (elicitation.form !== undefined || elicitation.url === undefined);
+}
+
 /**
- * A 2025-era request is stateless: the server cannot ask the user anything mid-call, so a call
- * that needs confirmation (@mcp.elicit) can never run. Say so, instead of asking for it.
+ * An @mcp.elicit call that was not confirmed, after rollback (nothing ran): ask the user with
+ * MRTR `input_required` when this client can, or say why it cannot run.
  */
-function forLegacy(error: unknown): unknown {
-  if (!(error instanceof ToolError) || error.code !== "CONFIRMATION_REQUIRED") return error;
-  return new ToolError(
-    error.code,
-    `${error.message}; this client's MCP version cannot ask for confirmation, so it cannot run this tool (use a client that speaks 2026-07-28)`,
-    error.target,
-  );
+function confirmation(
+  error: ConfirmationRequired,
+  era: string,
+  ctx: ServerContext,
+): InputRequiredResult | CallToolResult {
+  const answer = inputResponse(ctx.mcpReq.inputResponses, CONFIRM);
+  if (answer.kind === "elicit" && answer.action !== "accept") {
+    const declined = new ToolError(
+      "CONFIRMATION_DECLINED",
+      `The user did not confirm ${error.request.message.replace(/^Confirm |\?$/g, "")}; nothing was done`,
+    );
+    return toCallToolResult(errorResult(declined) as ToolResult);
+  }
+  if (era !== "legacy" && canElicit(ctx)) {
+    return inputRequired({
+      inputRequests: { [CONFIRM]: inputRequired.elicit(error.request as ElicitInputParams) },
+    });
+  }
+  const why =
+    era === "legacy"
+      ? "this client's MCP version cannot ask for confirmation, so it cannot run this tool (use a client that speaks 2026-07-28)"
+      : "this client did not declare the elicitation capability, so it cannot ask for confirmation";
+  const refused = new ToolError(error.code, `${error.message}; ${why}`, error.target);
+  return toCallToolResult(errorResult(refused) as ToolResult);
 }
 
 /** The per-request server factory: one McpServer with the caller's tools. */
@@ -213,20 +253,27 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
           annotations: tool.annotations,
           _meta: tool._meta,
         },
-        async (args: unknown) => {
+        async (args: unknown, ctx: ServerContext) => {
           const service = options.services[serviceOf(registry.spec, tool.target) ?? ""] as
             TxService | undefined;
           if (!service) throw new Error(`cap-mcp: no service serves ${tool.name}`);
+          // A retry that carries the user's yes to the confirmation form (MRTR).
+          const answer = inputResponse(ctx.mcpReq.inputResponses, CONFIRM);
+          const confirmed = answer.kind === "elicit" && answer.action === "accept";
           try {
             // The service's own root transaction, inheriting cds.context (user, tenant,
             // locale). execute() throws on any error, so CAP rolls back before we map it.
             const result = await service.tx((tx) =>
-              executor.execute(tool, (args ?? {}) as Record<string, unknown>, tx, user),
+              executor.execute(tool, (args ?? {}) as Record<string, unknown>, tx, user, {
+                confirmed,
+                ...(confirmed && answer.content && { confirmedArgs: answer.content }),
+              }),
             );
             return toCallToolResult(result);
           } catch (error) {
+            if (error instanceof ConfirmationRequired) return confirmation(error, era, ctx);
             const translated = localized(error, options.translate, context.locale);
-            const result = errorResult(era === "legacy" ? forLegacy(translated) : translated);
+            const result = errorResult(translated);
             if (result) return toCallToolResult(result);
             options.log.error(`${tool.name} failed:`, error);
             const message =

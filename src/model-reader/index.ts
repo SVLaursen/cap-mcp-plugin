@@ -422,9 +422,47 @@ function readOperation(
     returns: readReturns(def.returns, ctx),
     requires: roles(def),
     restrict: grants(def)?.map(({ to }) => ({ grant: name.slice(name.lastIndexOf(".") + 1), to })),
-    elicit: strings(def["@mcp.elicit"]),
+    elicit: readElicit(name, def["@mcp.elicit"], params, ctx),
     ui: readUi(name, def, ctx),
   };
+}
+
+/**
+ * `@mcp.elicit`: `['confirm']` and/or parameter names to ask the user for. Any other value is
+ * diagnosed, but whatever was written still asks for confirmation: a typo must never switch it
+ * off. The flag form (`@mcp.elicit` alone) means `['confirm']`; `[]` asks nothing.
+ */
+function readElicit(
+  name: string,
+  value: unknown,
+  params: FieldSpec[],
+  ctx: Context,
+): string[] | undefined {
+  if (value === undefined || value === null || value === false) return undefined;
+  if (value === true) return ["confirm"];
+  if (!Array.isArray(value)) {
+    invalid(
+      ctx,
+      name,
+      `@mcp.elicit must be a list ('confirm' or parameter names); the call is still confirmed`,
+    );
+    return ["confirm"];
+  }
+  const values = strings(value) ?? [];
+  if (values.length < value.length) {
+    invalid(ctx, name, `@mcp.elicit values must be strings; the call is still confirmed`);
+    if (!values.length) return ["confirm"];
+  }
+  for (const v of values) {
+    if (v !== "confirm" && !params.some((p) => p.name === v)) {
+      invalid(
+        ctx,
+        name,
+        `@mcp.elicit value ${v} is neither 'confirm' nor a parameter of ${name}; the call is still confirmed`,
+      );
+    }
+  }
+  return values.length ? values : undefined;
 }
 
 /** The scalar, non-ignored, non-omitted elements an agent may see. */

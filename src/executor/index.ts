@@ -1,10 +1,11 @@
-import { DEFAULT_LIMITS, OPERATORS, type Limits } from "../schema-mapper";
+import { DEFAULT_LIMITS, OPERATORS, elicitationSchema, type Limits } from "../schema-mapper";
 import { view } from "../exposure-registry/access";
 import type {
   EntityMode,
   EntitySpec,
   ExposureSpec,
   FieldSpec,
+  JsonSchema,
   OperationSpec,
   PromptSpec,
   ServiceSpec,
@@ -39,9 +40,14 @@ export interface ExecutorOptions {
   limits?: Limits;
 }
 
-/** Per call. `confirmed`: the user confirmed this call (@mcp.elicit, MRTR in M5). */
+/** Per call: whether the user confirmed it (@mcp.elicit, through MRTR), and with what values. */
 export interface CallOptions {
   confirmed?: boolean;
+  /**
+   * The values the user gave in the confirmation form. Only the operation's @mcp.elicit
+   * parameters are taken from it; they replace the agent's values and are checked like them.
+   */
+  confirmedArgs?: Record<string, unknown>;
 }
 
 /**
@@ -61,12 +67,27 @@ export function errorResult(error: unknown): ToolResult | undefined {
  */
 export class ToolError extends Error {
   constructor(
-    readonly code: "INVALID_ARGUMENT" | "NOT_FOUND" | "CONFIRMATION_REQUIRED",
+    readonly code:
+      "INVALID_ARGUMENT" | "NOT_FOUND" | "CONFIRMATION_REQUIRED" | "CONFIRMATION_DECLINED",
     message: string,
     readonly target?: string,
   ) {
     super(message);
     this.name = "ToolError";
+  }
+}
+
+/**
+ * An @mcp.elicit operation that was not confirmed (nothing ran). Carries the form to show the
+ * user: a client that can elicit asks with it (MRTR `input_required`) and retries.
+ */
+export class ConfirmationRequired extends ToolError {
+  constructor(
+    message: string,
+    readonly request: { message: string; requestedSchema: JsonSchema },
+  ) {
+    super("CONFIRMATION_REQUIRED", message);
+    this.name = "ConfirmationRequired";
   }
 }
 
@@ -397,6 +418,12 @@ export class Executor {
   ): Promise<ToolResult> {
     const bound = op.boundTo ? this.entities.get(op.boundTo) : undefined;
     const keyNames = bound?.keys.map((k) => k.name) ?? [];
+    if (options.confirmed && options.confirmedArgs) {
+      // The user's answers to the confirmation form win over the agent's values.
+      const asked = op.params.filter((p) => op.elicit?.includes(p.name)).map((p) => p.name);
+      const answers = Object.entries(options.confirmedArgs).filter(([k]) => asked.includes(k));
+      args = { ...args, ...Object.fromEntries(answers) };
+    }
     allowOnly(args, [...keyNames, ...op.params.map((p) => p.name)]);
     const data: Args = {};
     for (const p of op.params) {
@@ -410,10 +437,12 @@ export class Executor {
       data[p.name] = v;
     }
     if (op.elicit?.length && !options.confirmed) {
-      throw new ToolError(
-        "CONFIRMATION_REQUIRED",
-        `${op.title} needs the user's confirmation before it runs`,
-      );
+      const key = bound ? ` for ${JSON.stringify(pickKeys(args, keyNames))}` : "";
+      const given = Object.keys(data).length ? ` with ${JSON.stringify(data)}` : "";
+      throw new ConfirmationRequired(`${op.title} needs the user's confirmation before it runs`, {
+        message: `Confirm ${op.title}${key}${given}?`,
+        requestedSchema: elicitationSchema(op, data),
+      });
     }
     const event = op.name.slice(op.name.lastIndexOf(".") + 1);
     const returned = bound

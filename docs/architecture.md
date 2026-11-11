@@ -55,6 +55,10 @@ The data passed between them is defined in `src/types.ts`.
    2025-era clients get the same tools statelessly: each request (`initialize` included) stands
    alone, answered as SSE; GET and DELETE are 405. They cannot confirm an `@mcp.elicit` call,
    so it is refused with a `CONFIRMATION_REQUIRED` tool error that says why.
+   A 2026-07-28 client with the `elicitation` capability confirms through MRTR: the executor
+   throws `ConfirmationRequired` (carrying the form, from `elicitationSchema`) before anything
+   runs, the adapter answers `input_required`, and the retry's `inputResponses.confirm` becomes
+   `execute(…, { confirmed, confirmedArgs })`.
    A 401 (CAP's `next(401)`, e.g. an invalid token) becomes CAP's own login challenge
    (`req._login`, Basic for mocked/basic auth) or, for XSUAA/JWT/IAS,
    `WWW-Authenticate: Bearer resource_metadata="<origin>/.well-known/oauth-protected-resource/mcp"`.

@@ -113,7 +113,7 @@ describe("executor: operations", () => {
   });
 
   test("bound action OrdersService.Orders.cancel takes the order key plus parameters", async () => {
-    // Confirmed directly: confirming over /mcp (MRTR) is M5.
+    // Confirmed directly; the MRTR round trip over /mcp is in opt-in-features.test.ts.
     const result = await executeDirectly(
       "bob",
       "OrdersService_Orders_cancel",

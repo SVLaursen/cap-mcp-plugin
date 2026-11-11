@@ -1088,6 +1088,38 @@ describe("model-reader: diagnostics", () => {
     ]);
   });
 
+  test("@mcp.elicit values other than 'confirm' and parameter names are diagnosed; it still confirms", () => {
+    const csn = compileSnippet(`
+      @mcp service S {
+        @mcp @mcp.elicit: ['confirm', 'amout'] action pay(amount: Integer);
+        @mcp @mcp.elicit: 'confirm' action go();
+        @mcp @mcp.elicit action flag();
+        @mcp @mcp.elicit: [] action none();
+        @mcp @mcp.elicit: [1] action odd();
+      }
+    `);
+    const { spec, diagnostics } = readModel(csn);
+    // Anything that asks for confirmation keeps asking: a typo must never switch it off.
+    expect(onlyService(spec).operations.map((o) => [o.name, o.elicit])).toEqual([
+      ["S.pay", ["confirm", "amout"]],
+      ["S.go", ["confirm"]],
+      ["S.flag", ["confirm"]],
+      ["S.none", undefined],
+      ["S.odd", ["confirm"]],
+    ]);
+    expect(diagnostics.filter((d) => d.code === "INVALID_ANNOTATION_VALUE")).toEqual([
+      {
+        level: "error",
+        code: "INVALID_ANNOTATION_VALUE",
+        target: "S.pay",
+        message:
+          "@mcp.elicit value amout is neither 'confirm' nor a parameter of S.pay; the call is still confirmed",
+      },
+      expect.objectContaining({ target: "S.go" }),
+      expect.objectContaining({ target: "S.odd" }),
+    ]);
+  });
+
   test("@mcp.deepInsert on anything but a composition is INVALID_ANNOTATION_VALUE", () => {
     const csn = compileSnippet(`
       @mcp service S {

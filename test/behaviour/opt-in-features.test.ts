@@ -286,9 +286,71 @@ describe("opt-in: MCP Apps (issue #133)", () => {
 });
 
 describe("opt-in: confirmation (MRTR)", () => {
-  test.todo("calling cancel returns resultType input_required with a confirmation request");
-  test.todo("retrying with a declining inputResponse leaves the order unchanged");
-  test.todo("retrying with an accepting inputResponse cancels the order");
+  /** Bob's submitted order (demo data). */
+  const ORDER = "7e2f9c58-1c1d-4c0b-9a7a-6d1f0b5e0a01";
+  const ELICITING = { "io.modelcontextprotocol/clientCapabilities": { elicitation: { form: {} } } };
+  const cancel = (extra: Record<string, unknown> = {}) =>
+    rpc(
+      demo.POST,
+      "bob",
+      "tools/call",
+      { name: "OrdersService_Orders_cancel", arguments: { ID: ORDER, reason: "moved" }, ...extra },
+      { meta: ELICITING },
+    );
+  const status = async () =>
+    (
+      (await callTool("bob", "OrdersService_Orders_get", { ID: ORDER })).structuredContent as {
+        status: string;
+      }
+    ).status;
+
+  test("calling cancel returns resultType input_required with a confirmation request", async () => {
+    const res = await cancel();
+    expect(res.message?.result).not.toHaveProperty("content");
+    expect(res.message?.result).toMatchObject({
+      resultType: "input_required",
+      inputRequests: {
+        confirm: {
+          method: "elicitation/create",
+          params: {
+            mode: "form",
+            message: expect.stringMatching(/^Confirm OrdersService\.Orders\.cancel/),
+            requestedSchema: { type: "object", properties: {} },
+          },
+        },
+      },
+    });
+    expect(await status()).toBe("submitted");
+  });
+
+  test("retrying with a declining inputResponse leaves the order unchanged", async () => {
+    for (const action of ["decline", "cancel"]) {
+      const res = await cancel({ inputResponses: { confirm: { action } } });
+      expect(res.message?.result).toMatchObject({
+        isError: true,
+        structuredContent: { error: { code: "CONFIRMATION_DECLINED" } },
+      });
+    }
+    expect(await status()).toBe("submitted");
+  });
+
+  test("retrying with an accepting inputResponse cancels the order", async () => {
+    const res = await cancel({ inputResponses: { confirm: { action: "accept", content: {} } } });
+    expect(res.message?.result).toMatchObject({
+      structuredContent: { value: { ID: ORDER, status: "cancelled", reason: "moved" } },
+    });
+    expect(await status()).toBe("cancelled");
+  });
+
+  test("a 2026-07-28 client that cannot elicit gets a clear isError", async () => {
+    const res = await callTool("bob", "OrdersService_Orders_cancel", { ID: ORDER, reason: "x" });
+    expect(res.structuredContent).toEqual({
+      error: expect.objectContaining({
+        code: "CONFIRMATION_REQUIRED",
+        message: expect.stringMatching(/elicitation/),
+      }),
+    });
+  });
 });
 
 describe("opt-in: completion", () => {

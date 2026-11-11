@@ -3,7 +3,7 @@
  * returns. The service here is a ServiceLike stand-in (not a CAP mock): it only returns a value.
  */
 import cds from "@sap/cds";
-import { Executor, type ServiceLike } from "../../src/executor";
+import { ConfirmationRequired, Executor, type ServiceLike } from "../../src/executor";
 import { ExposureRegistry } from "../../src/exposure-registry";
 import { compileSnippet } from "../helpers/snippet";
 import { schemaError } from "../helpers/validate";
@@ -83,5 +83,57 @@ describe("resources", () => {
     await expect(executor.readResource("R.Nope", "1", echo())).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
+  });
+});
+
+describe("confirmation (@mcp.elicit)", () => {
+  const elicit = ExposureRegistry.fromModel(
+    compileSnippet(`@mcp service E {
+      @mcp @mcp.elicit: ['confirm', 'amount'] action pay(amount: Integer, memo: String);
+    }`),
+  );
+  const tool = elicit.toolsFor(user).find((t) => t.name === "E_pay");
+  const sending = () => {
+    const sent: unknown[] = [];
+    const service: ServiceLike = {
+      name: "E",
+      run: async () => undefined,
+      send: async (req) => void sent.push(req.data),
+    };
+    return { sent, service };
+  };
+
+  test("unconfirmed, nothing is sent; the error carries the form, pre-filled", async () => {
+    if (!tool) throw new Error("no E_pay");
+    const { sent, service } = sending();
+    const call = new Executor(elicit.spec).execute(tool, { amount: 5, memo: "m" }, service, user);
+    await expect(call).rejects.toBeInstanceOf(ConfirmationRequired);
+    await expect(call).rejects.toMatchObject({
+      request: {
+        message: 'Confirm E.pay with {"amount":5,"memo":"m"}?',
+        requestedSchema: {
+          type: "object",
+          properties: { amount: expect.objectContaining({ type: "integer", default: 5 }) },
+        },
+      },
+    });
+    expect(sent).toEqual([]);
+  });
+
+  test("confirmed, the user's answers replace the agent's values for the asked parameters only", async () => {
+    if (!tool) throw new Error("no E_pay");
+    const { sent, service } = sending();
+    await new Executor(elicit.spec).execute(tool, { amount: 5, memo: "m" }, service, user, {
+      confirmed: true,
+      confirmedArgs: { amount: 3, memo: "changed" },
+    });
+    expect(sent).toEqual([{ amount: 3, memo: "m" }]);
+    // The answers are checked like the agent's arguments.
+    await expect(
+      new Executor(elicit.spec).execute(tool, { amount: 5 }, service, user, {
+        confirmed: true,
+        confirmedArgs: { amount: "lots" },
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
   });
 });
