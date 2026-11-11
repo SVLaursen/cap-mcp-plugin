@@ -81,7 +81,7 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 - [ ] MCP Apps via `@modelcontextprotocol/ext-apps` (issue #133), incl. custom registration hook _(MCP Apps)_
 - [x] Confirmation via MRTR `input_required` _(confirmation)_
 - [ ] Completion _(completion)_
-- [ ] Auth matrix: XSUAA/IAS × secret/certificate, IAS-only + AMS _(`auth-matrix.test.ts`)_
+- [x] Auth matrix: XSUAA/IAS × secret/certificate, IAS-only + AMS _(`auth-matrix.test.ts`)_
 - [ ] Multitenant XSUAA: RFC 9728 metadata names the provider's `credentials.url`; subscribers authenticate at their own subdomain, so derive the authorization server from the tenant (M4 review)
 - [ ] Review: run the `reviewer` agent on M5
 

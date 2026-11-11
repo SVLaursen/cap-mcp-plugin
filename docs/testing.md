@@ -81,11 +81,33 @@ sends no credentials.
 
 ## The auth matrix
 
-`mocked` runs directly against the demo. For XSUAA and IAS rows, run a local token issuer in
-the test (sign JWTs with a test key and point the credentials' `url`/`certificate` at it) so
-`@sap/xssec` validates real tokens. Certificate rows need a test CA; generate it in the test
-setup with Node's `crypto`. Do not stub `@sap/xssec`. Work this out in M5 and document the
-recipe here.
+`mocked` runs directly against the demo (`auth-matrix.test.ts`). Every other row is its own
+file, because CAP builds its auth middleware once per boot: `xsuaa-secret`, `xsuaa-certificate`,
+`ias-secret`, `ias-certificate` and `ias-ams.test.ts`. Each calls `authMatrixRow` from
+`test/auth/scenario.ts` right after `bootDemo()`, which binds the demo to that kind and
+credentials and runs the same scenario (admin token, token without roles, forged token, no token
+in production, RFC 9728 metadata).
+
+The recipe (`test/helpers/issuer.ts`):
+
+- **Tokens are real.** `createIssuer()` makes an RSA key pair and signs RS256 JWTs with Node's
+  `crypto`, with the claims XSUAA (`scope` prefixed with the xsappname) or IAS (`iss` in
+  `domains`, `aud` = client id, roles in `ias_apis`) would issue.
+- **Keys reach xssec through its own config**, not a stub: `cds.requires.auth.config` is passed
+  to `@sap/xssec`'s service, and `validation.jwks.impl` is xssec's documented custom store for
+  its JWKS cache. The issuer's store answers every lookup with its public key, so xssec checks
+  signature, issuer, audience and expiry for real, offline. A token signed by another issuer
+  fails (`MissingKidError`, 401).
+- **Certificate rows** carry a self-signed certificate and key (made with the `openssl` CLI;
+  Node's `crypto` cannot issue certificates) and no client secret. xssec uses them only to fetch
+  tokens over mTLS, so validation is the same; the row proves `/mcp` and its metadata work with
+  such a binding (the authorization server is still `url`, never `certurl`).
+- **AMS**: real policy evaluation needs DCL compiled to DCN and an AMS bundle, which is
+  `@sap/ams`'s own concern. The `ias-ams` row instead adds a middleware after `auth` that grants
+  roles by wrapping `user.is`, as `AmsCapMiddleware.appendRoles` does, to an IAS token without
+  `ias_apis`: the tool list and CAP's checks must both see those roles.
+- Add `cds.middlewares.add(…)` only after `authMatrixRow(…)`: reading `cds.middlewares` builds
+  CAP's auth middleware with whatever `cds.requires.auth` is at that moment.
 
 ## Coverage
 
