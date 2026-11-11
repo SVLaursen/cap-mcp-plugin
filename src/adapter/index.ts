@@ -35,6 +35,7 @@ import {
 import type { ExposureRegistry } from "../exposure-registry";
 import { promptArgsSchema } from "../schema-mapper";
 import type { ExposureSpec, PromptSpec, ResourceSpec, ToolSpec, UserLike } from "../types";
+import { compareText } from "../util";
 
 /**
  * adapter
@@ -112,12 +113,18 @@ function caches() {
     },
     argsSchemaFor(prompt: PromptSpec) {
       let standard = promptArgs.get(prompt);
-      if (!standard) promptArgs.set(prompt, (standard = fromJsonSchema(promptArgsSchema(prompt))));
+      if (!standard) {
+        standard = fromJsonSchema(promptArgsSchema(prompt));
+        promptArgs.set(prompt, standard);
+      }
       return standard;
     },
     schemaFor(schema: object) {
       let standard = schemas.get(schema);
-      if (!standard) schemas.set(schema, (standard = fromJsonSchema(schema)));
+      if (!standard) {
+        standard = fromJsonSchema(schema);
+        schemas.set(schema, standard);
+      }
       return standard;
     },
   };
@@ -155,22 +162,24 @@ function toCallToolResult(result: ToolResult): CallToolResult {
  */
 function localized(error: unknown, translate: Translate | undefined, locale?: string): unknown {
   if (!translate || !error || typeof error !== "object" || error instanceof ToolError) return error;
-  const e = error as Record<string, unknown>;
-  const all = [e, ...(Array.isArray(e.details) ? (e.details as Record<string, unknown>[]) : [])];
-  for (const x of all) {
-    const message = typeof x.message === "string" ? x.message : undefined;
+  const err = error as Record<string, unknown>;
+  const details = Array.isArray(err.details) ? (err.details as Record<string, unknown>[]) : [];
+  for (const each of [err, ...details]) {
+    const message = typeof each.message === "string" ? each.message : undefined;
     const unwrapped = message?.startsWith("{i18n>") ? message.slice(6, -1) : message;
-    const key = unwrapped || (typeof x.code === "string" ? x.code : undefined);
+    const key = unwrapped || (typeof each.code === "string" ? each.code : undefined);
     if (!key || /^\d+$/.test(key)) continue;
-    const text = translate(key, locale, x.args);
+    const text = translate(key, locale, each.args);
     if (!text) continue;
-    const status = x.status ?? x.statusCode ?? (typeof x.code === "number" ? x.code : undefined);
-    if (!x.code || x.code == status) {
+    const status =
+      each.status ?? each.statusCode ?? (typeof each.code === "number" ? each.code : undefined);
+    // CAP may give the status as a number or a numeric string.
+    if (!each.code || Number(each.code) === Number(status)) {
       // The numeric code was the status (CAP's req.error(409, key, …)); keep it as one.
-      if (status !== undefined) x.status = status;
-      x.code = key;
+      if (status !== undefined) each.status = status;
+      each.code = key;
     }
-    x.message = text;
+    each.message = text;
   }
   return error;
 }
@@ -194,7 +203,7 @@ function canonical(value: unknown): string {
   if (value && typeof value === "object") {
     const entries = Object.entries(value as Record<string, unknown>)
       .filter(([, v]) => v !== undefined)
-      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+      .sort(([a], [b]) => compareText(a, b));
     return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(",")}}`;
   }
   return JSON.stringify(value) ?? "null";

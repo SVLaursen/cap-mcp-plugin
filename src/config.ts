@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { DEFAULT_LIMITS, type Limits } from "./schema-mapper";
 import type { Diagnostic, V1Options } from "./types";
+import { isObject } from "./util";
 
 /**
  * `cds.env.mcp` (docs/annotations.md, Configuration): camelCase keys, read through cds.env only.
@@ -66,10 +67,6 @@ function v1Options(raw: Record<string, unknown>): V1Options | undefined {
     v1.wrapEntitiesToActions = raw.wrap_entities_to_actions;
   if (typeof raw.enable_model_description === "boolean") v1.describe = raw.enable_model_description;
   return Object.keys(raw).some((key) => key in V1_KEYS) ? v1 : undefined;
-}
-
-function isObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
 export function readConfig(raw: unknown): {

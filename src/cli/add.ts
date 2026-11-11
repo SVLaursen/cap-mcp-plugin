@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { isObject } from "../util";
 
 /**
  * `cds add mcp`: `@mcp` on the chosen services, the dependency, and an mcp config block.
@@ -79,9 +80,6 @@ function keepExisting(target: Json, additions: Json): Json {
   }
   return result;
 }
-
-const isObject = (v: unknown): v is Json =>
-  typeof v === "object" && v !== null && !Array.isArray(v);
 
 /** What the facet needs from cds-dk's `cds` (passed in, ADR 0005). */
 export interface FacetCds {

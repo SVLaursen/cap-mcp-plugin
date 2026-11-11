@@ -1,5 +1,8 @@
 import { readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
+import { LEGACY_META_KEY, appMeta, linkedUri } from "../exposure-registry/app-meta";
+
+export { appMeta, linkedUri };
 
 /**
  * MCP Apps (issue #133, ADR 0012): the `ui://` resources that `@mcp.ui` tools link to.
@@ -17,8 +20,6 @@ import path from "node:path";
 /** The MIME type of an MCP App's HTML (ext-apps `RESOURCE_MIME_TYPE`). */
 export const APP_MIME_TYPE = "text/html;profile=mcp-app";
 
-/** The older flat `_meta` key for the UI resource (ext-apps `RESOURCE_URI_META_KEY`). */
-const LEGACY_META_KEY = "ui/resourceUri";
 
 /** The HTML of one UI resource; called on every read, so the app decides about caching. */
 export type AppContent = () => string | Promise<string>;
@@ -28,17 +29,6 @@ export interface AppRegistry {
   register(uri: string, content: AppContent): void;
 }
 
-/** A tool's `_meta` for a UI resource, as ext-apps' `registerAppTool` writes it. */
-export function appMeta(uri: string): Record<string, unknown> {
-  return { ui: { resourceUri: uri }, [LEGACY_META_KEY]: uri };
-}
-
-/** The UI resource a tool's `_meta` links to, if any. */
-export function linkedUri(meta: Record<string, unknown> | undefined): string | undefined {
-  const ui = meta?.ui as { resourceUri?: unknown } | undefined;
-  const uri = ui?.resourceUri ?? meta?.[LEGACY_META_KEY];
-  return typeof uri === "string" ? uri : undefined;
-}
 
 export class McpApps implements AppRegistry {
   readonly #sources = new Map<string, AppContent>();

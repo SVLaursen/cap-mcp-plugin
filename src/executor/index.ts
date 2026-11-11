@@ -18,6 +18,7 @@ import type {
   ToolSpec,
   UserLike,
 } from "../types";
+import { isObject, typeName } from "../util";
 
 /** The executor's view of a CAP service. A structural subset of cds.Service. */
 export interface ServiceLike {
@@ -151,12 +152,12 @@ export class Executor {
       allowOnly(args, []);
       const reachable = this.reachable(target.service, user);
       return result({
-        entities: reachable.entities.map((e) =>
+        entities: reachable.entities.map((entity) =>
           clean({
-            name: e.name,
-            title: e.title,
-            description: e.description,
-            modes: [...e.modes].sort(),
+            name: entity.name,
+            title: entity.title,
+            description: entity.description,
+            modes: [...entity.modes].sort(),
           }),
         ),
       });
@@ -334,14 +335,15 @@ export class Executor {
       ),
     );
     const nested = new Map(entity.deepInsert.map((d) => [d.element, d]));
-    for (const [name, v] of Object.entries(data)) {
+    for (const [name, given] of Object.entries(data)) {
       const deep = nested.get(name);
       if (deep) {
         const child = this.entities.get(deep.target);
         if (!child)
           throw new ToolError("INVALID_ARGUMENT", `Unknown field ${name}`, `data.${name}`);
-        const items = deep.many ? v : [v];
-        if (!Array.isArray(items) || (!deep.many && (v === null || typeof v !== "object"))) {
+        const items = deep.many ? given : [given];
+        const notObject = given === null || typeof given !== "object";
+        if (!Array.isArray(items) || (!deep.many && notObject)) {
           throw new ToolError(
             "INVALID_ARGUMENT",
             `${name} must be ${deep.many ? "an array" : "an object"}`,
@@ -353,8 +355,8 @@ export class Executor {
         );
         continue;
       }
-      const f = field(fields, name, `data.${name}`);
-      if (v !== null || f.mandatory) value(f, v, `data.${name}`);
+      const target = field(fields, name, `data.${name}`);
+      if (given !== null || target.mandatory) value(target, given, `data.${name}`);
     }
     return data;
   }
@@ -476,15 +478,15 @@ export class Executor {
     }
     allowOnly(args, [...keyNames, ...op.params.map((p) => p.name)]);
     const data: Args = {};
-    for (const p of op.params) {
-      const v = args[p.name];
-      if (v === undefined || (v === null && !p.mandatory)) continue;
-      if (p.many) {
-        if (!Array.isArray(v))
-          throw new ToolError("INVALID_ARGUMENT", `${p.name} must be an array`, p.name);
-        v.forEach((item, i) => value(p, item, `${p.name}[${i}]`));
-      } else value(p, v, p.name);
-      data[p.name] = v;
+    for (const param of op.params) {
+      const given = args[param.name];
+      if (given === undefined || (given === null && !param.mandatory)) continue;
+      if (param.many) {
+        if (!Array.isArray(given))
+          throw new ToolError("INVALID_ARGUMENT", `${param.name} must be an array`, param.name);
+        given.forEach((item, i) => value(param, item, `${param.name}[${i}]`));
+      } else value(param, given, param.name);
+      data[param.name] = given;
     }
     if (op.elicit?.length && !options.confirmed) {
       const key = bound ? ` for ${JSON.stringify(pickKeys(args, keyNames))}` : "";
@@ -506,13 +508,11 @@ export class Executor {
       : await service.send({ event, data });
     if (!op.returns) return { text: `${op.title} done` };
     const fields = op.returns.fields?.map((f) => f.name);
-    const shape = (v: unknown) =>
-      fields && v && typeof v === "object" ? project(v as Args, fields) : v;
+    // Only the fields the return type exposes (no @mcp.omit ones the handler happened to read).
+    const shape = (item: unknown) => (fields && isObject(item) ? project(item, fields) : item);
+    if (!op.returns.many) return result({ value: shape(returned ?? null) });
     // A list operation whose handler returns nothing returned an empty list (the schema says array).
-    const value_ = op.returns.many
-      ? (Array.isArray(returned) ? returned : []).map(shape)
-      : shape(returned ?? null);
-    return result({ value: value_ });
+    return result({ value: (Array.isArray(returned) ? returned : []).map(shape) });
   }
 
   /** The entity a call names, which must be exposed (and in `service`, for compact tools). */
@@ -616,8 +616,9 @@ function describeEntity(entity: EntitySpec) {
 }
 
 function describeOperation(op: OperationSpec) {
-  const r = op.returns;
-  const returns = r && (r.scalar ? typeName(r.scalar.cdsType) : (r.entity ?? "structure"));
+  const spec = op.returns;
+  const returns =
+    spec && (spec.scalar ? typeName(spec.scalar.cdsType) : (spec.entity ?? "structure"));
   return clean({
     name: op.name,
     title: op.title,
@@ -625,27 +626,26 @@ function describeOperation(op: OperationSpec) {
     description: op.description,
     boundTo: op.boundTo,
     params: op.params.map(describeField),
-    returns: r && (r.many ? `array of ${returns}` : returns),
+    returns: spec && (spec.many ? `array of ${returns}` : returns),
   });
 }
 
-function describeField(f: FieldSpec) {
+function describeField(spec: FieldSpec) {
   return clean({
-    name: f.name,
-    type: f.many ? `array of ${typeName(f.cdsType)}` : typeName(f.cdsType),
-    key: f.key || undefined,
-    mandatory: f.mandatory || undefined,
-    readonly: f.readonly || undefined,
-    description: f.description,
-    enum: f.enum,
-    length: f.length,
-    precision: f.precision,
-    scale: f.scale,
-    target: f.target,
+    name: spec.name,
+    type: spec.many ? `array of ${typeName(spec.cdsType)}` : typeName(spec.cdsType),
+    key: spec.key || undefined,
+    mandatory: spec.mandatory || undefined,
+    readonly: spec.readonly || undefined,
+    description: spec.description,
+    enum: spec.enum,
+    length: spec.length,
+    precision: spec.precision,
+    scale: spec.scale,
+    target: spec.target,
   });
 }
 
-const typeName = (cdsType: string) => cdsType.replace(/^cds\./, "");
 
 /** Drop undefined properties, so descriptions only say what is there. */
 function clean<T extends Record<string, unknown>>(value: T): Partial<T> {
@@ -715,29 +715,31 @@ interface ToolErrorLike {
  */
 function capError(error: unknown): ToolErrorLike | undefined {
   if (!error || typeof error !== "object") return undefined;
-  const e = error as Record<string, unknown>;
-  const numeric = typeof e.code === "number" ? e.code : undefined;
-  const details = Array.isArray(e.details) ? (e.details as Record<string, unknown>[]) : undefined;
+  const err = error as Record<string, unknown>;
+  const numeric = typeof err.code === "number" ? err.code : undefined;
+  const details = Array.isArray(err.details)
+    ? (err.details as Record<string, unknown>[])
+    : undefined;
   // CAP's MULTIPLE_ERRORS carries no status of its own, only its details' (all 4xx for input).
   const fromDetails = details?.length
     ? Math.max(...details.map((d) => Number(d.status ?? d.statusCode ?? d.code ?? 400) || 400))
     : undefined;
-  const status = Number(e.status ?? e.statusCode ?? numeric ?? fromDetails ?? NaN);
+  const status = Number(err.status ?? err.statusCode ?? numeric ?? fromDetails ?? NaN);
   if (!(status >= 400 && status < 500)) return undefined;
-  const message = typeof e.message === "string" ? e.message : "";
+  const message = typeof err.message === "string" ? err.message : "";
   // CAP's bare status errors (req.reject(403), a missing record) get readable codes.
   const named = BARE_STATUS[status];
   if (
     named &&
-    (typeof e.code !== "string" || /^\d+$/.test(e.code)) &&
+    (typeof err.code !== "string" || /^\d+$/.test(err.code)) &&
     (!message || /^\d+$/.test(message))
   ) {
     return { code: named.code, message: named.message };
   }
   return {
-    code: typeof e.code === "string" ? e.code : message || String(status),
-    message: message || String(e.code),
-    target: typeof e.target === "string" ? e.target : undefined,
+    code: typeof err.code === "string" ? err.code : message || String(status),
+    message: message || String(err.code),
+    target: typeof err.target === "string" ? err.target : undefined,
     // An error's message is not enumerable, so read each field rather than spreading it.
     details: details?.map((d) =>
       capError({ status: d.status ?? status, code: d.code, message: d.message, target: d.target }),
@@ -791,35 +793,35 @@ const STRING_TYPES = new Set(["cds.String", "cds.LargeString"]);
 function conditions(fields: Map<string, FieldSpec>, where: unknown): unknown[] {
   return and(
     ...(list(where, "where") ?? []).map((condition, i) => {
-      const c = object(condition, `where[${i}]`);
-      allowOnly(c, ["field", "op", "value"]);
-      const f = field(fields, String(c.field), `where[${i}].field`);
-      const op = String(c.op);
+      const entry = object(condition, `where[${i}]`);
+      allowOnly(entry, ["field", "op", "value"]);
+      const target = field(fields, String(entry.field), `where[${i}].field`);
+      const op = String(entry.op);
       if (!OPERATORS.includes(op)) {
         throw new ToolError("INVALID_ARGUMENT", `Unknown operator ${op}`, `where[${i}].op`);
       }
       const at = `where[${i}].value`;
       if (op === "in") {
-        if (!Array.isArray(c.value))
+        if (!Array.isArray(entry.value))
           throw new ToolError("INVALID_ARGUMENT", "'in' needs an array", at);
-        return [ref(f.name), "in", { list: c.value.map((v) => ({ val: value(f, v, at) })) }];
+        const list = entry.value.map((item) => ({ val: value(target, item, at) }));
+        return [ref(target.name), "in", { list }];
       }
       if (TEXT_FUNCTIONS.has(op)) {
-        if (!STRING_TYPES.has(f.cdsType)) {
+        if (!STRING_TYPES.has(target.cdsType)) {
           throw new ToolError(
             "INVALID_ARGUMENT",
-            `'${op}' needs a string field; ${f.name} is not one`,
+            `'${op}' needs a string field; ${target.name} is not one`,
             at,
           );
         }
-        return [{ func: op, args: [ref(f.name), { val: value(f, c.value, at) }] }];
+        return [{ func: op, args: [ref(target.name), { val: value(target, entry.value, at) }] }];
       }
-      const val = c.value === null && (op === "eq" || op === "ne") ? null : value(f, c.value, at);
-      return [
-        ref(f.name),
-        val === null ? (op === "eq" ? "is" : "is not") : COMPARISONS[op],
-        { val },
-      ];
+      // `= null` matches nothing in SQL: eq/ne null become `is null` / `is not null`.
+      if (entry.value === null && (op === "eq" || op === "ne")) {
+        return [ref(target.name), op === "eq" ? "is" : "is not", { val: null }];
+      }
+      return [ref(target.name), COMPARISONS[op], { val: value(target, entry.value, at) }];
     }),
   );
 }
@@ -836,53 +838,61 @@ function search(entity: EntitySpec, q: unknown): unknown[] {
 }
 
 function sortBy(fields: Map<string, FieldSpec>, entry: unknown) {
-  const o = object(entry, "orderby");
-  allowOnly(o, ["field", "dir"]);
-  const dir = o.dir ?? "asc";
+  const order = object(entry, "orderby");
+  allowOnly(order, ["field", "dir"]);
+  const dir = order.dir ?? "asc";
   if (dir !== "asc" && dir !== "desc")
     throw new ToolError("INVALID_ARGUMENT", "dir is asc or desc", "orderby");
-  return { ref: [field(fields, String(o.field), "orderby").name], sort: dir };
+  return { ref: [field(fields, String(order.field), "orderby").name], sort: dir };
 }
 
-/** A value for this field's type; numeric strings are fine where CAP takes them. */
-function value(f: FieldSpec, v: unknown, at: string): unknown {
-  const t = f.cdsType;
-  const ok =
-    t === "cds.Boolean"
-      ? typeof v === "boolean"
-      : [
-            "cds.Integer",
-            "cds.Int16",
-            "cds.Int32",
-            "cds.UInt8",
-            "cds.Double",
-            "cds.hana.REAL",
-            "cds.hana.TINYINT",
-            "cds.hana.SMALLINT",
-          ].includes(t)
-        ? typeof v === "number"
-        : [
-              "cds.Int64",
-              "cds.Integer64",
-              "cds.Decimal",
-              "cds.DecimalFloat",
-              "cds.hana.SMALLDECIMAL",
-            ].includes(t)
-          ? typeof v === "number" || (typeof v === "string" && /^-?\d+(\.\d+)?$/.test(v))
-          : typeof v === "string";
-  if (!ok)
+/** Types whose values are JSON numbers. */
+const NUMBER_TYPES = new Set([
+  "cds.Integer",
+  "cds.Int16",
+  "cds.Int32",
+  "cds.UInt8",
+  "cds.Double",
+  "cds.hana.REAL",
+  "cds.hana.TINYINT",
+  "cds.hana.SMALLINT",
+]);
+/** Types that may exceed a JSON number's precision: a number, or digits as a string. */
+const DIGIT_TYPES = new Set([
+  "cds.Int64",
+  "cds.Integer64",
+  "cds.Decimal",
+  "cds.DecimalFloat",
+  "cds.hana.SMALLDECIMAL",
+]);
+const DIGITS = /^-?\d+(\.\d+)?$/;
+
+function fitsType(cdsType: string, given: unknown): boolean {
+  if (cdsType === "cds.Boolean") return typeof given === "boolean";
+  if (NUMBER_TYPES.has(cdsType)) return typeof given === "number";
+  if (DIGIT_TYPES.has(cdsType)) {
+    return typeof given === "number" || (typeof given === "string" && DIGITS.test(given));
+  }
+  return typeof given === "string";
+}
+
+/** `given`, checked against the field's type. */
+function value(spec: FieldSpec, given: unknown, at: string): unknown {
+  if (!fitsType(spec.cdsType, given)) {
+    const type = typeName(spec.cdsType);
     throw new ToolError(
       "INVALID_ARGUMENT",
-      `${JSON.stringify(v)} is not a valid ${t.replace("cds.", "")} for ${f.name}`,
+      `${JSON.stringify(given)} is not a valid ${type} for ${spec.name}`,
       at,
     );
-  return v;
+  }
+  return given;
 }
 
 function field(fields: Map<string, FieldSpec>, name: string, at: string): FieldSpec {
-  const f = fields.get(name);
-  if (!f) throw new ToolError("INVALID_ARGUMENT", `Unknown field ${name}`, at);
-  return f;
+  const spec = fields.get(name);
+  if (!spec) throw new ToolError("INVALID_ARGUMENT", `Unknown field ${name}`, at);
+  return spec;
 }
 
 function allowOnly(args: Args, allowed: string[]): void {
@@ -890,24 +900,23 @@ function allowOnly(args: Args, allowed: string[]): void {
   if (extra) throw new ToolError("INVALID_ARGUMENT", `Unexpected argument ${extra}`, extra);
 }
 
-function list(v: unknown, at: string): unknown[] | undefined {
-  if (v === undefined) return undefined;
-  if (!Array.isArray(v)) throw new ToolError("INVALID_ARGUMENT", `${at} must be an array`, at);
-  return v;
+function list(given: unknown, at: string): unknown[] | undefined {
+  if (given === undefined) return undefined;
+  if (!Array.isArray(given))
+    throw new ToolError("INVALID_ARGUMENT", `${at} must be an array`, at);
+  return given;
 }
 
-function object(v: unknown, at: string): Args {
-  if (!v || typeof v !== "object" || Array.isArray(v)) {
-    throw new ToolError("INVALID_ARGUMENT", `${at} must be an object`, at);
-  }
-  return v as Args;
+function object(given: unknown, at: string): Args {
+  if (!isObject(given)) throw new ToolError("INVALID_ARGUMENT", `${at} must be an object`, at);
+  return given;
 }
 
-function integer(v: unknown, at: string, min: number, max: number): number {
-  if (!Number.isInteger(v) || (v as number) < min || (v as number) > max) {
+function integer(given: unknown, at: string, min: number, max: number): number {
+  if (typeof given !== "number" || !Number.isInteger(given) || given < min || given > max) {
     throw new ToolError("INVALID_ARGUMENT", `${at} must be an integer from ${min} to ${max}`, at);
   }
-  return v as number;
+  return given;
 }
 
 /** Join condition token lists with `and`, wrapping each so `or` inside one stays contained. */

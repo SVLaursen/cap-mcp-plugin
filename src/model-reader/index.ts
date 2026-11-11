@@ -219,11 +219,9 @@ function checkV1Defaults(ctx: Context, services: ServiceSpec[]): void {
   const exposed = new Set(services.flatMap((s) => s.entities.map((e) => e.name)));
   const changed = (target: string, message: string) =>
     ctx.diagnostics.push({ level: "warn", code: "V1_DEFAULT_CHANGED", target, message });
-  const serviceNames = Object.entries(ctx.definitions)
-    .filter(([, def]) => def.kind === "service")
-    .map(([name]) => name);
+  const names = serviceNames(ctx.definitions);
   for (const [name, def] of Object.entries(ctx.definitions)) {
-    if (def.kind !== "entity" || !serviceNames.some((s) => name.startsWith(`${s}.`))) continue;
+    if (def.kind !== "entity" || !serviceOf(name, names)) continue;
     const wrapped = v1Wrapped(def, v1);
     const key = v1OptIn(def);
     if (!wrapped && !key) continue;
@@ -288,15 +286,13 @@ function checkUnused(ctx: Context, services: ServiceSpec[]): void {
       message: `${keys.join(", ")} on ${target} has no effect: ${target} is not exposed over MCP`,
     });
   };
-  const serviceNames = Object.entries(ctx.definitions)
-    .filter(([, def]) => def.kind === "service")
-    .map(([name]) => name);
+  const names = serviceNames(ctx.definitions);
   for (const [name, def] of Object.entries(ctx.definitions)) {
     if (def.kind === "service") {
       report(name, def);
       continue;
     }
-    const service = serviceNames.find((s) => name.startsWith(`${s}.`));
+    const service = serviceOf(name, names);
     if (!service || isExcluded(ctx.definitions[service] ?? {})) continue;
     if (def.kind === "function" || def.kind === "action") report(name, def);
     if (def.kind !== "entity" || isExcluded(def)) continue;
@@ -365,6 +361,17 @@ function readService(service: string, def: Definition, ctx: Context): ServiceSpe
     operations,
     prompts: readPrompts(service, def, ctx),
   };
+}
+
+function serviceNames(definitions: Record<string, Definition>): string[] {
+  return Object.entries(definitions)
+    .filter(([, def]) => def.kind === "service")
+    .map(([name]) => name);
+}
+
+/** The service a definition belongs to: the one whose name is a prefix of its own. */
+function serviceOf(name: string, services: string[]): string | undefined {
+  return services.find((service) => name.startsWith(`${service}.`));
 }
 
 function readEntity(
@@ -718,9 +725,9 @@ function mapV1Input(name: string, values: string[], params: FieldSpec[], ctx: Co
       ? `@mcp.elicit 'input' is v1: mapped to the parameter names (${names.join(", ")}). List them instead`
       : `@mcp.elicit 'input' is v1: mapped to 'confirm' (${name} has no parameters). Write ['confirm'] instead`,
   });
-  const mapped = values.flatMap((v) =>
-    v === "input" ? (names.length ? names : ["confirm"]) : [v],
-  );
+  // v1's 'input' meant "ask for the parameters"; without parameters there is only 'confirm'.
+  const asked = names.length ? names : ["confirm"];
+  const mapped = values.flatMap((entry) => (entry === "input" ? asked : [entry]));
   return [...new Set(mapped)];
 }
 
@@ -848,11 +855,9 @@ function bound(value: unknown): number | undefined {
 function checkAnnotations(ctx: Context): void {
   const reported = new Map<string, Diagnostic>();
   const copies = new Map<string, string[]>();
-  const services = Object.entries(ctx.definitions)
-    .filter(([, def]) => def.kind === "service")
-    .map(([name]) => `${name}.`);
+  const services = serviceNames(ctx.definitions);
   const check = (target: string, def: Definition, writtenAt?: (key: string) => string) => {
-    const inService = services.some((prefix) => target.startsWith(prefix));
+    const inService = serviceOf(target, services) !== undefined;
     for (const [key, diagnostic] of checkKeys(target, def, inService)) {
       const origin = writtenAt?.(key) ?? target;
       if (origin === target) {
@@ -1017,8 +1022,8 @@ function title(name: string, def: Definition): string {
  * (the reader has no locale), so they count as absent and the fallback chain continues.
  */
 function text(value: unknown): string | undefined {
-  const s = str(value);
-  return s && /^\{i18n>[^}]*\}$/.test(s) ? undefined : s;
+  const given = str(value);
+  return given && /^\{i18n>[^}]*\}$/.test(given) ? undefined : given;
 }
 
 function describe(def: Definition): string | undefined {

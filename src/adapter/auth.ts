@@ -127,8 +127,11 @@ export function challenge(req: Request, res: Response, options: AuthOptions): vo
 }
 
 const is401 = (error: unknown) => {
-  const e = error as { status?: unknown; code?: unknown } | number | undefined;
-  return e === 401 || (typeof e === "object" && (e?.status == 401 || e?.code == 401));
+  if (error === 401) return true;
+  if (typeof error !== "object" || error === null) return false;
+  // CAP and auth libraries give the status as a number or a numeric string, as status or code.
+  const { status, code } = error as { status?: unknown; code?: unknown };
+  return Number(status) === 401 || Number(code) === 401;
 };
 
 /** Turns CAP's `next(401)` (e.g. an invalid token in jwt-auth) into our challenge. */

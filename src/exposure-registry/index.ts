@@ -1,5 +1,6 @@
 import { readModel } from "../model-reader";
 import { canCall, canUseMode, view, viewKey } from "./access";
+import { appMeta } from "./app-meta";
 import {
   DEFAULT_LIMITS,
   OPERATORS,
@@ -23,6 +24,7 @@ import type {
   UserLike,
   V1Options,
 } from "../types";
+import { byNameOrder, typeName } from "../util";
 
 /**
  * exposure-registry
@@ -194,7 +196,7 @@ export class ExposureRegistry {
             : `${services[0]} has ${prompts.length} prompts named ${name}; none is exposed`,
       });
     }
-    this.prompts.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    this.prompts.sort(byNameOrder);
   }
 
   /** Name checks and clashes are decided once, on the full (unfiltered) tool set. */
@@ -326,7 +328,7 @@ function isBuiltin(tool: ToolSpec): boolean {
 }
 
 function sortByName(tools: ToolSpec[]): ToolSpec[] {
-  return tools.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  return tools.sort(byNameOrder);
 }
 
 function operationTool(service: ServiceSpec, op: OperationSpec, bound?: EntitySpec): ToolSpec {
@@ -338,7 +340,7 @@ function operationTool(service: ServiceSpec, op: OperationSpec, bound?: EntitySp
     outputSchema: operationOutputSchema(op),
     annotations: op.kind === "function" ? READ : ACTION,
     // MCP Apps (ext-apps): the current key plus the deprecated flat one, as registerAppTool does.
-    ...(op.ui && { _meta: { ui: { resourceUri: op.ui }, "ui/resourceUri": op.ui } }),
+    ...(op.ui && { _meta: appMeta(op.ui) }),
     target: { kind: "operation", operation: op.name },
   };
 }
@@ -500,9 +502,10 @@ function compactTools(
 
 /** `C.stock(genre: Integer, region: String required)`, so call_operation's args can be found. */
 function signature(op: OperationSpec): string {
-  const params = op.params.map((p) => {
-    const type = p.cdsType.replace(/^cds\./, "");
-    return `${p.name}: ${p.many ? `array of ${type}` : type}${p.mandatory ? " required" : ""}`;
+  const params = op.params.map((param) => {
+    const type = typeName(param.cdsType);
+    const shape = param.many ? `array of ${type}` : type;
+    return `${param.name}: ${shape}${param.mandatory ? " required" : ""}`;
   });
   return `${op.name}(${params.join(", ")})`;
 }

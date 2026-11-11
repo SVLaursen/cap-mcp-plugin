@@ -6,6 +6,7 @@ import type {
   OperationSpec,
   PromptSpec,
 } from "../types";
+import { typeName } from "../util";
 
 /**
  * schema-mapper
@@ -359,7 +360,7 @@ const PROMPT_PATTERNS: Record<string, string> = {
  */
 export function promptArgsSchema(prompt: PromptSpec): JsonSchema {
   const property = (type: string): JsonSchema => {
-    const local = type.replace(/^cds\./, "");
+    const local = typeName(type);
     if (local === "Boolean") return { enum: ["true", "false"] };
     const pattern = PROMPT_PATTERNS[local];
     return pattern ? { type: "string", pattern } : { type: "string" };
