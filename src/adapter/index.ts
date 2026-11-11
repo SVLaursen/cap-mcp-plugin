@@ -28,11 +28,11 @@ import {
   Executor,
   ToolError,
   errorResult,
-  renderPrompt,
   type ServiceLike,
   type ToolResult,
 } from "../executor";
 import type { ExposureRegistry } from "../exposure-registry";
+import { renderPrompt } from "../exposure-registry/prompts";
 import { promptArgsSchema } from "../schema-mapper";
 import type { ExposureSpec, PromptSpec, ResourceSpec, ToolSpec, UserLike } from "../types";
 import { compareText } from "../util";

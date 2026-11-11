@@ -1,5 +1,5 @@
 import { readModel } from "../model-reader";
-import { canCall, canUseMode, view, viewKey } from "./access";
+import { canCall, canUseMode, view, viewKey } from "../access";
 import { appMeta } from "./app-meta";
 import {
   DEFAULT_LIMITS,

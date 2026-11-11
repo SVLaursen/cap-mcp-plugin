@@ -5,7 +5,7 @@ import type {
   OperationSpec,
   ServiceSpec,
   UserLike,
-} from "../types";
+} from "./types";
 
 /**
  * Who can reach what, as CAP decides it: @requires and the roles of @restrict grants. Used to

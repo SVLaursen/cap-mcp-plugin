@@ -3,7 +3,8 @@
  * returns. The service here is a ServiceLike stand-in (not a CAP mock): it only returns a value.
  */
 import cds from "@sap/cds";
-import { ConfirmationRequired, Executor, renderPrompt, type ServiceLike } from "../../src/executor";
+import { ConfirmationRequired, Executor, type ServiceLike } from "../../src/executor";
+import { renderPrompt } from "../../src/exposure-registry/prompts";
 import { ExposureRegistry } from "../../src/exposure-registry";
 import { compileSnippet } from "../helpers/snippet";
 import { schemaError } from "../helpers/validate";
