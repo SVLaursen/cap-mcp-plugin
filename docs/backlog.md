@@ -74,7 +74,7 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 
 ## M5 — Opt-in features
 
-- [ ] Baseline exposure matches the demo exactly; `@mcp: false`, `@cds.api.ignore` _(`opt-in-features.test.ts` › baseline)_
+- [x] Baseline exposure matches the demo exactly; `@mcp: false`, `@cds.api.ignore` _(`opt-in-features.test.ts` › baseline)_
 - [ ] Describe and compact _(describe and compact)_
 - [ ] Resources as single records + `resource_link` _(resources)_
 - [ ] Prompts with role visibility _(prompts)_

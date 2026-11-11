@@ -1,12 +1,75 @@
+import { bootDemo, type DemoUser } from "../helpers/demo";
+import { listTools, rpc } from "../helpers/mcp";
+import { callTool, expectInvalidArgument, page } from "../helpers/tools";
+
 /**
  * M5 — opt-in features, each against its demo target (see demo/README.md).
  */
+const demo = bootDemo();
+
 describe("opt-in: baseline", () => {
-  test.todo(
-    "CatalogService exposes query+get for Books, Authors, Genres and both functions — and nothing else",
-  );
-  test.todo("AdminService.AuditNotes (@mcp: false) is absent for every user, including alice");
-  test.todo("AdminService.Genres.parent (@cds.api.ignore) is absent from schemas and results");
+  const names = async (who: DemoUser) => {
+    const res = await listTools(demo.POST, who);
+    return (res.message?.result?.tools as { name: string }[]).map((t) => t.name);
+  };
+
+  test("CatalogService exposes query+get for Books, Authors, Genres and both functions — and nothing else", async () => {
+    const catalog = (await names("bob")).filter((n) => n.startsWith("CatalogService_"));
+    expect(catalog).toEqual([
+      "CatalogService_Authors_get",
+      "CatalogService_Authors_query",
+      "CatalogService_Books_get",
+      "CatalogService_Books_query",
+      // Feedback has no key: query (baseline) and create (@mcp.wrap.modes) only.
+      "CatalogService_Feedback_create",
+      "CatalogService_Feedback_query",
+      "CatalogService_Genres_get",
+      "CatalogService_Genres_query",
+      "CatalogService_bookCard",
+      // @mcp.describe
+      "CatalogService_describe",
+      "CatalogService_stockByGenre",
+      // @mcp on the action; restock (no @mcp) is absent.
+      "CatalogService_submitOrder",
+    ]);
+  });
+
+  test("AdminService.AuditNotes (@mcp: false) is absent for every user, including alice", async () => {
+    for (const who of ["alice", "bob", "carol"] as const) {
+      expect((await names(who)).filter((n) => /AuditNotes/.test(n))).toEqual([]);
+    }
+    const listed = await callTool("alice", "AdminService_list_entities");
+    expect(JSON.stringify(listed.structuredContent)).not.toMatch(/AuditNotes/);
+    const res = await rpc(demo.POST, "alice", "tools/list");
+    expect(JSON.stringify(res.message?.result)).not.toMatch(/AuditNotes/);
+    // Named anyway: refused before CAP is asked.
+    for (const tool of ["AdminService_query", "AdminService_describe_entity"]) {
+      expectInvalidArgument(await callTool("alice", tool, { entity: "AdminService.AuditNotes" }));
+    }
+  });
+
+  test("AdminService.Genres.parent (@cds.api.ignore) is absent from schemas and results", async () => {
+    const described = await callTool("alice", "AdminService_describe_entity", {
+      entity: "AdminService.Genres",
+    });
+    const rows = page(
+      await callTool("alice", "AdminService_query", { entity: "AdminService.Genres" }),
+    );
+    const genre = await callTool("alice", "AdminService_get", {
+      entity: "AdminService.Genres",
+      key: { ID: 10 },
+    });
+    expect(rows.rows.length).toBeGreaterThan(0);
+    for (const seen of [described.structuredContent, rows, genre.structuredContent]) {
+      expect(JSON.stringify(seen)).not.toMatch(/parent/);
+    }
+    expectInvalidArgument(
+      await callTool("alice", "AdminService_query", {
+        entity: "AdminService.Genres",
+        select: ["parent_ID"],
+      }),
+    );
+  });
 });
 
 describe("opt-in: describe and compact", () => {
