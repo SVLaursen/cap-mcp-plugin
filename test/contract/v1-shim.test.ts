@@ -284,3 +284,102 @@ describe("v1 shim: config", () => {
     ]);
   });
 });
+
+describe("v1 shim: review fixes (M6)", () => {
+  const tools = (csn: unknown, v1 = {}) => exposed(readModel(csn, { v1 }).spec);
+
+  test("@mcp.wrap.tools: false stops the list form of @mcp.resource, as in v1", () => {
+    const csn = compileSnippet(`
+      service S {
+        @mcp.resource: ['filter'] @mcp.wrap.tools: false @mcp.wrap.modes: ['create', 'delete']
+        entity Books { key ID: Integer; }
+      }
+    `);
+    expect(tools(csn)).toEqual({});
+    expect(
+      readModel(csn).diagnostics.find((d) => d.message.startsWith("@mcp.resource"))?.message,
+    ).toBe(
+      "@mcp.resource with a list of query options is v1 and has no effect on S.Books with @mcp.wrap.tools: false. In v2, @mcp.resource means single records by key",
+    );
+  });
+
+  test("@mcp.wrap.modes gives writes only where v1 wrapped the entity as tools", () => {
+    const csn = compileSnippet(`
+      service S {
+        @mcp.resource: ['filter'] @mcp.wrap.modes: ['delete'] entity Books { key ID: Integer; }
+        @mcp.resource: ['filter'] @mcp.wrap.tools @mcp.wrap.modes: ['delete'] entity Authors { key ID: Integer; }
+      }
+    `);
+    expect(tools(csn)).toEqual({
+      S: {
+        entities: { "S.Authors": ["delete", "get", "query"], "S.Books": ["get", "query"] },
+        operations: [],
+      },
+    });
+    // wrap_entities_to_actions wrapped every resource entity whose wrap.tools was unset.
+    expect(tools(csn, { wrapEntitiesToActions: true }).S?.entities["S.Books"]).toEqual([
+      "delete",
+      "get",
+      "query",
+    ]);
+  });
+
+  test("v1 keys only opt in the kind of definition v1 read them on", () => {
+    const csn = compileSnippet(`
+      @mcp.tool service A { entity Books { key ID: Integer; } function f() returns String; }
+      @mcp.wrap.tools service B { entity Books { key ID: Integer; } }
+      @mcp.resource: ['top'] service C { entity Books { key ID: Integer; } }
+      service D {
+        @mcp.tool entity Books { key ID: Integer; }
+        @mcp.wrap.tools action a();
+        @mcp.resource: ['top'] function f() returns String;
+      }
+    `);
+    const { spec, diagnostics } = readModel(csn);
+    expect(spec.services).toEqual([]);
+    expect(diagnostics.filter((d) => d.message.includes("mapped")).map((d) => d.target)).toEqual(
+      [],
+    );
+  });
+
+  test("the describe default change is reported once when v1 config names it", () => {
+    const csn = compileSnippet(`service S { @mcp.tool function f() returns String; }`);
+    const { v1, diagnostics: config } = readConfig({ enable_model_description: true });
+    const model = readModel(csn, { v1 }).diagnostics;
+    const targets = [...config, ...model]
+      .filter((d) => d.code === "V1_DEFAULT_CHANGED")
+      .map((d) => d.target);
+    expect(targets).toEqual(["cds.mcp.enable_model_description"]);
+  });
+
+  test("@mcp.elicit 'input' does not hide a non-string value", () => {
+    const csn = compileSnippet(`
+      service S { @mcp.tool @mcp.elicit: ['input', 5] action order(book: Integer, n: Integer); }
+    `);
+    expect(
+      readModel(csn).diagnostics.filter((d) => d.code === "INVALID_ANNOTATION_VALUE").length,
+    ).toBe(1);
+  });
+
+  test("a v1 key on a db entity says it reaches only projections, and v1's copies are reported", () => {
+    const csn = compileSnippet(`
+      context db { entity Books { key ID: Integer; } }
+      annotate db.Books with @mcp.resource: ['filter'];
+      service S { entity Books as projection on db.Books; }
+    `);
+    const { spec, diagnostics } = readModel(csn, { v1: { describe: false } });
+    expect(spec.services).toEqual([]);
+    expect(diagnostics.map((d) => [d.code, d.target, d.message])).toEqual([
+      [
+        "V1_ANNOTATION",
+        "db.Books",
+        "@mcp.resource with a list of query options is v1: on db.Books it reaches only the projections that copy it, which v2 does not opt in. Write @mcp on the projections instead (CAP copied it to S.Books)",
+      ],
+      [
+        "V1_DEFAULT_CHANGED",
+        "S.Books",
+        "v1 served S.Books as a resource template (@mcp.resource, copied from db.Books); v2 does not. Add @mcp to the entity for query and get tools",
+      ],
+    ]);
+  });
+});

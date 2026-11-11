@@ -1217,3 +1217,18 @@ describe("model-reader: diagnostics", () => {
     expect(diagnostics.filter((d) => d.level === "error")).toEqual([]);
   });
 });
+
+describe("model-reader: grouping copied diagnostics (M6 review)", () => {
+  test("a key written on a CAP-generated entity is reported on the projections that copy it", () => {
+    const csn = compileSnippet(`
+      entity Books { key ID: Integer; title: localized String; }
+      annotate Books.texts with @mcp.foo;
+      annotate Books.texts with { title @mcp.bar };
+      @mcp service S { entity T as projection on Books.texts; }
+    `);
+    const unknown = readModel(csn)
+      .diagnostics.filter((d) => d.code === "UNKNOWN_ANNOTATION")
+      .map((d) => d.target);
+    expect(unknown).toEqual(["S.T", "S.T:title"]);
+  });
+});
