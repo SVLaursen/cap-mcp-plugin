@@ -36,7 +36,8 @@
     "format:fix": "prettier --write .",
     "demo": "npm run watch --workspace=demo",
     "inspect": "npx @modelcontextprotocol/inspector",
-    "check": "npm run typecheck && npm run lint && npm test"
+    "check": "npm run typecheck && npm run lint && npm test",
+    "conformance": "node scripts/conformance.js"
   },
   "peerDependencies": {
     "@sap/cds": ">=10",

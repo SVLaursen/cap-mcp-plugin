@@ -41,6 +41,11 @@
     },
     "cdsc": {
       "docs": true
+    },
+    "mcp": {
+      "allowedOrigins": [
+        "http://localhost:6274"
+      ]
     }
   }
 }

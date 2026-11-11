@@ -101,10 +101,11 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 
 ## M7 — Release 2.0
 
-- [ ] MCP conformance suite in CI (`@modelcontextprotocol/conformance`)
+- [x] MCP conformance suite in CI (`@modelcontextprotocol/conformance`): `npm run conformance` boots the demo and runs every server scenario; `conformance-baseline.yml` lists the ones that need the suite's own fixtures or features v2 does not offer. Fixed what it found: DNS rebinding (an `Origin` must be in `allowedOrigins`; no implicit own origin, maintainer decision) _(`protocol.test.ts`)_
 - [x] Coverage thresholds met (`jest.config.js`): measured and set to 94/88/96/95 (statements/branches/functions/lines), enforced in CI by `npm run test:coverage`
 - [x] Release workflow (port v1's release-it + trusted publishing): `.release-it.json`, `.github/workflows/release.yml` (manual, on main; npm trusted publishing with provenance). Dry run checked locally; the publish itself, OIDC and the deploy key can only be checked in GitHub Actions
 - [x] The published package holds only runtime files, README and licence, and loads under an app's own Jest (`cds-plugin.js` loaded `src/` whenever `JEST_WORKER_ID` was set) _(`package.test.ts`)_
+- [ ] Set `repository`, `homepage` and `bugs` in package.json, the README's absolute links and the npm trusted-publisher entry once the repository is decided (maintainer: pinned, awaiting Gavdi)
 - [ ] Review: run the `reviewer` agent on M7
 
 ## 2.x (P1) and later (P2)

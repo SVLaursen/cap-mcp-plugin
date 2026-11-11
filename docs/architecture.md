@@ -33,8 +33,9 @@ The data passed between them is defined in `src/types.ts`.
 
 ## Request lifecycle
 
-1. `activate(cds)` logs the startup report (`cli`: counts and every diagnostic) and mounts one `/mcp` route (all methods) on `served`. A request whose `Origin`
-   is neither the app's own nor in `cds.env.mcp.allowedOrigins` gets 403 (DNS rebinding); the
+1. `activate(cds)` logs the startup report (`cli`: counts and every diagnostic) and mounts one `/mcp` route (all methods) on `served`. A request with an `Origin`
+   that is not in `cds.env.mcp.allowedOrigins` gets 403 (DNS rebinding; no implicit own origin, since
+   that would come from the Host header); the
    rest go through `cds.middlewares.before` (ADR 0009). That chain authenticates the request and sets `cds.context` (user, tenant,
    locale, model). Other plugins' middleware (e.g. `@sap/ams`) runs here too, with no special
    code in the plugin. CAP's production default (`restrict_all_services`) lives only in its
@@ -177,7 +178,7 @@ in an output schema, including in records an operation returns.
 
 There is no stdio entry point (maintainer decision, M6): cds-dk does not let plugins add a
 `cds mcp` command, and stdio has no authentication. Stdio-only clients use `cds watch` plus a
-bridge such as `mcp-remote` (docs/guide/quickstart.md). If a stdio entry point is ever added,
+bridge such as `mcp-remote` (docs/guide/getting-started.md). If a stdio entry point is ever added,
 its caller is anonymous by default; `--user <id>` may pick a user only from
 `cds.requires.auth.users` with `mocked` or `basic` auth, and it refuses to start in production.
 Never `cds.User.privileged`.

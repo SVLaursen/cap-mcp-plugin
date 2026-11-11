@@ -1,3 +1,4 @@
+import http from "node:http";
 import cds from "@sap/cds";
 import pkg from "../../package.json";
 import { ExposureRegistry } from "../../src/exposure-registry";
@@ -192,10 +193,53 @@ describe("protocol: Origin (DNS rebinding protection)", () => {
     expect(res.status).toBe(403);
   });
 
-  test("no Origin (native clients) and the app's own origin are fine", async () => {
-    const own = (demo as unknown as { url: string }).url;
+  test("a request without Origin (native clients, bridges) is fine", async () => {
     expect((await listTools(demo.POST, "bob")).status).toBe(200);
-    expect((await listTools(demo.POST, "bob", origin(own))).status).toBe(200);
+  });
+
+  test("DNS rebinding: Host and Origin both the attacker's name are refused with 403", async () => {
+    // What a page on evil.example.com sends once its name resolves to this server. Raw HTTP:
+    // the test client would not send our Host header.
+    const url = new URL((demo as unknown as { url: string }).url);
+    const status = await new Promise<number | undefined>((resolve, reject) => {
+      const req = http.request(
+        {
+          host: url.hostname,
+          port: url.port,
+          path: "/mcp",
+          method: "POST",
+          headers: {
+            host: "evil.example.com",
+            origin: "http://evil.example.com",
+            "content-type": "application/json",
+            accept: "application/json, text/event-stream",
+          },
+        },
+        (res) => {
+          res.resume();
+          resolve(res.statusCode);
+        },
+      );
+      req.on("error", reject);
+      req.end(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "initialize",
+          params: {
+            protocolVersion: LEGACY_VERSION,
+            capabilities: {},
+            clientInfo: { name: "rebinding", version: "1" },
+          },
+        }),
+      );
+    });
+    expect(status).toBe(403);
+  });
+
+  test("the app's own origin is not allowed implicitly: browser clients must be listed", async () => {
+    const own = (demo as unknown as { url: string }).url;
+    expect((await listTools(demo.POST, "bob", origin(own))).status).toBe(403);
   });
 
   test("origins listed in cds.env.mcp.allowedOrigins are accepted", async () => {

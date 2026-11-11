@@ -1,0 +1,42 @@
+# Expected failures for `npm run conformance` (@modelcontextprotocol/conformance, server mode).
+#
+# The suite's server scenarios call fixtures of its own reference server by name. A CAP app has
+# none of them, so these scenarios fail for a reason that says nothing about protocol
+# compliance. The suite fails the run when a scenario not listed here fails, and when a listed
+# one starts passing (remove it then).
+#
+# The suite covers protocol versions up to 2025-11-25 (2025-era clients, served statelessly per
+# ADR 0010). 2026-07-28 behaviour is covered by test/behaviour/protocol.test.ts.
+server:
+  # Fixture tools (test_simple_text, test_image_content, …) that a CAP app does not have
+  - tools-call-simple-text
+  - tools-call-image
+  - tools-call-audio
+  - tools-call-embedded-resource
+  - tools-call-mixed-content
+  - tools-call-error
+  - tools-call-with-progress
+  - tools-call-sampling
+  - tools-call-elicitation
+  - elicitation-sep1034-defaults
+  - elicitation-sep1330-enums
+  # Fixture prompts (test_simple_prompt, …)
+  - prompts-get-simple
+  - prompts-get-with-args
+  - prompts-get-embedded-resource
+  - prompts-get-with-image
+  # Fixture resources (test://static-text, test://template/{id}/data, …)
+  - resources-read-text
+  - resources-read-binary
+  - resources-templates-read
+  # Completion of the fixture prompt test_prompt_with_arguments (v2 completes @mcp.resource keys)
+  - completion-complete
+  # Not offered by v2: logging (logging/setLevel, notifications/message) and resource
+  # subscriptions (stateless server, lists never change while serving)
+  - logging-set-level
+  - tools-call-with-logging
+  - resources-subscribe
+  - resources-unsubscribe
+  # Multiple SSE streams per session (SEP-1699): the server is stateless and has no sessions
+  # (ADR 0010), so the scenario only warns and records no passing check
+  - server-sse-multiple-streams

@@ -50,13 +50,13 @@ annotate OrdersService with @mcp;
 
 ## Settings to review (`cds.mcp`)
 
-| Key                  | Why                                                                        |
-| -------------------- | -------------------------------------------------------------------------- |
-| `allowedOrigins`     | Browser origins other than your app's own get 403 (DNS rebinding)          |
-| `limits.maxRows`     | Upper bound on `top` per query call (default 200)                          |
-| `limits.defaultRows` | Page size when the agent gives none (default 25)                           |
-| `name`, `version`    | Identify the server to clients; set them to tell apps apart                |
-| `instructions`       | Tell agents how to use your tools; `cds build` copies an instructions file |
+| Key                  | Why                                                                               |
+| -------------------- | --------------------------------------------------------------------------------- |
+| `allowedOrigins`     | Browser origins that may call `/mcp`; any other `Origin` gets 403 (DNS rebinding) |
+| `limits.maxRows`     | Upper bound on `top` per query call (default 200)                                 |
+| `limits.defaultRows` | Page size when the agent gives none (default 25)                                  |
+| `name`, `version`    | Identify the server to clients; set them to tell apps apart                       |
+| `instructions`       | Tell agents how to use your tools; `cds build` copies an instructions file        |
 
 ## Before you deploy
 

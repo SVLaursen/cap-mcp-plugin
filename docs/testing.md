@@ -5,13 +5,13 @@ v2 tests against CAP itself.
 
 ## The pyramid
 
-| Layer       | Where              | What it proves                                           | Speed                      |
-| ----------- | ------------------ | -------------------------------------------------------- | -------------------------- |
-| Contract    | `test/contract/`   | Given this CDS, this exact spec / schema / tool list     | ms per test                |
-| Behaviour   | `test/behaviour/`  | Over HTTP against the demo: data, errors, auth           | ~10 ms per test after boot |
-| Regression  | `test/regression/` | Each v1 finding stays fixed                              | as behaviour               |
-| Auth matrix | `test/auth/`       | v1.9 auth parity (mocked, XSUAA, IAS, certificates, AMS) | as behaviour               |
-| Conformance | CI (M7)            | Protocol compliance against the official suite           | minutes                    |
+| Layer       | Where                      | What it proves                                                                    | Speed                      |
+| ----------- | -------------------------- | --------------------------------------------------------------------------------- | -------------------------- |
+| Contract    | `test/contract/`           | Given this CDS, this exact spec / schema / tool list                              | ms per test                |
+| Behaviour   | `test/behaviour/`          | Over HTTP against the demo: data, errors, auth                                    | ~10 ms per test after boot |
+| Regression  | `test/regression/`         | Each v1 finding stays fixed                                                       | as behaviour               |
+| Auth matrix | `test/auth/`               | v1.9 auth parity (mocked, XSUAA, IAS, certificates, AMS)                          | as behaviour               |
+| Conformance | `npm run conformance` (CI) | The official suite against the demo; known failures in `conformance-baseline.yml` | ~10 s                      |
 
 ## Contract tests
 

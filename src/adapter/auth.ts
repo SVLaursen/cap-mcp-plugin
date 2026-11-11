@@ -151,12 +151,14 @@ export function metadataHandler(options: AuthOptions): RequestHandler {
 
 /**
  * Streamable HTTP: servers MUST validate Origin (DNS rebinding). A request without Origin (a
- * native client) passes; with one, it must be the app's own origin or explicitly allowed.
+ * native client, a server-side bridge) passes; with one, it must be listed in
+ * `cds.env.mcp.allowedOrigins`. There is no implicit "own" origin: it would have to come from the
+ * Host header, which a DNS-rebinding page controls (maintainer decision, M7 conformance).
  */
 export function checkOrigin(allowed: () => string[] | undefined): RequestHandler {
   return (req, res, next) => {
     const from = req.get("origin");
-    if (from === undefined || from === origin(req) || allowed()?.includes(from)) return next();
+    if (from === undefined || allowed()?.includes(from)) return next();
     res.status(403).json({
       jsonrpc: "2.0",
       id: null,

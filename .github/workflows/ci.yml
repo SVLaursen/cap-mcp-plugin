@@ -22,3 +22,23 @@ jobs:
       - run: npm run format
       - run: npm run test:coverage
       - run: npm run build
+
+  # Official MCP conformance suite against the demo (scripts/conformance.js). Known failures and
+  # why are in conformance-baseline.yml; a new failure or a stale entry fails the job.
+  conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run conformance
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-results
+          path: _out/conformance
+          if-no-files-found: ignore
