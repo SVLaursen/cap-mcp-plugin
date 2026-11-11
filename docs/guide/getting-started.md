@@ -53,7 +53,7 @@ sees only what CAP lets them use.
 
 ## 3. Connect a client
 
-The endpoint is located at `<HOST>/mcp` (Streamable HTTP). It serves MCP v2 clients
+The endpoint is located at `<HOST>/mcp` (Streamable HTTP). It serves MCP 2026-07-28 clients
 and older (2025-era) clients alike, without sessions.
 
 Who the caller is depends on your CAP auth, exactly as for OData:
