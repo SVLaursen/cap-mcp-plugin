@@ -53,7 +53,7 @@ sees only what CAP lets them use.
 
 ## 3. Connect a client
 
-The endpoint is `http://localhost:4004/mcp` (Streamable HTTP). It serves MCP 2026-07-28 clients
+The endpoint is located at `<HOST>/mcp` (Streamable HTTP). It serves MCP v2 clients
 and older (2025-era) clients alike, without sessions.
 
 Who the caller is depends on your CAP auth, exactly as for OData:
@@ -117,7 +117,7 @@ agents may create and update orders, and cancel one after the user confirms:
 service OrdersService {
   entity Orders { key ID : UUID; status : String; reason : String; }
     actions {
-      @mcp @mcp.elicit: ['confirm'] action cancel();
+      @mcp.elicit: ['confirm'] action cancel();
     };
 }
 annotate OrdersService with @mcp;

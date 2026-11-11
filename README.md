@@ -1,5 +1,7 @@
 # @gavdi/cap-mcp
 
+> Pre-release version
+
 Expose SAP CAP services to AI agents over the [Model Context Protocol](https://modelcontextprotocol.io).
 
 Annotate a service with `@mcp`, and agents can query it through MCP clients such as desktop
@@ -21,7 +23,7 @@ npm add @gavdi/cap-mcp
 ```
 
 Requires Node.js 22 or later, with `@sap/cds` 10 or later and `express` 5 as peer dependencies.
-CAP loads the plugin automatically; there is no code to write.
+CAP loads the plugin automatically; there is no immediate integration code to write.
 
 ## Quickstart
 
