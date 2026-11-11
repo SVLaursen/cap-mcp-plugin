@@ -1,4 +1,4 @@
-import { docCommentHint, exposureReport } from "../../src/cli";
+import { docCommentHint, exposureReport } from "../../src/cli/startup-report";
 import { ExposureRegistry } from "../../src/exposure-registry";
 import { compileSnippet } from "../helpers/snippet";
 

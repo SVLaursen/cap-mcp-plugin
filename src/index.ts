@@ -11,7 +11,7 @@ import {
   requireUser,
   type AuthConfig,
 } from "./adapter/auth";
-import { docCommentHint, exposureReport } from "./cli";
+import { docCommentHint, exposureReport } from "./cli/startup-report";
 import { mcpFacet, type FacetCds } from "./cli/add";
 import { mcpBuildTask, type BuildCds } from "./cli/build";
 import { capQueryLimit, readConfig, readInstructions } from "./config";
