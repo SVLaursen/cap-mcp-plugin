@@ -27,7 +27,7 @@ describe("auth matrix: IAS only, roles from @sap/ams policies", () => {
   // Added after the row binds IAS: reading cds.middlewares builds CAP's auth middleware.
   cds.middlewares.add(
     function amsRoles(_req: unknown, _res: unknown, next: () => void) {
-      const user = cds.context?.user as cds.User | undefined;
+      const user = cds.context?.user;
       const sub = (user?.attr as { sub?: string } | undefined)?.sub ?? user?.id;
       const granted = (sub && assignments[sub]) || [];
       if (user && granted.length) {

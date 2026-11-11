@@ -1,10 +1,11 @@
 import { createMcpHandler } from "@modelcontextprotocol/server";
-import { serverFactory } from "../../src/adapter";
+import { serverFactory, type TxService } from "../../src/adapter";
 import { registryCache } from "../../src/exposure-registry";
+import type { ServiceLike } from "../../src/executor";
 import { compileSnippet } from "../helpers/snippet";
 
 /** The adapter's factory over a snippet model, served by the SDK without CAP or HTTP. */
-function serve(cdl: string, roles: string[], services: Record<string, unknown> = {}) {
+function serve(cdl: string, roles: string[], services: Record<string, TxService | undefined> = {}) {
   const model = compileSnippet(cdl);
   const user = { id: "someone", is: (role: string) => roles.includes(role) };
   const factory = serverFactory({
@@ -83,7 +84,7 @@ describe("adapter: errors outside tools/call", () => {
       throw Object.assign(new Error("SQLITE_ERROR: no such table: S_Authors"), { code: 1 });
     },
     send: async () => undefined,
-    tx: <T>(fn: (tx: unknown) => Promise<T>) => fn(failing),
+    tx: <T>(fn: (tx: ServiceLike) => Promise<T>) => fn(failing),
   };
   const inProduction = async <T>(fn: () => Promise<T>) => {
     const env = process.env.NODE_ENV;
@@ -118,7 +119,7 @@ describe("adapter: errors outside tools/call", () => {
       run: async () => {
         throw Object.assign(new Error("Forbidden"), { status: 403, code: "403" });
       },
-      tx: <T>(fn: (tx: unknown) => Promise<T>) => fn(refusing),
+      tx: <T>(fn: (tx: ServiceLike) => Promise<T>) => fn(refusing),
     };
     const res = await call(serve(cdl, [], { S: refusing }), "completion/complete", {
       ref: { type: "ref/resource", uri: "cap://S/Authors/{key}" },
@@ -131,7 +132,7 @@ describe("adapter: errors outside tools/call", () => {
     const many = {
       ...failing,
       run: async () => Array.from({ length: 101 }, (_, i) => ({ ID: 1000 + i })),
-      tx: <T>(fn: (tx: unknown) => Promise<T>) => fn(many),
+      tx: <T>(fn: (tx: ServiceLike) => Promise<T>) => fn(many),
     };
     const res = await call(serve(cdl, [], { S: many }), "completion/complete", {
       ref: { type: "ref/resource", uri: "cap://S/Authors/{key}" },

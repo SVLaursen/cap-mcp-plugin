@@ -1,6 +1,6 @@
 import {
   DEFAULT_LIMITS,
-  OPERATORS,
+  isOperator,
   elicitationSchema,
   queryLimits,
   type Limits,
@@ -646,7 +646,6 @@ function describeField(spec: FieldSpec) {
   });
 }
 
-
 /** Drop undefined properties, so descriptions only say what is there. */
 function clean<T extends Record<string, unknown>>(value: T): Partial<T> {
   return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as Partial<T>;
@@ -767,14 +766,14 @@ function keyOf(entity: EntitySpec, args: Args): Args {
   );
 }
 
-const COMPARISONS: Record<string, string> = {
+const COMPARISONS = {
   eq: "=",
   ne: "!=",
   gt: ">",
   ge: ">=",
   lt: "<",
   le: "<=",
-};
+} as const;
 /** Key types stored as text; others are cast, so every database can compare a prefix. */
 const TEXT_KEYS = new Set(["cds.String", "cds.LargeString", "cds.UUID"]);
 
@@ -787,7 +786,13 @@ function keyText(key: FieldSpec) {
 /** `completion/complete` returns at most 100 values (MCP spec). */
 export const MAX_COMPLETIONS = 100;
 
-const TEXT_FUNCTIONS = new Set(["contains", "startswith", "endswith"]);
+type TextFunction = "contains" | "startswith" | "endswith";
+const TEXT_FUNCTIONS: ReadonlySet<string> = new Set<TextFunction>([
+  "contains",
+  "startswith",
+  "endswith",
+]);
+const isTextFunction = (op: string): op is TextFunction => TEXT_FUNCTIONS.has(op);
 const STRING_TYPES = new Set(["cds.String", "cds.LargeString"]);
 
 function conditions(fields: Map<string, FieldSpec>, where: unknown): unknown[] {
@@ -797,7 +802,7 @@ function conditions(fields: Map<string, FieldSpec>, where: unknown): unknown[] {
       allowOnly(entry, ["field", "op", "value"]);
       const target = field(fields, String(entry.field), `where[${i}].field`);
       const op = String(entry.op);
-      if (!OPERATORS.includes(op)) {
+      if (!isOperator(op)) {
         throw new ToolError("INVALID_ARGUMENT", `Unknown operator ${op}`, `where[${i}].op`);
       }
       const at = `where[${i}].value`;
@@ -807,7 +812,7 @@ function conditions(fields: Map<string, FieldSpec>, where: unknown): unknown[] {
         const list = entry.value.map((item) => ({ val: value(target, item, at) }));
         return [ref(target.name), "in", { list }];
       }
-      if (TEXT_FUNCTIONS.has(op)) {
+      if (isTextFunction(op)) {
         if (!STRING_TYPES.has(target.cdsType)) {
           throw new ToolError(
             "INVALID_ARGUMENT",
@@ -902,8 +907,7 @@ function allowOnly(args: Args, allowed: string[]): void {
 
 function list(given: unknown, at: string): unknown[] | undefined {
   if (given === undefined) return undefined;
-  if (!Array.isArray(given))
-    throw new ToolError("INVALID_ARGUMENT", `${at} must be an array`, at);
+  if (!Array.isArray(given)) throw new ToolError("INVALID_ARGUMENT", `${at} must be an array`, at);
   return given;
 }
 

@@ -8,6 +8,6 @@ const validator = new AjvJsonSchemaValidator();
  * checks tool inputs and structuredContent at runtime. Returns the error message, or undefined.
  */
 export function schemaError(schema: JsonSchema, value: unknown): string | undefined {
-  const result = validator.getValidator(schema as never)(value);
+  const result = validator.getValidator(schema)(value);
   return result.valid ? undefined : (result.errorMessage ?? "invalid");
 }

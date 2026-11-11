@@ -88,7 +88,7 @@ export interface AdapterOptions {
   /** MCP App UI resources (ADR 0012); none when omitted. */
   apps?: McpApps;
   /** CAP services by name (cds.services). */
-  services: Record<string, unknown>;
+  services: Record<string, TxService | undefined>;
   /** CAP's messages (cds.i18n.messages.at), so errors read as they do over OData. */
   translate?: Translate;
   log: { error(...args: unknown[]): void };
@@ -148,7 +148,7 @@ function toCallToolResult(result: ToolResult): CallToolResult {
     ],
     ...(result.structuredContent === undefined
       ? {}
-      : { structuredContent: result.structuredContent as Record<string, unknown> }),
+      : { structuredContent: result.structuredContent }),
     ...(result.isError ? { isError: true } : {}),
   };
 }
@@ -308,8 +308,7 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
           _meta,
         },
         async (args: unknown, ctx: ServerContext) => {
-          const service = options.services[serviceOf(registry.spec, tool.target) ?? ""] as
-            TxService | undefined;
+          const service = options.services[serviceOf(registry.spec, tool.target) ?? ""];
           if (!service) throw new Error(`cap-mcp: no service serves ${tool.name}`);
           // A retry that carries the user's yes to the form we asked with for this call (MRTR).
           const state = confirmationState(tool.name, args ?? {}, user);
@@ -387,7 +386,7 @@ function resourceService(
   options: AdapterOptions,
 ): TxService {
   const name = serviceOf(registry.spec, { kind: "entity", entity: resource.entity, mode: "get" });
-  const service = options.services[name ?? ""] as TxService | undefined;
+  const service = options.services[name ?? ""];
   if (!service) throw new Error(`cap-mcp: no service serves ${resource.entity}`);
   return service;
 }

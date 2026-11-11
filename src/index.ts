@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { Application, RequestHandler } from "express";
-import { mcpHandler, type RequestContext } from "./adapter";
+import { mcpHandler, type RequestContext, type TxService } from "./adapter";
 import { setUpApps } from "./adapter/apps";
 import {
   authErrors,
@@ -32,7 +32,8 @@ export interface CdsLike {
   readonly root: string;
   readonly context?: RequestContext;
   readonly model?: unknown;
-  readonly services: Record<string, unknown>;
+  /** CAP's services: each runs CQN, sends events and opens its own root transaction. */
+  readonly services: Record<string, TxService | undefined>;
   readonly middlewares: { before: RequestHandler[] };
   readonly requires: { auth?: AuthConfig };
   readonly env: {

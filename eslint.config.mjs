@@ -7,7 +7,16 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   {
     files: ["**/*.ts"],
+    // Type-aware rules need the TypeScript program (tsconfig.json covers src/ and test/).
+    languageOptions: {
+      parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
+    },
     rules: {
+      // A promise nobody awaits loses its error; one passed where a callback is expected too.
+      "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/no-misused-promises": "error",
+      "@typescript-eslint/no-unnecessary-type-assertion": "error",
+      eqeqeq: ["error", "always"],
       // v1 had 76 `as any`. v2 keeps casts visible and rare.
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/ban-ts-comment": "error",

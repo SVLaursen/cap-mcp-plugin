@@ -60,7 +60,7 @@ export async function executeDirectly(
   args: Record<string, unknown> = {},
   options: { confirmed?: boolean; listedFor?: DemoUser } = {},
 ): Promise<ToolResult> {
-  const registry = ExposureRegistry.fromModel(cds.model as unknown as object);
+  const registry = ExposureRegistry.fromModel(cds.model);
   const user = demoUser(who);
   const lister = options.listedFor ? demoUser(options.listedFor) : user;
   const tool = registry.toolsFor(lister).find((t) => t.name === name);

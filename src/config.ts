@@ -119,7 +119,7 @@ export function readConfig(raw: unknown): {
     if (expected) invalid(target, `${target} must be ${expected}; using the default`);
     else config[key] = value;
   }
-  return { config: config as McpConfig, v1: v1Options(raw), diagnostics };
+  return { config: config, v1: v1Options(raw), diagnostics };
 }
 
 function readLimits(

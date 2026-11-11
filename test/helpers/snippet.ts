@@ -34,6 +34,6 @@ export function compileSnippet(
  */
 export async function compileDemo(): Promise<cds.linked.LinkedCSN> {
   const compile = cds.compile as unknown as Compile;
-  const csn = await cds.load(path.join(DEMO_DIR, "srv"), { docs: true } as never);
+  const csn = await cds.load(path.join(DEMO_DIR, "srv"), { docs: true });
   return cds.linked(compile.for.nodejs(csn) as cds.csn.CSN);
 }

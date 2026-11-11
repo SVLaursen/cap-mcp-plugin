@@ -20,7 +20,6 @@ export { appMeta, linkedUri };
 /** The MIME type of an MCP App's HTML (ext-apps `RESOURCE_MIME_TYPE`). */
 export const APP_MIME_TYPE = "text/html;profile=mcp-app";
 
-
 /** The HTML of one UI resource; called on every read, so the app decides about caching. */
 export type AppContent = () => string | Promise<string>;
 
@@ -28,7 +27,6 @@ export type AppContent = () => string | Promise<string>;
 export interface AppRegistry {
   register(uri: string, content: AppContent): void;
 }
-
 
 export class McpApps implements AppRegistry {
   readonly #sources = new Map<string, AppContent>();

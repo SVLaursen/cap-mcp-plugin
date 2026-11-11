@@ -123,7 +123,7 @@ describe("protocol: stateless 2026-07-28", () => {
   });
 
   test("two users hitting the same endpoint concurrently each get their own tool list", async () => {
-    const registry = ExposureRegistry.fromModel(cds.model as unknown as object);
+    const registry = ExposureRegistry.fromModel(cds.model);
     const callers = ["alice", "bob", "carol", "alice", "bob", "carol"] as const;
     const lists = await Promise.all(callers.map((who) => listTools(demo.POST, who)));
     lists.forEach((res, i) => {
@@ -148,7 +148,7 @@ describe("protocol: older clients (2025-era, stateless; ADR 0010)", () => {
   });
 
   test("tools/list and tools/call work as standalone requests, per user", async () => {
-    const registry = ExposureRegistry.fromModel(cds.model as unknown as object);
+    const registry = ExposureRegistry.fromModel(cds.model);
     for (const who of ["alice", "bob"] as const) {
       const list = await legacyRpc(demo.POST, who, "tools/list");
       expect(list.headers["mcp-session-id"]).toBeUndefined();
@@ -289,7 +289,7 @@ describe("protocol: production default (CAP's restrict_all_services)", () => {
   });
 
   test("outside production, anonymous callers see only what CAP lets anonymous users reach", async () => {
-    const registry = ExposureRegistry.fromModel(cds.model as unknown as object);
+    const registry = ExposureRegistry.fromModel(cds.model);
     const res = await listTools(demo.POST, "anonymous");
     expect(res.message?.result?.tools).toEqual(registry.toolsFor(cds.User.anonymous).map(listed));
     expect(JSON.stringify(res.message?.result)).not.toContain("AdminService");
@@ -317,7 +317,7 @@ describe("protocol: auth metadata (mocked; OAuth in protocol-auth.test.ts)", () 
 
 describe("protocol: mounting inside CAP", () => {
   test("/mcp lists the caller's tools from the registry, exactly as specified", async () => {
-    const registry = ExposureRegistry.fromModel(cds.model as unknown as object);
+    const registry = ExposureRegistry.fromModel(cds.model);
     for (const who of ["alice", "bob"] as const) {
       const res = await listTools(demo.POST, who);
       expect(res.status).toBe(200);
@@ -328,7 +328,7 @@ describe("protocol: mounting inside CAP", () => {
   test("@mcp services keep their OData endpoints: no protocol named mcp is registered", async () => {
     // A protocol named `mcp` would make CAP treat @mcp as the protocol choice (ADR 0009).
     expect(Object.keys(cds.env.protocols ?? {})).not.toContain("mcp");
-    const registry = ExposureRegistry.fromModel(cds.model as unknown as object);
+    const registry = ExposureRegistry.fromModel(cds.model);
     for (const { name } of registry.spec.services) {
       const endpoints = (cds.services[name] as unknown as { endpoints: { kind: string }[] })
         .endpoints;

@@ -13,9 +13,9 @@ const ORDER = "7e2f9c58-1c1d-4c0b-9a7a-6d1f0b5e0a01"; // ORD-1001, bob's
 
 /** Every draft of Orders, whoever owns it (OData only shows a user their own drafts). */
 async function drafts() {
-  return (await cds.db.run({
+  return cds.db.run<unknown[]>({
     SELECT: { from: { ref: ["OrdersService.Orders.drafts"] }, columns: [{ ref: ["ID"] }] },
-  } as never)) as unknown[];
+  } as never);
 }
 
 describe("executor: drafts and deep insert", () => {

@@ -154,6 +154,7 @@ export function queryLimits(entity: EntitySpec, limits: Limits = DEFAULT_LIMITS)
   const defaultRows = Math.min(maxRows, entity.limits?.defaultRows ?? limits.defaultRows);
   return { maxRows, defaultRows };
 }
+
 /** Comparison operators of the query tools' `where`. */
 export const OPERATORS = [
   "eq",
@@ -166,7 +167,12 @@ export const OPERATORS = [
   "contains",
   "startswith",
   "endswith",
-];
+] as const;
+export type Operator = (typeof OPERATORS)[number];
+
+export function isOperator(op: string): op is Operator {
+  return (OPERATORS as readonly string[]).includes(op);
+}
 
 export function entityInputSchema(
   entity: EntitySpec,
