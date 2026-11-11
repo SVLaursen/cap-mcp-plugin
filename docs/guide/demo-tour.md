@@ -120,7 +120,10 @@ Hosts that support MCP Apps render a UI for three operations:
   (`cds.on('mcp:apps')`).
 - `AdminService_stockReport`: an admin-only UI; only alice can list or read it.
 
-The UI resources are listed under `resources/list`. See [MCP Apps](mcp-apps.md).
+Each page renders the tool result the host sends it: the book card shows the book (or the
+handler's error, e.g. for book 999), the chart the genre's stock as a bar, the report one line
+per book under the threshold. The UI resources are listed under `resources/list`. See
+[MCP Apps](mcp-apps.md).
 
 ## Not in the running demo
 

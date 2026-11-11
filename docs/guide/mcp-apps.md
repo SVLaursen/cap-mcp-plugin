@@ -51,6 +51,14 @@ protocol: it receives the tool's input and result, and can call tools of your se
 and a browser SDK for this. Bundle what the page needs into the HTML (or serve it from code, as
 below): the plugin serves exactly the content you give it.
 
+A page that only shows the result needs no library. It sends `ui/initialize` to `window.parent`
+over `postMessage`, answers the host's reply with `ui/notifications/initialized`, and then
+receives `ui/notifications/tool-result`, whose `params` is the tool result. The plugin's results
+carry `structuredContent: { value }` for operations, or `{ error: { code, message } }` with
+`isError` when the call failed. The demo's
+[`book-card.html`](../../demo/app/mcp-apps/book-card.html) does exactly this in about 30 lines
+of script.
+
 The plugin itself has no runtime dependency on `@modelcontextprotocol/ext-apps`.
 
 ## Supplying the HTML from code: `mcp:apps`

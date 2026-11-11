@@ -25,19 +25,74 @@
       .meta {
         color: #666;
       }
+      #error {
+        color: #b00020;
+      }
+      #error:empty {
+        display: none;
+      }
     </style>
   </head>
   <body>
     <!--
       MCP App UI for CatalogService.bookCard (@mcp.ui: 'ui://bookshop/book-card.html').
-      Milestone M5 wires this up through @modelcontextprotocol/ext-apps. The host passes the
-      tool result in; this page only renders it.
+      The host renders this page in an iframe and talks to it over postMessage (the MCP Apps
+      bridge): the page asks ui/initialize, says ui/notifications/initialized, and the host sends
+      the tool's result as ui/notifications/tool-result. The result's structuredContent is
+      { value: <the book> }, or { error: { code, message } } when the call failed.
+      No library needed; @modelcontextprotocol/ext-apps' App class does the same in a bundled app.
     -->
     <div class="card">
-      <h1 id="title">…</h1>
-      <div class="meta"><span id="author"></span> · <span id="price"></span></div>
-      <p id="descr"></p>
-      <div class="meta">In stock: <span id="stock"></span></div>
+      <p id="error"></p>
+      <div id="book">
+        <h1 id="title"></h1>
+        <div class="meta"><span id="author"></span> · <span id="price"></span></div>
+        <p id="descr"></p>
+        <div class="meta">In stock: <span id="stock"></span></div>
+      </div>
     </div>
+    <script>
+      function render(result) {
+        const set = (id, text) => (document.getElementById(id).textContent = text ?? "");
+        const content = result.structuredContent ?? {};
+        document.getElementById("book").hidden = !!result.isError;
+        if (result.isError)
+          return set("error", content.error?.message ?? result.content?.[0]?.text);
+        const book = content.value ?? {};
+        set("title", book.title);
+        set("author", book.authorName);
+        set("price", book.price === null || book.price === undefined ? "" : `€ ${book.price}`);
+        set("descr", book.descr);
+        set("stock", book.stock);
+      }
+
+      // The MCP Apps bridge (ext-apps protocol 2026-01-26): JSON-RPC over postMessage.
+      (() => {
+        const host = window.parent;
+        const send = (message) => host.postMessage({ jsonrpc: "2.0", ...message }, "*");
+        const size = () =>
+          send({
+            method: "ui/notifications/size-changed",
+            params: { height: document.documentElement.scrollHeight },
+          });
+        window.addEventListener("message", ({ source, data }) => {
+          if (source !== host || data?.jsonrpc !== "2.0") return;
+          if (data.id === 1 && !data.method) send({ method: "ui/notifications/initialized" });
+          if (data.method === "ui/notifications/tool-result") {
+            render(data.params);
+            size();
+          }
+        });
+        send({
+          id: 1,
+          method: "ui/initialize",
+          params: {
+            appInfo: { name: "bookshop-book-card", version: "1.0.0" },
+            appCapabilities: {},
+            protocolVersion: "2026-01-26",
+          },
+        });
+      })();
+    </script>
   </body>
 </html>

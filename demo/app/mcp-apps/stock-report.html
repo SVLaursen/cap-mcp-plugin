@@ -2,10 +2,81 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Stock report</title>
+    <style>
+      body {
+        font:
+          14px/1.4 system-ui,
+          sans-serif;
+        margin: 0;
+        padding: 16px;
+      }
+      h1 {
+        font-size: 18px;
+        margin: 0 0 8px;
+      }
+      #error {
+        color: #b00020;
+      }
+      #error:empty {
+        display: none;
+      }
+    </style>
   </head>
   <body>
+    <!--
+      MCP App UI for AdminService.stockReport (@mcp.ui: 'ui://bookshop/stock-report.html'),
+      listed and readable only for admins. The bridge below is the same as in book-card.html.
+    -->
     <h1>Books low on stock</h1>
+    <p id="error"></p>
     <ul id="books"></ul>
+    <script>
+      function render(result) {
+        const content = result.structuredContent ?? {};
+        if (result.isError) {
+          document.getElementById("error").textContent =
+            content.error?.message ?? result.content?.[0]?.text ?? "";
+          return;
+        }
+        const list = document.getElementById("books");
+        list.replaceChildren(
+          ...(content.value ?? []).map((book) => {
+            const item = document.createElement("li");
+            item.textContent = `${book.title}: ${book.stock}`;
+            return item;
+          }),
+        );
+      }
+
+      // The MCP Apps bridge (ext-apps protocol 2026-01-26): JSON-RPC over postMessage.
+      (() => {
+        const host = window.parent;
+        const send = (message) => host.postMessage({ jsonrpc: "2.0", ...message }, "*");
+        const size = () =>
+          send({
+            method: "ui/notifications/size-changed",
+            params: { height: document.documentElement.scrollHeight },
+          });
+        window.addEventListener("message", ({ source, data }) => {
+          if (source !== host || data?.jsonrpc !== "2.0") return;
+          if (data.id === 1 && !data.method) send({ method: "ui/notifications/initialized" });
+          if (data.method === "ui/notifications/tool-result") {
+            render(data.params);
+            size();
+          }
+        });
+        send({
+          id: 1,
+          method: "ui/initialize",
+          params: {
+            appInfo: { name: "bookshop-stock-report", version: "1.0.0" },
+            appCapabilities: {},
+            protocolVersion: "2026-01-26",
+          },
+        });
+      })();
+    </script>
   </body>
 </html>
