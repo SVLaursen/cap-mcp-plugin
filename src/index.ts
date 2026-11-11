@@ -12,6 +12,8 @@ import {
   type AuthConfig,
 } from "./adapter/auth";
 import { docCommentHint, exposureReport } from "./cli";
+import { mcpFacet, type FacetCds } from "./cli/add";
+import { mcpBuildTask, type BuildCds } from "./cli/build";
 import { capQueryLimit, readConfig, readInstructions } from "./config";
 import { registryCache } from "./exposure-registry";
 import { DEFAULT_LIMITS } from "./schema-mapper";
@@ -61,7 +63,31 @@ export function packageVersion(): string {
 }
 
 /**
- * Plugin activation, called once from cds-plugin.js with the host app's `cds`.
+ * What cds-plugin.js does, given the host app's `cds`: activate the plugin, and register the
+ * `cds add mcp` facet and the `cds build` task when cds-dk runs those commands. The published
+ * cds-plugin.js calls this from lib/; this repository's tests call it from src/ (test/setup-env.js).
+ */
+export function plugin(
+  cds: CdsLike & {
+    cli?: { command?: string };
+    add?: { register(name: string, facet: unknown): void } & FacetCds["add"];
+    build?: { register?(name: string, task: unknown): void } & Partial<BuildCds["build"]>;
+  },
+): void {
+  activate(cds);
+  // `cds add mcp`: cds-dk sets cds.cli before it loads plugins, and only it has cds.add.
+  if (cds.cli?.command === "add" && cds.add) {
+    const self = { name: "@gavdi/cap-mcp", version: packageVersion() };
+    cds.add.register("mcp", mcpFacet(cds as unknown as FacetCds, self));
+  }
+  // `cds build`: copy the instructions file into the deployed app (only when one is configured).
+  if (cds.cli?.command === "build" && cds.build?.register) {
+    cds.build.register("mcp", mcpBuildTask(cds as unknown as BuildCds));
+  }
+}
+
+/**
+ * Plugin activation, called once (from `plugin`) with the host app's `cds`.
  *
  * Mounts one `/mcp` route for all `@mcp` services once CAP has served them, behind CAP's own
  * `before` middlewares (cds.context, auth, model), so the caller is `cds.context.user` and other

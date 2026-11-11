@@ -6,8 +6,7 @@ import path from "node:path";
 
 /**
  * M7 — the package as npm publishes it: only the runtime files, and an app with exactly those
- * files installed serves MCP, also under the app's own Jest (cds.test), where JEST_WORKER_ID is
- * set. lib/ is built once for the behaviour tests (test/build-lib.js).
+ * files installed serves MCP, also under the app's own Jest (cds.test). lib/ is built once for the behaviour tests (test/build-lib.js).
  */
 const ROOT = path.join(__dirname, "..", "..");
 let files: string[];
@@ -79,9 +78,11 @@ test("the package holds the runtime files, the README and the licence, nothing i
 
 test("an app with the installed package serves tools, also under its own Jest", async () => {
   const port = await freePort();
+  // As under the app's own Jest (JEST_WORKER_ID set), without this repository's test wiring.
+  const { CDS_CONFIG: _ours, ...env } = process.env;
   server = spawn(process.execPath, [path.join(ROOT, "node_modules/@sap/cds/bin/serve.js")], {
     cwd: app,
-    env: { ...process.env, PORT: String(port), JEST_WORKER_ID: "1", NODE_ENV: "development" },
+    env: { ...env, PORT: String(port), JEST_WORKER_ID: "1", NODE_ENV: "development" },
   });
   let log = "";
   server.stdout?.on("data", (d: Buffer) => (log += d.toString()));

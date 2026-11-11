@@ -880,6 +880,27 @@ describe("model-reader: row limits (CAP's @cds.query.limit)", () => {
     ).toEqual({ "S.A": {} });
   });
 
+  // CAP's own reading, from its paging handler: the reader must agree with it, or the tools
+  // advertise limits CAP does not apply. A CAP release that changes the rules fails here.
+  const { getPageSize } = jest.requireActual<{
+    getPageSize(def: unknown): { default: number; max: number };
+  }>("@sap/cds/libx/_runtime/common/generic/paging.js");
+  test.each([
+    "@cds.query.limit: { default: 2, max: 3 } entity A { key ID: Integer; }",
+    "@cds.query.limit: 10 entity A { key ID: Integer; }",
+    "@cds.query.limit: { default: 50, max: 20 } entity A { key ID: Integer; }",
+    "@cds.query.limit.max: 30 entity A { key ID: Integer; }",
+    "entity A { key ID: Integer; }",
+  ])("agrees with CAP's getPageSize (service default 20, max 50): %s", (entity) => {
+    for (const service of ["", "@cds.query.limit: { default: 20, max: 50 }"]) {
+      const csn = compileSnippet(`@mcp ${service} service S { ${entity} }`);
+      const ours = onlyService(readModel(csn).spec).entities[0]?.limits;
+      const cap = getPageSize((csn.definitions as Record<string, unknown>)["S.A"]);
+      const max = ours?.maxRows ?? 1000; // CAP's global default max
+      expect({ default: Math.min(ours?.defaultRows ?? max, max), max }).toEqual(cap);
+    }
+  });
+
   test("a value that is not a whole number is reported and ignored", () => {
     const { spec, diagnostics } = read(`
       @mcp service S { @cds.query.limit: { default: 'ten', max: 2.5 } entity A { key ID: Integer; } }

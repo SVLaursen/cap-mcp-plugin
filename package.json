@@ -46,7 +46,7 @@
     "conformance": "node scripts/conformance.js"
   },
   "peerDependencies": {
-    "@sap/cds": ">=10",
+    "@sap/cds": "^10",
     "express": "^5"
   },
   "dependencies": {

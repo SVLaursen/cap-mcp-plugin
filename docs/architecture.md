@@ -186,7 +186,9 @@ Never `cds.User.privileged`.
 
 ## What lives where at runtime
 
-- No module reads `global.cds` (ADR 0005). `activate(cds)` receives it from `cds-plugin.js`.
-- Under Jest, `cds-plugin.js` loads `src/` through ts-jest; elsewhere it loads `lib/`.
+- No module reads `global.cds` (ADR 0005). `plugin(cds)` receives it from `cds-plugin.js`.
+- `cds-plugin.js` always loads `lib/`. This repository's behaviour tests point CAP's plugin list
+  at `test/cds-plugin-src.js` instead (`CDS_CONFIG`, set in `test/setup-env.js`), which loads
+  `src/` through ts-jest; child processes that test the CLI or the packed package drop it.
 - The registry caches per model object, so extended tenant models (multitenancy, P1) get their
   own tool lists without extra code.

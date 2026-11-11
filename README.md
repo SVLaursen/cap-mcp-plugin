@@ -22,7 +22,9 @@ transaction, exactly as it does for OData. Nothing is exposed unless you annotat
 npm add @gavdi/cap-mcp
 ```
 
-Requires Node.js 22 or later, with `@sap/cds` 10 or later and `express` 5 as peer dependencies.
+Requires Node.js 22 or later, with `@sap/cds` 10 and `express` 5 as peer dependencies. A new CAP
+major gets a plugin release once it is tested: the plugin reads some of CAP's behaviour (row limits,
+`@restrict`) the way CAP does, which a major may change.
 CAP loads the plugin automatically; there is no immediate integration code to write.
 
 ## Quickstart

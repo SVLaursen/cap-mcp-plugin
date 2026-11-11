@@ -21,10 +21,10 @@ const ROOT = path.join(__dirname, "..", "..");
 const CDS = path.join(ROOT, "node_modules", "@sap", "cds-dk", "bin", "cds.js");
 let app: string;
 
-/** Run the cds CLI in the app, outside Jest (so cds-plugin.js loads lib/). */
+/** Run the cds CLI in the app, in its own process, with the plugin from lib/. */
 function cds(...args: string[]): string {
   const env = { ...process.env };
-  delete env.JEST_WORKER_ID;
+  delete env.CDS_CONFIG; // test/setup-env.js: the CLI must load the plugin from lib/
   return execFileSync(process.execPath, [CDS, ...args], { cwd: app, env, encoding: "utf8" });
 }
 
@@ -108,7 +108,7 @@ test("cds build says when the instructions file cannot be copied (missing, or an
   const pkgFile = path.join(app, "package.json");
   const pkg = JSON.parse(readFileSync(pkgFile, "utf8"));
   const env = { ...process.env };
-  delete env.JEST_WORKER_ID;
+  delete env.CDS_CONFIG; // test/setup-env.js: the CLI must load the plugin from lib/
   const build = () => {
     const out = spawnSync(process.execPath, [CDS, "build", "--production"], {
       cwd: app,
