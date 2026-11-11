@@ -91,7 +91,7 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 - [x] Startup report groups a diagnostic that CAP propagated to several projections (one typo in a db entity is reported once per projection today)
 - [x] Startup report: say when an exposed definition has a doc comment in the source but `cdsc.docs` is off, and how to turn it on (ADR 0011)
 - [x] `cds add mcp` facet
-- [x] `cds mcp` stdio entry point: not built (maintainer decision). Documented instead: `cds watch` plus a bridge such as `mcp-remote` (docs/guide/quickstart.md). Rule for any future stdio entry point: anonymous by default, `--user <id>` only from `cds.requires.auth.users` with mocked/basic auth, refused in production (docs/architecture.md, stdio)
+- [x] `cds mcp` stdio entry point: not built (maintainer decision). Documented instead: `cds watch` plus a bridge such as `mcp-remote` (docs/guide/getting-started.md). Rule for any future stdio entry point: anonymous by default, `--user <id>` only from `cds.requires.auth.users` with mocked/basic auth, refused in production (docs/architecture.md, stdio)
 - [x] Config keys finalised in `docs/annotations.md` (camelCase, via `cds.env` only)
 - [x] `cds build` copies the `instructions` file into the deployed app (v1 parity, `docs/v1-reference.md`)
 - [x] v1 shim: map v1 annotations and config, emit `V1_ANNOTATION` / `V1_DEFAULT_CHANGED`
@@ -106,7 +106,7 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 - [x] Release workflow (port v1's release-it + trusted publishing): `.release-it.json`, `.github/workflows/release.yml` (manual, on main; npm trusted publishing with provenance). Dry run checked locally; the publish itself, OIDC and the deploy key can only be checked in GitHub Actions
 - [x] The published package holds only runtime files, README and licence, and loads under an app's own Jest (`cds-plugin.js` loaded `src/` whenever `JEST_WORKER_ID` was set) _(`package.test.ts`)_
 - [ ] Set `repository`, `homepage` and `bugs` in package.json, the README's absolute links and the npm trusted-publisher entry once the repository is decided (maintainer: pinned, awaiting Gavdi)
-- [ ] Review: run the `reviewer` agent on M7
+- [x] Review: run the `reviewer` agent on M7 (fixed: a stable release needs an explicit `stable` input and a `repository`, so `patch` from 2.0.0-alpha.x cannot publish 2.0.0 as `latest` by accident; pinned npm, no dependency cache in the release job, CI token read-only; the release hook runs coverage and conformance; lib/ built once per test run (two files raced) and cleaned before every build; no source maps pointing at unpublished src/; the package test boots an app and lists tools; the unused `zod` dependency removed; conformance script stops the demo on signals. Left as is: release-it publishes before it pushes (first run should be a prerelease, documented in release.yml); v1's workflow should publish with its own dist-tag before v2 takes `latest` (v1 repository))
 
 ## 2.x (P1) and later (P2)
 

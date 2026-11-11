@@ -26,6 +26,8 @@ module.exports = {
         "<rootDir>/test/auth/**/*.test.ts",
       ],
       setupFiles: ["<rootDir>/test/setup-env.js"],
+      // Child processes in cds-cli.test.ts and package.test.ts load lib/: build it once.
+      globalSetup: "<rootDir>/test/build-lib.js",
     },
   ],
   testTimeout: 30000,

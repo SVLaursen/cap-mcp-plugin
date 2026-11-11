@@ -17,7 +17,14 @@
     "autoGenerate": true
   },
   "hooks": {
-    "before:init": ["npm run format", "npm run check"],
+    "before:init": [
+      "npm run format",
+      "npm run typecheck",
+      "npm run lint",
+      "npm run test:coverage",
+      "npm run build",
+      "npm run conformance"
+    ],
     "after:bump": "npm run build"
   }
 }

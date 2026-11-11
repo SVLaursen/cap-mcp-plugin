@@ -14,7 +14,8 @@ import path from "node:path";
 /**
  * M6 — smoke tests: the real cds-dk CLI (`cds add mcp`, `cds build`) in a fresh app, with the
  * plugin installed.
- * The child process loads the plugin from lib/, so this builds it first.
+ * The child process loads the plugin from lib/, built once for the behaviour tests
+ * (test/build-lib.js).
  */
 const ROOT = path.join(__dirname, "..", "..");
 const CDS = path.join(ROOT, "node_modules", "@sap", "cds-dk", "bin", "cds.js");
@@ -28,11 +29,6 @@ function cds(...args: string[]): string {
 }
 
 beforeAll(() => {
-  execFileSync(
-    process.execPath,
-    [path.join(ROOT, "node_modules", "typescript", "bin", "tsc"), "-p", "tsconfig.build.json"],
-    { cwd: ROOT },
-  );
   app = mkdtempSync(path.join(tmpdir(), "cap-mcp-add-"));
   mkdirSync(path.join(app, "srv"));
   mkdirSync(path.join(app, "node_modules", "@sap"), { recursive: true });

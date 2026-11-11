@@ -24,7 +24,7 @@
     "demo"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "node -e \"require('fs').rmSync('lib',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "test:contract": "jest --selectProjects contract",
@@ -45,8 +45,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/node": "^2.1.2",
-    "@modelcontextprotocol/server": "^2.4.0",
-    "zod": "^4.2.0"
+    "@modelcontextprotocol/server": "^2.4.0"
   },
   "devDependencies": {
     "@cap-js/cds-test": "^1.0.2",

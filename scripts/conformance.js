@@ -35,7 +35,8 @@ function freePort() {
 async function waitFor(url, server, timeoutMs = 60000) {
   const until = Date.now() + timeoutMs;
   while (Date.now() < until) {
-    if (server.exitCode !== null) throw new Error(`demo exited with ${server.exitCode}`);
+    if (server.exitCode !== null || server.signalCode !== null)
+      throw new Error(`demo exited (${server.exitCode ?? server.signalCode})`);
     const up = await new Promise((resolve) =>
       http.get(url, (res) => resolve(!!res.resume())).on("error", () => resolve(false)),
     );
@@ -59,8 +60,14 @@ async function main() {
     },
     stdio: ["ignore", "inherit", "inherit"],
   });
-  const stop = () => server.exitCode === null && server.kill();
+  const stop = () => server.exitCode === null && server.signalCode === null && server.kill();
   process.on("exit", stop);
+  for (const signal of ["SIGINT", "SIGTERM"]) {
+    process.on(signal, () => {
+      stop();
+      process.exit(1);
+    });
+  }
 
   try {
     await waitFor(`http://localhost:${port}/`, server);
