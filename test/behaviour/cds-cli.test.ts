@@ -12,7 +12,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 /**
- * M6 — smoke test: the real `cds add mcp` (cds-dk) in a fresh app, with the plugin installed.
+ * M6 — smoke tests: the real cds-dk CLI (`cds add mcp`, `cds build`) in a fresh app, with the
+ * plugin installed.
  * The child process loads the plugin from lib/, so this builds it first.
  */
 const ROOT = path.join(__dirname, "..", "..");
@@ -80,4 +81,14 @@ test("running it again for another service adds to srv/mcp.cds instead of replac
     "annotate AdminService with @mcp;",
   ]);
   expect(existsSync(path.join(app, "srv", "mcp.cds"))).toBe(true);
+}, 60_000);
+
+test("cds build copies the instructions file to where the deployed app reads it", () => {
+  mkdirSync(path.join(app, "docs"));
+  writeFileSync(path.join(app, "docs", "mcp.md"), "Be brief.\n");
+  const pkg = JSON.parse(readFileSync(path.join(app, "package.json"), "utf8"));
+  pkg.cds.mcp.instructions = { file: "docs/mcp.md" };
+  writeFileSync(path.join(app, "package.json"), JSON.stringify(pkg, null, 2));
+  cds("build", "--production");
+  expect(readFileSync(path.join(app, "gen", "srv", "docs", "mcp.md"), "utf8")).toBe("Be brief.\n");
 }, 60_000);

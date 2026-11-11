@@ -18,3 +18,8 @@ if (cds.cli?.command === "add" && cds.add) {
     impl.mcpFacet(cds, { name: "@gavdi/cap-mcp", version: impl.packageVersion() }),
   );
 }
+
+// `cds build`: copy the instructions file into the deployed app (only when one is configured).
+if (cds.cli?.command === "build" && cds.build?.register) {
+  cds.build.register("mcp", impl.mcpBuildTask(cds));
+}

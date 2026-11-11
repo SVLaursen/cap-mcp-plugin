@@ -46,6 +46,7 @@ export type { McpConfig } from "./config";
 export const MCP_PATH = "/mcp";
 
 export { mcpFacet } from "./cli/add";
+export { mcpBuildTask } from "./cli/build";
 
 /** This plugin's own version (server identity default, `cds add mcp` dependency). */
 export function packageVersion(): string {
