@@ -1,6 +1,8 @@
 import {
   CLIENT_CAPABILITIES_META_KEY,
+  INTERNAL_ERROR,
   McpServer,
+  ProtocolError,
   ResourceNotFoundError,
   ResourceTemplate,
   createMcpHandler,
@@ -347,11 +349,18 @@ function registerResource(
     if (!service) throw new Error(`cap-mcp: no service serves ${resource.entity}`);
     return service;
   };
-  // @mcp.completion on the key: completion/complete offers keys, read as the caller.
+  // @mcp.completion on the key: completion/complete offers keys, read as the caller. A CAP
+  // refusal (no access, a bad value) offers nothing.
   const complete = resource.completion
     ? {
-        key: (value: string) =>
-          serviceFor().tx((tx) => executor.completeKey(resource.entity, value, tx)),
+        key: async (value: string) => {
+          try {
+            return await serviceFor().tx((tx) => executor.completeKey(resource.entity, value, tx));
+          } catch (error) {
+            if (errorResult(error)) return [];
+            throw internalError(`completing ${resource.uriTemplate} failed:`, error, options);
+          }
+        },
       }
     : undefined;
   const template = new ResourceTemplate(resource.uriTemplate, {
@@ -373,14 +382,21 @@ function registerResource(
         };
       } catch (error) {
         const mapped = errorResult(error);
-        if (!mapped) {
-          options.log.error(`reading ${uri.href} failed:`, error);
-          throw error;
-        }
+        if (!mapped) throw internalError(`reading ${uri.href} failed:`, error, options);
         throw new ResourceNotFoundError(uri.href, mapped.text);
       }
     },
   );
+}
+
+/**
+ * An error CAP did not map (a bug, a database failure), outside tools/call: logged, and answered
+ * as JSON-RPC Internal error. Its text reaches the client only outside production, as for tools.
+ */
+function internalError(what: string, error: unknown, options: AdapterOptions): ProtocolError {
+  options.log.error(what, error);
+  const message = !isProduction() && error instanceof Error ? error.message : "Internal error";
+  return new ProtocolError(INTERNAL_ERROR, message);
 }
 
 /** One MCP App UI resource (ADR 0012): its HTML, as ext-apps' registerAppResource serves it. */
@@ -391,8 +407,7 @@ function registerApp(server: McpServer, uri: string, apps: McpApps, options: Ada
     try {
       return { contents: [{ uri, mimeType: APP_MIME_TYPE, text: await content() }] };
     } catch (error) {
-      options.log.error(`reading ${uri} failed:`, error);
-      throw error;
+      throw internalError(`reading ${uri} failed:`, error, options);
     }
   });
 }
