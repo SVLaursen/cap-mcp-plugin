@@ -54,6 +54,7 @@
     "@cap-js/sqlite": "^3.1.2",
     "@eslint/js": "^10.0.1",
     "@modelcontextprotocol/client": "^2.4.0",
+    "@modelcontextprotocol/conformance": "^0.1.16",
     "@modelcontextprotocol/ext-apps": "^2.0.4",
     "@sap/cds": "^10.2.2",
     "@sap/cds-dk": "^10.2.1",
@@ -64,6 +65,7 @@
     "express": "^5.3.0",
     "jest": "^29.7.0",
     "prettier": "^3.5.3",
+    "release-it": "^21.1.2",
     "ts-jest": "^29.4.15",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.0.0"
