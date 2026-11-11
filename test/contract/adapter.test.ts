@@ -126,4 +126,40 @@ describe("adapter: errors outside tools/call", () => {
     });
     expect(res.result?.completion).toMatchObject({ values: [], hasMore: false });
   });
+
+  test("more than 100 keys: 100 values, hasMore, and no total (it is unknown)", async () => {
+    const many = {
+      ...failing,
+      run: async () => Array.from({ length: 101 }, (_, i) => ({ ID: 1000 + i })),
+      tx: <T>(fn: (tx: unknown) => Promise<T>) => fn(many),
+    };
+    const res = await call(serve(cdl, [], { S: many }), "completion/complete", {
+      ref: { type: "ref/resource", uri: "cap://S/Authors/{key}" },
+      argument: { name: "key", value: "1" },
+    });
+    const completion = res.result?.completion as Record<string, unknown>;
+    expect(completion.values).toHaveLength(100);
+    expect(completion.hasMore).toBe(true);
+    expect(completion).not.toHaveProperty("total");
+  });
+
+  test("a template without completion, or an unknown one, is Invalid params", async () => {
+    const handler = serve(
+      `@mcp service S {
+        @mcp.resource entity Authors { key ID : Integer @mcp.completion; }
+        @mcp.resource entity Plain { key ID : Integer; }
+      }`,
+      [],
+      { S: failing },
+    );
+    for (const uri of ["cap://S/Plain/{key}", "cap://S/Nothing/{key}"]) {
+      const res = await call(handler, "completion/complete", {
+        ref: { type: "ref/resource", uri },
+        argument: { name: "key", value: "1" },
+      });
+      expect(res.error ?? res.result).toMatchObject(
+        uri.includes("Plain") ? { completion: { values: [] } } : { code: -32602 },
+      );
+    }
+  });
 });

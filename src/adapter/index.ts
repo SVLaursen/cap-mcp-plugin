@@ -1,6 +1,7 @@
 import {
   CLIENT_CAPABILITIES_META_KEY,
   INTERNAL_ERROR,
+  INVALID_PARAMS,
   McpServer,
   ProtocolError,
   ResourceNotFoundError,
@@ -25,6 +26,7 @@ import { isProduction } from "./auth";
 import {
   ConfirmationRequired,
   Executor,
+  MAX_COMPLETIONS,
   ToolError,
   errorResult,
   renderPrompt,
@@ -280,6 +282,7 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
     });
     for (const resource of resources)
       registerResource(server, resource, registry, executor, options);
+    registerCompletion(server, resources, registry, executor, options);
     for (const uri of uis) registerApp(server, uri, apps, options);
     for (const prompt of prompts) registerPrompt(server, prompt, argsSchemaFor(prompt));
     for (const { tool, _meta } of tools) {
@@ -343,37 +346,14 @@ function registerResource(
   executor: Executor,
   options: AdapterOptions,
 ): void {
-  const serviceFor = () => {
-    const name = serviceOf(registry.spec, { kind: "entity", entity: resource.entity, mode: "get" });
-    const service = options.services[name ?? ""] as TxService | undefined;
-    if (!service) throw new Error(`cap-mcp: no service serves ${resource.entity}`);
-    return service;
-  };
-  // @mcp.completion on the key: completion/complete offers keys, read as the caller. A CAP
-  // refusal (no access, a bad value) offers nothing.
-  const complete = resource.completion
-    ? {
-        key: async (value: string) => {
-          try {
-            return await serviceFor().tx((tx) => executor.completeKey(resource.entity, value, tx));
-          } catch (error) {
-            if (errorResult(error)) return [];
-            throw internalError(`completing ${resource.uriTemplate} failed:`, error, options);
-          }
-        },
-      }
-    : undefined;
-  const template = new ResourceTemplate(resource.uriTemplate, {
-    list: undefined,
-    ...(complete && { complete }),
-  });
+  const template = new ResourceTemplate(resource.uriTemplate, { list: undefined });
   const { title, description, mimeType } = resource;
   server.registerResource(
     resource.name,
     template,
     { title, mimeType, ...(description && { description }) },
     async (uri, variables) => {
-      const service = serviceFor();
+      const service = resourceService(resource, registry, options);
       const key = [variables.key ?? ""].flat().join(",");
       try {
         const result = await service.tx((tx) => executor.readResource(resource.entity, key, tx));
@@ -387,6 +367,61 @@ function registerResource(
       }
     },
   );
+}
+
+/** The CAP service an entity's resource is read in. */
+function resourceService(
+  resource: ResourceSpec,
+  registry: ExposureRegistry,
+  options: AdapterOptions,
+): TxService {
+  const name = serviceOf(registry.spec, { kind: "entity", entity: resource.entity, mode: "get" });
+  const service = options.services[name ?? ""] as TxService | undefined;
+  if (!service) throw new Error(`cap-mcp: no service serves ${resource.entity}`);
+  return service;
+}
+
+/**
+ * `completion/complete` for the `{key}` of the caller's @mcp.completion resources, read as the
+ * caller (a CAP refusal offers nothing). Our own handler rather than the SDK's template
+ * callbacks: those report `total` as the number of values fetched, which is wrong when there
+ * are more. Without such a resource there is no handler and no `completions` capability.
+ */
+function registerCompletion(
+  server: McpServer,
+  resources: ResourceSpec[],
+  registry: ExposureRegistry,
+  executor: Executor,
+  options: AdapterOptions,
+): void {
+  if (!resources.some((r) => r.completion)) return;
+  server.server.registerCapabilities({ completions: {} });
+  server.server.setRequestHandler("completion/complete", async (request) => {
+    const { ref, argument } = request.params;
+    const resource =
+      ref.type === "ref/resource" ? resources.find((r) => r.uriTemplate === ref.uri) : undefined;
+    if (!resource) {
+      const what = ref.type === "ref/resource" ? `Resource template ${ref.uri}` : "This reference";
+      throw new ProtocolError(INVALID_PARAMS, `${what} has no completion`);
+    }
+    if (!resource.completion || argument.name !== "key") {
+      return { completion: { values: [], hasMore: false } };
+    }
+    try {
+      const values = await resourceService(resource, registry, options).tx((tx) =>
+        executor.completeKey(resource.entity, argument.value, tx),
+      );
+      return {
+        completion: {
+          values: values.slice(0, MAX_COMPLETIONS),
+          hasMore: values.length > MAX_COMPLETIONS,
+        },
+      };
+    } catch (error) {
+      if (errorResult(error)) return { completion: { values: [], hasMore: false } };
+      throw internalError(`completing ${resource.uriTemplate} failed:`, error, options);
+    }
+  });
 }
 
 /**

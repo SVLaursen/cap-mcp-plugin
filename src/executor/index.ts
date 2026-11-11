@@ -197,7 +197,7 @@ export class Executor {
       SELECT: {
         from: { ref: [entity.name] },
         columns: [ref(key.name)],
-        ...(value && { where: [{ func: "startswith", args: [ref(key.name), { val: value }] }] }),
+        ...(value && { where: [{ func: "startswith", args: [keyText(key), { val: value }] }] }),
         orderBy: [{ ...ref(key.name), sort: "asc" }],
         limit: { rows: { val: MAX_COMPLETIONS + 1 } },
       },
@@ -742,8 +742,17 @@ const COMPARISONS: Record<string, string> = {
   lt: "<",
   le: "<=",
 };
+/** Key types stored as text; others are cast, so every database can compare a prefix. */
+const TEXT_KEYS = new Set(["cds.String", "cds.LargeString", "cds.UUID"]);
+
+function keyText(key: FieldSpec) {
+  return TEXT_KEYS.has(key.cdsType)
+    ? ref(key.name)
+    : { ...ref(key.name), cast: { type: "cds.String" } };
+}
+
 /** `completion/complete` returns at most 100 values (MCP spec). */
-const MAX_COMPLETIONS = 100;
+export const MAX_COMPLETIONS = 100;
 
 const TEXT_FUNCTIONS = new Set(["contains", "startswith", "endswith"]);
 const STRING_TYPES = new Set(["cds.String", "cds.LargeString"]);

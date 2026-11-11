@@ -143,6 +143,7 @@ describe("resource key completion", () => {
     compileSnippet(`@mcp service R {
       @mcp.resource entity Ones { key ID: Integer @mcp.completion; }
       @mcp.resource entity Plain { key ID: Integer; }
+      @mcp.resource entity Codes { key code: String @mcp.completion; }
     }`),
   );
   const rows = (n: number): ServiceLike & { query?: unknown } => {
@@ -165,11 +166,25 @@ describe("resource key completion", () => {
       SELECT: {
         from: { ref: ["R.Ones"] },
         columns: [{ ref: ["ID"] }],
-        where: [{ func: "startswith", args: [{ ref: ["ID"] }, { val: "10" }] }],
+        // Keys that are not strings are cast, so every database can compare a prefix.
+        where: [
+          {
+            func: "startswith",
+            args: [{ ref: ["ID"], cast: { type: "cds.String" } }, { val: "10" }],
+          },
+        ],
         orderBy: [{ ref: ["ID"], sort: "asc" }],
         limit: { rows: { val: 101 } },
       },
     });
+  });
+
+  test("string keys are compared as they are", async () => {
+    const service = rows(0);
+    await new Executor(model.spec).completeKey("R.Codes", "a", service);
+    expect((service.query as { SELECT: { where: unknown } }).SELECT.where).toEqual([
+      { func: "startswith", args: [{ ref: ["code"] }, { val: "a" }] },
+    ]);
   });
 
   test("an empty value lists the first keys, without a filter", async () => {
