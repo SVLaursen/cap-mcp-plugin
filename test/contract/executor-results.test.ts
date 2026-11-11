@@ -137,3 +137,52 @@ describe("confirmation (@mcp.elicit)", () => {
     ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
   });
 });
+
+describe("resource key completion", () => {
+  const model = ExposureRegistry.fromModel(
+    compileSnippet(`@mcp service R {
+      @mcp.resource entity Ones { key ID: Integer @mcp.completion; }
+      @mcp.resource entity Plain { key ID: Integer; }
+    }`),
+  );
+  const rows = (n: number): ServiceLike & { query?: unknown } => {
+    const service: ServiceLike & { query?: unknown } = {
+      name: "R",
+      run: async (q) => {
+        service.query = q;
+        return Array.from({ length: n }, (_, i) => ({ ID: 100 + i }));
+      },
+      send: async () => undefined,
+    };
+    return service;
+  };
+
+  test("asks CAP for keys starting with the value, in key order, one more than MCP's 100", async () => {
+    const service = rows(3);
+    const done = await new Executor(model.spec).completeKey("R.Ones", "10", service);
+    expect(done).toEqual(["100", "101", "102"]);
+    expect(service.query).toEqual({
+      SELECT: {
+        from: { ref: ["R.Ones"] },
+        columns: [{ ref: ["ID"] }],
+        where: [{ func: "startswith", args: [{ ref: ["ID"] }, { val: "10" }] }],
+        orderBy: [{ ref: ["ID"], sort: "asc" }],
+        limit: { rows: { val: 101 } },
+      },
+    });
+  });
+
+  test("an empty value lists the first keys, without a filter", async () => {
+    const service = rows(101);
+    const done = await new Executor(model.spec).completeKey("R.Ones", "", service);
+    // The SDK keeps 100 and says hasMore when there are 101.
+    expect(done).toHaveLength(101);
+    expect((service.query as { SELECT: { where?: unknown } }).SELECT.where).toBeUndefined();
+  });
+
+  test("entities without key completion complete nothing, and CAP is not asked", async () => {
+    const service = rows(3);
+    expect(await new Executor(model.spec).completeKey("R.Plain", "1", service)).toEqual([]);
+    expect(service.query).toBeUndefined();
+  });
+});

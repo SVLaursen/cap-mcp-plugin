@@ -395,6 +395,30 @@ describe("opt-in: confirmation (MRTR)", () => {
 });
 
 describe("opt-in: completion", () => {
-  test.todo("completion/complete for submitOrder.book returns matching book IDs");
-  test.todo("parameters without @mcp.completion return no completions");
+  // MCP completes resource-template variables (and prompt arguments), not tool arguments, so
+  // @mcp.completion completes the key of an @mcp.resource entity (AdminService.Authors:ID).
+  const complete = (who: Caller, uri: string, value: string) =>
+    rpc(demo.POST, who, "completion/complete", {
+      ref: { type: "ref/resource", uri },
+      argument: { name: "key", value },
+    });
+
+  test("completion/complete for the Authors resource key returns matching author IDs", async () => {
+    const res = await complete("alice", "cap://AdminService/Authors/{key}", "10");
+    expect(res.message?.result?.completion).toMatchObject({
+      values: ["101", "107"],
+      hasMore: false,
+    });
+    const discover = await rpc(demo.POST, "alice", "server/discover");
+    expect(discover.message?.result?.capabilities).toHaveProperty("completions");
+  });
+
+  test("resources without @mcp.completion, and callers who cannot read them, get no completions", async () => {
+    // Bob cannot reach AdminService: there is no such template for him.
+    expect(
+      (await complete("bob", "cap://AdminService/Authors/{key}", "1")).message?.error,
+    ).toBeDefined();
+    const discover = await rpc(demo.POST, "bob", "server/discover");
+    expect(discover.message?.result?.capabilities).not.toHaveProperty("completions");
+  });
 });

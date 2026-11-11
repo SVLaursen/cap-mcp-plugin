@@ -184,6 +184,27 @@ export class Executor {
     return await this.get(entity, parseResourceKey(entity, key), service);
   }
 
+  /**
+   * Values for the `{key}` of an @mcp.resource template whose key has @mcp.completion: keys
+   * that start with `value`, in key order, as the caller may read them (CAP applies @restrict).
+   * MCP returns at most 100; one more is fetched so the SDK can say `hasMore`.
+   */
+  async completeKey(entityName: string, value: string, service: ServiceLike): Promise<string[]> {
+    const entity = this.entities.get(entityName);
+    const key = entity?.keys.length === 1 ? entity.keys[0] : undefined;
+    if (!entity?.resource || !key?.completion) return [];
+    const rows = (await service.run({
+      SELECT: {
+        from: { ref: [entity.name] },
+        columns: [ref(key.name)],
+        ...(value && { where: [{ func: "startswith", args: [ref(key.name), { val: value }] }] }),
+        orderBy: [{ ...ref(key.name), sort: "asc" }],
+        limit: { rows: { val: MAX_COMPLETIONS + 1 } },
+      },
+    })) as Args[] | undefined;
+    return (rows ?? []).map((row) => String(row[key.name]));
+  }
+
   private dispatch(tool: ToolSpec, args: Args, service: ServiceLike): Promise<ToolResult> {
     const target = tool.target;
     if (target.kind === "entity") {
@@ -721,6 +742,9 @@ const COMPARISONS: Record<string, string> = {
   lt: "<",
   le: "<=",
 };
+/** `completion/complete` returns at most 100 values (MCP spec). */
+const MAX_COMPLETIONS = 100;
+
 const TEXT_FUNCTIONS = new Set(["contains", "startswith", "endswith"]);
 const STRING_TYPES = new Set(["cds.String", "cds.LargeString"]);
 

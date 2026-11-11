@@ -85,6 +85,11 @@ record comes back as one `application/json` content. The key segment is the one 
 link to: the value of a single key, or `k1=v1;k2=v2`, URI-encoded. A missing record or a key that
 is not one is the protocol's resource-not-found error (`-32602` with the `uri`).
 
+A resource whose single key has `@mcp.completion` (`ResourceSpec.completion`) gets a
+`complete.key` callback on its template: `executor.completeKey(entity, value, tx)` runs a
+`startswith` SELECT of the key in `srv.tx`, and the SDK answers `completion/complete` (and
+advertises `completions`) from it.
+
 MCP App UIs (`@mcp.ui`, ADR 0012) are plain resources, registered per request by the adapter
 (`adapter/apps.ts`): `activate()` reads `app/mcp-apps/<path>` for each linked `ui://` URI once
 CAP has served the app, then emits `mcp:apps` so app code can register more. Per request, a tool

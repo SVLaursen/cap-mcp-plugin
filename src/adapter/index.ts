@@ -310,20 +310,30 @@ function registerResource(
   executor: Executor,
   options: AdapterOptions,
 ): void {
-  const template = new ResourceTemplate(resource.uriTemplate, { list: undefined });
+  const serviceFor = () => {
+    const name = serviceOf(registry.spec, { kind: "entity", entity: resource.entity, mode: "get" });
+    const service = options.services[name ?? ""] as TxService | undefined;
+    if (!service) throw new Error(`cap-mcp: no service serves ${resource.entity}`);
+    return service;
+  };
+  // @mcp.completion on the key: completion/complete offers keys, read as the caller.
+  const complete = resource.completion
+    ? {
+        key: (value: string) =>
+          serviceFor().tx((tx) => executor.completeKey(resource.entity, value, tx)),
+      }
+    : undefined;
+  const template = new ResourceTemplate(resource.uriTemplate, {
+    list: undefined,
+    ...(complete && { complete }),
+  });
   const { title, description, mimeType } = resource;
   server.registerResource(
     resource.name,
     template,
     { title, mimeType, ...(description && { description }) },
     async (uri, variables) => {
-      const name = serviceOf(registry.spec, {
-        kind: "entity",
-        entity: resource.entity,
-        mode: "get",
-      });
-      const service = options.services[name ?? ""] as TxService | undefined;
-      if (!service) throw new Error(`cap-mcp: no service serves ${resource.entity}`);
+      const service = serviceFor();
       const key = [variables.key ?? ""].flat().join(",");
       try {
         const result = await service.tx((tx) => executor.readResource(resource.entity, key, tx));

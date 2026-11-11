@@ -597,6 +597,7 @@ describe("exposure-registry: resources", () => {
         description: "People.",
         mimeType: "application/json",
         entity: "my.S.People",
+        completion: false,
       },
     ]);
     expect(r.resourcesFor(user("admin")).map((t) => t.uriTemplate)).toEqual([
@@ -604,6 +605,17 @@ describe("exposure-registry: resources", () => {
       "cap://my.S/Secrets/{key}",
     ]);
   });
+});
+
+test("a resource whose single key has @mcp.completion offers key completion", () => {
+  const r = registry(`@mcp service S {
+    @mcp.resource entity A { key ID: Integer @mcp.completion; }
+    @mcp.resource entity B { key ID: Integer; }
+  }`);
+  expect(r.resourcesFor(user()).map((x) => [x.name, x.completion])).toEqual([
+    ["S_A", true],
+    ["S_B", false],
+  ]);
 });
 
 describe("exposure-registry: prompts", () => {

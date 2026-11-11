@@ -242,6 +242,8 @@ export interface ResourceSpec {
   mimeType: "application/json";
   /** Fully qualified entity. */
   entity: string;
+  /** The single key has @mcp.completion: `completion/complete` offers values for `{key}`. */
+  completion: boolean;
 }
 
 /** The roles/identity the registry filters by. A structural subset of cds.User. */

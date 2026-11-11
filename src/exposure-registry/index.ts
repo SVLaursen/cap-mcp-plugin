@@ -297,6 +297,7 @@ function resourceSpec(service: ServiceSpec, entity: EntitySpec): ResourceSpec {
     ...(entity.description && { description: entity.description }),
     mimeType: "application/json",
     entity: entity.name,
+    completion: entity.keys.length === 1 && entity.keys[0]?.completion === true,
   };
 }
 

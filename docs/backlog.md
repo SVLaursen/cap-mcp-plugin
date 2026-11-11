@@ -80,7 +80,7 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 - [x] Prompts with role visibility _(prompts)_
 - [x] MCP Apps (issue #133), incl. custom registration hook; no runtime dependency on `@modelcontextprotocol/ext-apps` (ADR 0012) _(MCP Apps)_
 - [x] Confirmation via MRTR `input_required` _(confirmation)_
-- [ ] Completion _(completion)_
+- [x] Completion: `@mcp.completion` completes `@mcp.resource` key templates; MCP has no tool-argument completion, so parameters get a diagnostic _(completion)_
 - [x] Auth matrix: XSUAA/IAS × secret/certificate, IAS-only + AMS _(`auth-matrix.test.ts`)_
 - [ ] Multitenant XSUAA: RFC 9728 metadata names the provider's `credentials.url`; subscribers authenticate at their own subdomain, so derive the authorization server from the tenant (M4 review)
 - [ ] Review: run the `reviewer` agent on M5

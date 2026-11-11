@@ -4,6 +4,7 @@ using {sap.capire.bookshop as my} from '../db/schema';
 //   - @mcp.compact: the generic tool set instead of per-entity tools
 //   - @mcp.wrap.modes on Books: create, update, delete
 //   - @mcp.resource on Authors: one record by key as cap://AdminService/Authors/<ID>
+//   - @mcp.completion on Authors:ID: completes that template's key
 //   - @mcp.prompts on the service
 //   - @mcp: false on AuditNotes, @cds.api.ignore on Genres.parent
 // Service-level @requires: only admins see or call anything here.
@@ -46,6 +47,8 @@ annotate AdminService.Books with {
 };
 
 annotate AdminService.Authors with {
+  // Completes the key of cap://AdminService/Authors/{key} (MCP has no tool-argument completion).
+  ID    @mcp.completion;
   email @mcp.omit;
 };
 

@@ -3,7 +3,7 @@ using {sap.capire.bookshop as my} from '../db/schema';
 // MCP exposure (v2): `@mcp` on the service gives the read-only baseline:
 //   - query + get for Books, Authors, Genres
 //   - all functions (stockByGenre, bookCard)
-// Opt-ins exercised here: @mcp.describe, @mcp on an action, @mcp.ui, @mcp.completion, @mcp.omit.
+// Opt-ins exercised here: @mcp.describe, @mcp on an action, @mcp.ui, @mcp.omit.
 // Deliberately NOT exposed: the `restock` action (no @mcp), Authors.email and Books.costPrice.
 /** Browse the bookshop catalog and place orders. */
 @mcp
@@ -45,8 +45,8 @@ service CatalogService @(path: '/browse') {
   /** Order a number of copies of a book. Actions are opt-in. */
   @mcp
   action   submitOrder(
-    /** The book to order. Opted in to argument completion. */
-    book : Books:ID @mcp.completion,
+    /** The book to order. */
+    book : Books:ID,
     quantity : Integer @mandatory
   )                                       returns {
     stock : Integer
