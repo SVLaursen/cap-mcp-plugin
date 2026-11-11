@@ -330,11 +330,7 @@ export function entityOutputSchema(entity: EntitySpec, mode: EntityMode): JsonSc
   }
 }
 
-/**
- * Always `{ value }`. 2026-07-28 allows any JSON as structuredContent, but one shape for every
- * operation is simpler for agents, 2025-era clients need an object, and a single record may be
- * null (nothing found) without failing the SDK's output validation.
- */
+/** Prompt arguments are strings: the pattern a value of each CDS type must match. */
 const PROMPT_PATTERNS: Record<string, string> = {
   Integer: "^-?\\d+$",
   Int16: "^-?\\d+$",
@@ -365,6 +361,11 @@ export function promptArgsSchema(prompt: PromptSpec): JsonSchema {
   };
 }
 
+/**
+ * Always `{ value }`. 2026-07-28 allows any JSON as structuredContent, but one shape for every
+ * operation is simpler for agents, 2025-era clients need an object, and a single record may be
+ * null (nothing found) without failing the SDK's output validation.
+ */
 export function operationOutputSchema(op: OperationSpec): JsonSchema | undefined {
   const returns = op.returns;
   if (!returns) return undefined;

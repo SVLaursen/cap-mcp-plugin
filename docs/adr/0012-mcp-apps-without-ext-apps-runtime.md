@@ -30,7 +30,8 @@ Where the HTML comes from:
 
 - **Default:** `ui://<host>/<path>` is the file `<cds.root>/app/mcp-apps/<path>`, read once
   when CAP has served the app. A missing file is logged as a warning, and the tool loses its UI
-  link (it keeps working as a plain tool). Paths that leave `app/mcp-apps/` are refused.
+  link (it keeps working as a plain tool). Paths that leave `app/mcp-apps/` are refused. Symlinks are followed and must stay inside it too. The `<host>` part names the app
+  for the client only; files are found by path.
 - **Hook:** once the defaults are read, the plugin emits `cds.emit('mcp:apps', apps)`. App code
   adds or replaces a resource with `apps.register('ui://x/y.html', () => html)` (the content
   function is sync or async, called on every read, so the app decides about caching). The event
@@ -54,3 +55,6 @@ content).
 - The plugin follows the extension by hand: the compatibility test is the guard.
 - Hosts that support MCP Apps render the UI; others ignore `_meta.ui` and show the tool result.
 - `cds.on('mcp:apps')` is part of the user-facing contract (docs/annotations.md).
+- Files are read for the `@mcp.ui` links of the app's base model. A link that exists only in a
+  tenant's extended model has no file content unless the hook registers it; the tool then has
+  no UI link. Revisit if extensions ask for MCP Apps.

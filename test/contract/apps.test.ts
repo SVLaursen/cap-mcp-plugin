@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { APP_MIME_TYPE, McpApps, appMeta, loadAppFiles } from "../../src/adapter/apps";
@@ -54,6 +54,14 @@ describe("MCP Apps (ADR 0012)", () => {
     expect(apps.uris()).toEqual([]);
     expect(warnings).toHaveLength(3);
     expect(warnings[0]).toMatch(/ui:\/\/shop\/missing\.html.*app\/mcp-apps\/missing\.html/);
+  });
+
+  test("a symlink under app/mcp-apps that points outside it is refused", () => {
+    const link = path.join(root, "app", "mcp-apps", "link.html");
+    symlinkSync(path.join(root, "secret.html"), link);
+    const apps = loadAppFiles(root, ["ui://shop/link.html"], log);
+    expect(apps.uris()).toEqual([]);
+    expect(warnings).toEqual([expect.stringMatching(/not a file under app\/mcp-apps/)]);
   });
 
   test("register adds or replaces a resource; only ui:// URIs are accepted", async () => {

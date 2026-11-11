@@ -1,10 +1,11 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 
 /**
  * MCP Apps (issue #133, ADR 0012): the `ui://` resources that `@mcp.ui` tools link to.
  *
- * - By default `ui://<host>/<path>` is the file `<root>/app/mcp-apps/<path>`, read once.
+ * - By default `ui://<host>/<path>` is the file `<root>/app/mcp-apps/<path>`, read once (the
+ *   host only names the app for the client; files are found by path).
  * - App code adds or replaces a resource through the `mcp:apps` event (`apps.register`).
  * - The adapter serves a resource only to callers who see a tool that links to it, and drops
  *   the UI link from a tool whose resource has no content.
@@ -79,19 +80,29 @@ export function loadAppFiles(
 ): McpApps {
   const apps = new McpApps();
   const dir = path.resolve(root, "app", "mcp-apps");
+  const inside = (file: string, base: string) => file.startsWith(base + path.sep);
+  const outside = (uri: string) =>
+    log.warn(`MCP App ${uri} is not a file under app/mcp-apps; the tool has no UI`);
   for (const uri of new Set(uris)) {
     const relative = filePath(uri);
     const file = relative === undefined ? undefined : path.resolve(dir, relative);
-    if (file === undefined || !file.startsWith(dir + path.sep)) {
-      log.warn(`MCP App ${uri} is not a file under app/mcp-apps; the tool has no UI`);
+    if (file === undefined || !inside(file, dir)) {
+      outside(uri);
       continue;
     }
+    let real: string;
     let html: string;
     try {
-      html = readFileSync(file, "utf8");
+      // Symlinks are followed, so check where the file really is.
+      real = realpathSync(file);
+      html = readFileSync(real, "utf8");
     } catch {
       const shown = path.relative(root, file).split(path.sep).join("/");
       log.warn(`MCP App ${uri} has no file at ${shown}; the tool has no UI`);
+      continue;
+    }
+    if (!inside(real, realpathSync(dir))) {
+      outside(uri);
       continue;
     }
     apps.register(uri, () => html);

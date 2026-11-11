@@ -950,9 +950,10 @@ function parseResourceKey(entity: EntitySpec, segment: string): Args {
  * becomes the argument's value (already checked against promptArgsSchema). Other braces stay.
  */
 export function renderPrompt(prompt: PromptSpec, args: Record<string, string>): string {
-  return prompt.inputs.reduce(
-    (text, input) => text.replaceAll(`{{${input.key}}}`, args[input.key] ?? ""),
-    prompt.template,
+  const keys = new Set(prompt.inputs.map((input) => input.key));
+  // One pass over the template, so an argument's own text is never filled in again.
+  return prompt.template.replace(/\{\{([^{}]*)\}\}/g, (whole, key: string) =>
+    keys.has(key) ? (args[key] ?? "") : whole,
   );
 }
 

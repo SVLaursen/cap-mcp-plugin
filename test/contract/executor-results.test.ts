@@ -3,7 +3,7 @@
  * returns. The service here is a ServiceLike stand-in (not a CAP mock): it only returns a value.
  */
 import cds from "@sap/cds";
-import { ConfirmationRequired, Executor, type ServiceLike } from "../../src/executor";
+import { ConfirmationRequired, Executor, renderPrompt, type ServiceLike } from "../../src/executor";
 import { ExposureRegistry } from "../../src/exposure-registry";
 import { compileSnippet } from "../helpers/snippet";
 import { schemaError } from "../helpers/validate";
@@ -212,4 +212,18 @@ describe("resource key completion", () => {
     expect(await new Executor(model.spec).completeKey("R.Plain", "1", service)).toEqual([]);
     expect(service.query).toBeUndefined();
   });
+});
+
+test("renderPrompt fills each {{key}} once: an argument's text is never filled in again", () => {
+  const prompt = {
+    name: "p",
+    service: "S",
+    template: "A {{a}} B {{b}} {{other}}",
+    role: "user" as const,
+    inputs: [
+      { key: "a", type: "String" },
+      { key: "b", type: "String" },
+    ],
+  };
+  expect(renderPrompt(prompt, { a: "{{b}}", b: "x" })).toBe("A {{b}} B x {{other}}");
 });
