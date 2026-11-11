@@ -158,10 +158,10 @@ export function metadataHandler(options: AuthOptions): RequestHandler {
  * `cds.env.mcp.allowedOrigins`. There is no implicit "own" origin: it would have to come from the
  * Host header, which a DNS-rebinding page controls.
  */
-export function checkOrigin(allowed: () => string[] | undefined): RequestHandler {
+export function checkOrigin(allowed: readonly string[] | undefined): RequestHandler {
   return (req, res, next) => {
     const from = req.get("origin");
-    if (from === undefined || allowed()?.includes(from)) return next();
+    if (from === undefined || allowed?.includes(from)) return next();
     res.status(403).json({
       jsonrpc: "2.0",
       id: null,

@@ -121,8 +121,8 @@ export function activate(cds: CdsLike): void {
     // All methods: the SDK answers GET/DELETE (2025 session operations) with 405.
     cds.app.all(
       mcpPath,
-      // Read per request, through the same check as at startup: only a list of strings counts.
-      checkOrigin(() => readConfig(cds.env.mcp).config.allowedOrigins),
+      // Checked at startup like every other key: only a list of strings counts.
+      checkOrigin(config.allowedOrigins),
       ...cds.middlewares.before,
       requireUser({ ...auth, user: () => cds.context?.user }),
       // No body parser: the SDK reads the body itself (4 MiB) and answers JSON-RPC errors.

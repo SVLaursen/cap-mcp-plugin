@@ -1,6 +1,8 @@
+import type { Request, Response } from "express";
 import {
   authErrors,
   authorizationServer,
+  checkOrigin,
   metadataPath,
   protectedResourceMetadata,
 } from "../../src/adapter/auth";
@@ -69,5 +71,30 @@ describe("adapter: auth metadata", () => {
     const error = { status: 500, message: "boom" };
     authErrors({ path: "/mcp", auth: () => undefined })(error, {} as never, {} as never, next);
     expect(next).toHaveBeenCalledWith(error);
+  });
+});
+
+describe("adapter: Origin check (DNS rebinding)", () => {
+  /** The status checkOrigin answers with, or "next" when it lets the request through. */
+  const verdict = (allowed: readonly string[] | undefined, origin?: string) => {
+    let outcome: number | "next" = "next";
+    const res = {
+      status(code: number) {
+        outcome = code;
+        return { json: () => undefined };
+      },
+    };
+    const req = { get: (header: string) => (header === "origin" ? origin : undefined) };
+    checkOrigin(allowed)(req as Request, res as unknown as Response, () => undefined);
+    return outcome;
+  };
+
+  test("a request without Origin passes; one with Origin must be listed exactly", () => {
+    expect(verdict(undefined)).toBe("next");
+    expect(verdict(undefined, "https://shop.com")).toBe(403);
+    expect(verdict(["https://shop.com"], "https://shop.com")).toBe("next");
+    // Never a prefix or substring match.
+    expect(verdict(["https://shop.com"], "https://shop.co")).toBe(403);
+    expect(verdict(["https://shop.com"], "https://shop.com.evil.example")).toBe(403);
   });
 });

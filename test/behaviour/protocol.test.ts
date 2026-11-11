@@ -242,28 +242,10 @@ describe("protocol: Origin (DNS rebinding protection)", () => {
     expect((await listTools(demo.POST, "bob", origin(own))).status).toBe(403);
   });
 
-  test("origins listed in cds.env.mcp.allowedOrigins are accepted", async () => {
-    const env = cds.env as unknown as { mcp?: { allowedOrigins?: string[] } };
-    const saved = env.mcp;
-    env.mcp = { ...saved, allowedOrigins: ["http://localhost:6274"] };
-    try {
-      expect((await listTools(demo.POST, "bob", origin("http://localhost:6274"))).status).toBe(200);
-      expect((await listTools(demo.POST, "bob", origin("http://localhost:6275"))).status).toBe(403);
-    } finally {
-      env.mcp = saved;
-    }
-  });
-
-  test("allowedOrigins that is not a list allows nothing extra (never a substring match)", async () => {
-    const env = cds.env as unknown as { mcp?: { allowedOrigins?: unknown } };
-    const saved = env.mcp;
-    env.mcp = { ...saved, allowedOrigins: "https://shop.com,https://b.com" };
-    try {
-      expect((await listTools(demo.POST, "bob", origin("https://shop.co"))).status).toBe(403);
-      expect((await listTools(demo.POST, "bob", origin("https://shop.com"))).status).toBe(403);
-    } finally {
-      env.mcp = saved;
-    }
+  test("origins listed in cds.env.mcp.allowedOrigins are accepted, and only those", async () => {
+    // demo/package.json lists the MCP Inspector's origin.
+    expect((await listTools(demo.POST, "bob", origin("http://localhost:6274"))).status).toBe(200);
+    expect((await listTools(demo.POST, "bob", origin("http://localhost:6275"))).status).toBe(403);
   });
 });
 
