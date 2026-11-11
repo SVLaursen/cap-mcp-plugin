@@ -104,6 +104,7 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 - [ ] MCP conformance suite in CI (`@modelcontextprotocol/conformance`)
 - [x] Coverage thresholds met (`jest.config.js`): measured and set to 94/88/96/95 (statements/branches/functions/lines), enforced in CI by `npm run test:coverage`
 - [x] Release workflow (port v1's release-it + trusted publishing): `.release-it.json`, `.github/workflows/release.yml` (manual, on main; npm trusted publishing with provenance). Dry run checked locally; the publish itself, OIDC and the deploy key can only be checked in GitHub Actions
+- [x] The published package holds only runtime files, README and licence, and loads under an app's own Jest (`cds-plugin.js` loaded `src/` whenever `JEST_WORKER_ID` was set) _(`package.test.ts`)_
 - [ ] Review: run the `reviewer` agent on M7
 
 ## 2.x (P1) and later (P2)

@@ -15,7 +15,6 @@
   "files": [
     "lib/**/*",
     "cds-plugin.js",
-    "index.cds",
     "LICENSE.md"
   ],
   "engines": {
