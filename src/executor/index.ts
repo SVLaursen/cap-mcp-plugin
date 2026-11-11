@@ -6,6 +6,7 @@ import type {
   ExposureSpec,
   FieldSpec,
   OperationSpec,
+  PromptSpec,
   ServiceSpec,
   ToolSpec,
   UserLike,
@@ -879,6 +880,17 @@ function parseResourceKey(entity: EntitySpec, segment: string): Args {
     ] as const;
   });
   return Object.fromEntries(pairs);
+}
+
+/**
+ * The text of an @mcp.prompts entry with its arguments filled in: each `{{key}}` of an input
+ * becomes the argument's value (already checked against promptArgsSchema). Other braces stay.
+ */
+export function renderPrompt(prompt: PromptSpec, args: Record<string, string>): string {
+  return prompt.inputs.reduce(
+    (text, input) => text.replaceAll(`{{${input.key}}}`, args[input.key] ?? ""),
+    prompt.template,
+  );
 }
 
 /** `cap://<Service>/<Entity>/<key>`; composite keys as `k1=v1;k2=v2` (ADR 0006). */

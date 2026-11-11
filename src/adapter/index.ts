@@ -9,9 +9,17 @@ import type { CallToolResult, McpServerFactory } from "@modelcontextprotocol/ser
 import { toNodeHandler } from "@modelcontextprotocol/node";
 import type { RequestHandler } from "express";
 import { isProduction } from "./auth";
-import { Executor, ToolError, errorResult, type ServiceLike, type ToolResult } from "../executor";
+import {
+  Executor,
+  ToolError,
+  errorResult,
+  renderPrompt,
+  type ServiceLike,
+  type ToolResult,
+} from "../executor";
 import type { ExposureRegistry } from "../exposure-registry";
-import type { ExposureSpec, ResourceSpec, ToolSpec, UserLike } from "../types";
+import { promptArgsSchema } from "../schema-mapper";
+import type { ExposureSpec, PromptSpec, ResourceSpec, ToolSpec, UserLike } from "../types";
 
 /**
  * adapter (milestone M4)
@@ -73,6 +81,7 @@ export interface AdapterOptions {
 function caches() {
   const executors = new WeakMap<ExposureRegistry, Executor>();
   const schemas = new WeakMap<object, ReturnType<typeof fromJsonSchema>>();
+  const promptArgs = new WeakMap<PromptSpec, ReturnType<typeof fromJsonSchema>>();
   return {
     executorFor(registry: ExposureRegistry): Executor {
       let executor = executors.get(registry);
@@ -81,6 +90,11 @@ function caches() {
         executors.set(registry, executor);
       }
       return executor;
+    },
+    argsSchemaFor(prompt: PromptSpec) {
+      let standard = promptArgs.get(prompt);
+      if (!standard) promptArgs.set(prompt, (standard = fromJsonSchema(promptArgsSchema(prompt))));
+      return standard;
     },
     schemaFor(schema: object) {
       let standard = schemas.get(schema);
@@ -157,7 +171,7 @@ function forLegacy(error: unknown): unknown {
 
 /** The per-request server factory: one McpServer with the caller's tools. */
 export function serverFactory(options: AdapterOptions): McpServerFactory {
-  const { executorFor, schemaFor } = caches();
+  const { executorFor, schemaFor, argsSchemaFor } = caches();
   return ({ era }) => {
     const context = options.context();
     if (!context)
@@ -166,12 +180,14 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
     const registry = options.registryFor(context.model ?? options.model());
     const executor = executorFor(registry);
     const resources = registry.resourcesFor(user);
+    const prompts = registry.promptsFor(user);
     const listed = { ttlMs: TOOLS_TTL_MS, cacheScope: "private" } as const;
     const server = new McpServer(options.serverInfo, {
       // Registering defaults listChanged to true; we never send that notification.
       capabilities: {
         tools: { listChanged: false },
         ...(resources.length ? { resources: { listChanged: false } } : {}),
+        ...(prompts.length ? { prompts: { listChanged: false } } : {}),
       },
       // Lists depend on the user: only the requesting client may cache them.
       cacheHints: {
@@ -180,10 +196,12 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
         ...(resources.length
           ? { "resources/list": listed, "resources/templates/list": listed }
           : {}),
+        ...(prompts.length ? { "prompts/list": listed } : {}),
       },
     });
     for (const resource of resources)
       registerResource(server, resource, registry, executor, options);
+    for (const prompt of prompts) registerPrompt(server, prompt, argsSchemaFor(prompt));
     for (const tool of registry.toolsFor(user)) {
       server.registerTool(
         tool.name,
@@ -263,6 +281,31 @@ function registerResource(
         throw new ResourceNotFoundError(uri.href, mapped.text);
       }
     },
+  );
+}
+
+/** One @mcp.prompts entry: its template as one message, arguments checked by the SDK. */
+function registerPrompt(
+  server: McpServer,
+  prompt: PromptSpec,
+  argsSchema: ReturnType<typeof fromJsonSchema>,
+): void {
+  server.registerPrompt(
+    prompt.name,
+    {
+      ...(prompt.title && { title: prompt.title }),
+      ...(prompt.description && { description: prompt.description }),
+      argsSchema,
+    },
+    (args: unknown) => ({
+      ...(prompt.description && { description: prompt.description }),
+      messages: [
+        {
+          role: prompt.role,
+          content: { type: "text", text: renderPrompt(prompt, args as Record<string, string>) },
+        },
+      ],
+    }),
   );
 }
 

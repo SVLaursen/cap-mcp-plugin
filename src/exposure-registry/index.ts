@@ -16,6 +16,7 @@ import type {
   EntitySpec,
   ExposureSpec,
   OperationSpec,
+  PromptSpec,
   ResourceSpec,
   ServiceSpec,
   ToolSpec,
@@ -96,6 +97,8 @@ export class ExposureRegistry {
   private readonly entries: Entry[] = [];
   /** Names the describe and compact tools may use (clashes and invalid names removed). */
   private readonly builtinNames = new Set<string>();
+  /** Prompts by name, after clashes are removed. */
+  private readonly prompts: PromptSpec[] = [];
   /** Tool lists per distinct access pattern, so equal access shares the same objects. */
   private readonly lists = new Map<string, ToolSpec[]>();
 
@@ -106,6 +109,7 @@ export class ExposureRegistry {
   ) {
     this.diagnostics.push(...readDiagnostics);
     this.build();
+    this.buildPrompts();
   }
 
   /** The limits the tools advertise; the executor must enforce the same. */
@@ -151,6 +155,43 @@ export class ExposureRegistry {
         .filter((e) => e.resource && e.modes.has("get") && canUseMode(user, service, e, "get"))
         .map((e) => resourceSpec(service, e)),
     );
+  }
+
+  /**
+   * The @mcp.prompts of every service this user can reach (its @requires), sorted by name.
+   * A prompt is text for the user to send; it reads nothing, but it names the service's data,
+   * so it is shown only where the service is.
+   */
+  promptsFor(user: UserLike): PromptSpec[] {
+    const reachable = new Set(
+      this.spec.services.filter((s) => view(s, user) !== undefined).map((s) => s.name),
+    );
+    return this.prompts.filter((p) => reachable.has(p.service));
+  }
+
+  private buildPrompts(): void {
+    const byName = new Map<string, PromptSpec[]>();
+    for (const prompt of this.spec.services.flatMap((s) => s.prompts)) {
+      byName.set(prompt.name, [...(byName.get(prompt.name) ?? []), prompt]);
+    }
+    for (const [name, prompts] of byName) {
+      const [only] = prompts;
+      if (prompts.length === 1 && only) {
+        this.prompts.push(deepFreeze(only));
+        continue;
+      }
+      const services = [...new Set(prompts.map((p) => p.service))].sort();
+      this.diagnostics.push({
+        level: "error",
+        code: "PROMPT_NAME_CLASH",
+        target: name,
+        message:
+          services.length > 1
+            ? `${services.join(" and ")} both have a prompt named ${name}; neither is exposed`
+            : `${services[0]} has ${prompts.length} prompts named ${name}; none is exposed`,
+      });
+    }
+    this.prompts.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   }
 
   /** Name checks and clashes are decided once, on the full (unfiltered) tool set. */

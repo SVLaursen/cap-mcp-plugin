@@ -162,6 +162,8 @@ export type DiagnosticCode =
   | "UNUSED_ANNOTATION"
   /** Two tools would get the same name (also across services); both are left out. */
   | "TOOL_NAME_CLASH"
+  /** Two services' @mcp.prompts use the same name; neither prompt is exposed. */
+  | "PROMPT_NAME_CLASH"
   /** A tool name outside MCP's [A-Za-z0-9._-]{1,128}; the tool is left out. */
   | "INVALID_TOOL_NAME"
   /** A tool name over 64 characters, which some LLM tool APIs reject; still exposed. */

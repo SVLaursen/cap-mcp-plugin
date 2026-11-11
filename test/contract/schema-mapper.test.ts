@@ -8,6 +8,7 @@ import {
   fieldToSchema,
   operationInputSchema,
   operationOutputSchema,
+  promptArgsSchema,
 } from "../../src/schema-mapper";
 import type { EntitySpec, FieldSpec, JsonSchema, ServiceSpec } from "../../src/types";
 import { compileSnippet } from "../helpers/snippet";
@@ -558,6 +559,34 @@ describe("schema-mapper: tool output schemas", () => {
       "S.books": value({ type: "array", items: book }),
       "S.stock": value({ type: ["object", "null"], properties: { stock: nullableInt } }),
       "S.run": undefined,
+    });
+  });
+});
+
+describe("schema-mapper: prompt arguments", () => {
+  test("every input is a required string; numbers and booleans must look like one", () => {
+    const prompt = {
+      name: "p",
+      service: "S",
+      template: "{{n}} {{d}} {{b}} {{s}}",
+      role: "user" as const,
+      inputs: [
+        { key: "n", type: "Integer" },
+        { key: "d", type: "cds.Decimal" },
+        { key: "b", type: "Boolean" },
+        { key: "s", type: "String" },
+      ],
+    };
+    expect(promptArgsSchema(prompt)).toEqual({
+      type: "object",
+      properties: {
+        n: { type: "string", pattern: "^-?\\d+$" },
+        d: { type: "string", pattern: "^-?\\d+(\\.\\d+)?$" },
+        b: { enum: ["true", "false"] },
+        s: { type: "string" },
+      },
+      required: ["n", "d", "b", "s"],
+      additionalProperties: false,
     });
   });
 });

@@ -1,4 +1,11 @@
-import type { EntityMode, EntitySpec, FieldSpec, JsonSchema, OperationSpec } from "../types";
+import type {
+  EntityMode,
+  EntitySpec,
+  FieldSpec,
+  JsonSchema,
+  OperationSpec,
+  PromptSpec,
+} from "../types";
 
 /**
  * schema-mapper (milestone M1)
@@ -292,6 +299,36 @@ export function entityOutputSchema(entity: EntitySpec, mode: EntityMode): JsonSc
  * operation is simpler for agents, 2025-era clients need an object, and a single record may be
  * null (nothing found) without failing the SDK's output validation.
  */
+const PROMPT_PATTERNS: Record<string, string> = {
+  Integer: "^-?\\d+$",
+  Int16: "^-?\\d+$",
+  Int32: "^-?\\d+$",
+  Int64: "^-?\\d+$",
+  UInt8: "^\\d+$",
+  Decimal: "^-?\\d+(\\.\\d+)?$",
+  Double: "^-?\\d+(\\.\\d+)?$",
+};
+
+/**
+ * The arguments of an @mcp.prompts entry. Prompt arguments are strings on the wire, so every
+ * input is a string that must look like its type (an Integer like an integer). All inputs are
+ * required: the template uses each.
+ */
+export function promptArgsSchema(prompt: PromptSpec): JsonSchema {
+  const property = (type: string): JsonSchema => {
+    const local = type.replace(/^cds\./, "");
+    if (local === "Boolean") return { enum: ["true", "false"] };
+    const pattern = PROMPT_PATTERNS[local];
+    return pattern ? { type: "string", pattern } : { type: "string" };
+  };
+  return {
+    type: "object",
+    properties: Object.fromEntries(prompt.inputs.map((i) => [i.key, property(i.type)])),
+    required: prompt.inputs.map((i) => i.key),
+    additionalProperties: false,
+  };
+}
+
 export function operationOutputSchema(op: OperationSpec): JsonSchema | undefined {
   const returns = op.returns;
   if (!returns) return undefined;

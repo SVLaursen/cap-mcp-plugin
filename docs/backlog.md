@@ -77,7 +77,7 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 - [x] Baseline exposure matches the demo exactly; `@mcp: false`, `@cds.api.ignore` _(`opt-in-features.test.ts` › baseline)_
 - [x] Describe and compact _(describe and compact)_
 - [x] Resources as single records + `resource_link` _(resources)_
-- [ ] Prompts with role visibility _(prompts)_
+- [x] Prompts with role visibility _(prompts)_
 - [ ] MCP Apps via `@modelcontextprotocol/ext-apps` (issue #133), incl. custom registration hook _(MCP Apps)_
 - [ ] Confirmation via MRTR `input_required` _(confirmation)_
 - [ ] Completion _(completion)_

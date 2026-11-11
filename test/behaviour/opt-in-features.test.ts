@@ -235,8 +235,48 @@ describe("opt-in: resources", () => {
 });
 
 describe("opt-in: prompts", () => {
-  test.todo("AdminService's restock-plan prompt is listed for alice and hidden from bob");
-  test.todo("prompt arguments are validated and substituted");
+  const getPrompt = (who: Caller, args: Record<string, unknown>) =>
+    rpc(demo.POST, who, "prompts/get", { name: "restock-plan", arguments: args });
+
+  test("AdminService's restock-plan prompt is listed for alice and hidden from bob", async () => {
+    const alice = await rpc(demo.POST, "alice", "prompts/list");
+    expect(alice.message?.result?.prompts).toEqual([
+      {
+        name: "restock-plan",
+        title: "Restock plan",
+        description: "Suggest which books to restock, based on current stock levels",
+        arguments: [{ name: "threshold", required: true }],
+      },
+    ]);
+    const discover = await rpc(demo.POST, "alice", "server/discover");
+    expect(discover.message?.result?.capabilities).toMatchObject({
+      prompts: { listChanged: false },
+    });
+    // Bob cannot reach AdminService: no prompts at all, and asking by name fails.
+    const bob = await rpc(demo.POST, "bob", "server/discover");
+    expect(bob.message?.result?.capabilities).not.toHaveProperty("prompts");
+    expect((await getPrompt("bob", { threshold: "5" })).message?.error).toBeDefined();
+  });
+
+  test("prompt arguments are validated and substituted", async () => {
+    const ok = await getPrompt("alice", { threshold: "5" });
+    expect(ok.message?.result).toMatchObject({
+      description: "Suggest which books to restock, based on current stock levels",
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: "List books with stock below 5 and suggest a restock quantity for each.",
+          },
+        },
+      ],
+    });
+    // Prompt arguments are strings on the wire; an Integer input must look like one.
+    for (const args of [{}, { threshold: "five" }, { threshold: "5", other: "x" }]) {
+      expect((await getPrompt("alice", args)).message?.error).toMatchObject({ code: -32602 });
+    }
+  });
 });
 
 describe("opt-in: MCP Apps (issue #133)", () => {

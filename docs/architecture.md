@@ -47,8 +47,10 @@ The data passed between them is defined in `src/types.ts`.
    versions, and calls the factory, which builds a fresh `McpServer` with the caller's tools
    (registry for `cds.context.model ?? cds.model`, `toolsFor(cds.context.user)`); the server
    dispatches the JSON-RPC method. Only what the caller can use is advertised, always with
-   `listChanged: false`: `tools`, and `resources` when some `@mcp.resource` entity is readable
-   for them; `tools/list`, `resources/list`, `resources/templates/list` and `server/discover` say
+   `listChanged: false`: `tools`, `resources` when some `@mcp.resource` entity is readable
+   for them, and `prompts` when a service they can reach has `@mcp.prompts`
+   (`registry.promptsFor(user)`; arguments from `promptArgsSchema`, text from `renderPrompt`);
+   `tools/list`, `resources/list`, `resources/templates/list`, `prompts/list` and `server/discover` say
    `cacheScope: private` (lists depend on the user) and `ttlMs` 60 s. No session, no `Mcp-Session-Id`.
    2025-era clients get the same tools statelessly: each request (`initialize` included) stands
    alone, answered as SSE; GET and DELETE are 405. They cannot confirm an `@mcp.elicit` call,

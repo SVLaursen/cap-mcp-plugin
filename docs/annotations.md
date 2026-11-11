@@ -78,6 +78,12 @@ removes the whole service, including members with their own `@mcp`.
 
 Unknown `@mcp.*` keys produce an `UNKNOWN_ANNOTATION` diagnostic at startup.
 
+**Prompts** are listed to callers who can reach their service (its `@requires`). Each `inputs`
+entry is a required argument; prompt arguments are strings on the wire, so an `Integer` or
+`Decimal` input must look like a number and a `Boolean` one is `true` or `false`. `prompts/get`
+returns the template as one message with the given `role`, each `{{key}}` replaced by its
+argument.
+
 ## Diagnostics
 
 The model reader and the exposure registry report these; the startup report (M6) prints them. Targets are written
@@ -94,6 +100,7 @@ The model reader and the exposure registry report these; the startup report (M6)
 | `DRAFT_WRITE_NOT_SUPPORTED`    | error | `@mcp.wrap.modes` write modes on a composition child of a draft                                                                                                                                                              | Those modes are not offered; write the child through its root with `@mcp.deepInsert`       |
 | `UNSUPPORTED_TYPE`             | warn  | An exposed element or parameter whose type has no JSON Schema mapping (e.g. `Vector`)                                                                                                                                        | Exposed as "any value"                                                                     |
 | `OMITTED_KEY`                  | warn  | `@mcp.omit` on a key of an exposed entity                                                                                                                                                                                    | Only query (and create) are offered for it                                                 |
+| `PROMPT_NAME_CLASH`            | error | Two `@mcp.prompts` entries (in one service or across services) have the same name. Target is the prompt name                                                                                                                 | Neither is exposed                                                                         |
 | `TOOL_NAME_CLASH`              | error | Two tools would get the same name (also across services, e.g. `A.B_C` and `A_B.C`). Target is the tool name                                                                                                                  | Neither is exposed, unless one is the plugin's own (describe, compact set): that one stays |
 | `INVALID_TOOL_NAME`            | error | A tool name outside MCP's `[A-Za-z0-9._-]{1,128}` (spaces, non-ASCII, very long namespaces). Target is the tool name                                                                                                         | The tool is not exposed                                                                    |
 | `LONG_TOOL_NAME`               | warn  | A tool name over 64 characters, which some LLM tool APIs reject                                                                                                                                                              | Exposed                                                                                    |

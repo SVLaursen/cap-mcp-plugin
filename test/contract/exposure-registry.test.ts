@@ -605,3 +605,29 @@ describe("exposure-registry: resources", () => {
     ]);
   });
 });
+
+describe("exposure-registry: prompts", () => {
+  const prompted = `
+    @mcp @mcp.prompts: [{ name: 'open', template: 'Hi' }, { name: 'twice', template: 'A' }]
+    service Open {}
+    @mcp @requires: 'admin' @mcp.prompts: [{ name: 'closed', template: 'Ho' }, { name: 'twice', template: 'B' }]
+    service Closed {}
+  `;
+
+  test("prompts of a service are listed for users who can reach the service", () => {
+    const r = registry(prompted);
+    expect(r.promptsFor(user()).map((p) => p.name)).toEqual(["open"]);
+    expect(r.promptsFor(user("admin")).map((p) => p.name)).toEqual(["closed", "open"]);
+  });
+
+  test("two prompts with the same name clash: neither is listed", () => {
+    const r = registry(prompted);
+    expect(r.promptsFor(user("admin")).map((p) => p.name)).not.toContain("twice");
+    expect(r.diagnostics).toContainEqual({
+      level: "error",
+      code: "PROMPT_NAME_CLASH",
+      target: "twice",
+      message: "Closed and Open both have a prompt named twice; neither is exposed",
+    });
+  });
+});
