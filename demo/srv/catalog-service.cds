@@ -3,7 +3,8 @@ using {sap.capire.bookshop as my} from '../db/schema';
 // MCP exposure (v2): `@mcp` on the service gives the read-only baseline:
 //   - query + get for Books, Authors, Genres
 //   - all functions (stockByGenre, bookCard)
-// Opt-ins exercised here: @mcp.describe, @mcp on an action, @mcp.ui, @mcp.resource, @mcp.omit.
+// Opt-ins exercised here: @mcp.describe, @mcp on an action, @mcp.ui, @mcp.resource, @mcp.omit,
+// and the names agents see: @mcp.name, @mcp.description, @mcp.hint.
 // Deliberately NOT exposed: the `restock` action (no @mcp), Authors.email and Books.costPrice.
 /** Browse the bookshop catalog and place orders. */
 @mcp
@@ -22,6 +23,7 @@ service CatalogService @(path: '/browse') {
   };
 
   @readonly
+  @mcp.description: 'Authors of the books in the catalog. Email addresses are never shared.'
   entity Authors as projection on my.Authors;
 
   /** Genres, also single-record resources (without key completion). */
@@ -37,6 +39,7 @@ service CatalogService @(path: '/browse') {
    * Number of books in stock for a genre. Baseline: functions are exposed by `@mcp` on the service.
    * Its MCP App UI comes from code (`cds.on('mcp:apps')` in server.js), not from app/mcp-apps/.
    */
+  @mcp.name: 'Stock by genre'
   @mcp.ui: 'ui://bookshop/stock-chart.html'
   function stockByGenre(genre : Integer) returns Integer;
 
@@ -60,6 +63,7 @@ service CatalogService @(path: '/browse') {
 
 annotate CatalogService.Books with {
   costPrice @mcp.omit;
+  status    @mcp.hint: 'available or discontinued; only available books can be ordered';
 };
 
 annotate CatalogService.Authors with {
