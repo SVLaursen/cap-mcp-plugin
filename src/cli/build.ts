@@ -6,7 +6,7 @@ import { readConfig } from "../config";
 export interface BuildCds {
   root: string;
   env: { mcp?: unknown };
-  build: { Plugin: new () => { task: { src: string; dest: string } } };
+  build: { Plugin: (new () => { task: { src: string; dest: string } }) & { WARNING: unknown } };
 }
 
 /**
@@ -19,7 +19,8 @@ export function mcpBuildTask(cds: BuildCds) {
     const instructions = readConfig(cds.env.mcp).config.instructions;
     return typeof instructions === "object" ? instructions.file : undefined;
   };
-  return class McpBuildTask extends cds.build.Plugin {
+  const Base = cds.build.Plugin;
+  return class McpBuildTask extends Base {
     static taskDefaults = { src: "." };
 
     static hasTask() {
@@ -28,8 +29,16 @@ export function mcpBuildTask(cds: BuildCds) {
 
     async build() {
       const instructions = file();
-      if (!instructions || !existsSync(path.resolve(cds.root, instructions))) return;
-      const self = this as unknown as { copy(src: string): { to(dest: string): Promise<unknown> } };
+      if (!instructions) return;
+      const self = this as unknown as {
+        copy(src: string): { to(dest: string): Promise<unknown> };
+        pushMessage(message: string, severity: unknown): void;
+      };
+      const warn = (message: string) =>
+        self.pushMessage(`MCP instructions file ${instructions} ${message}`, Base.WARNING);
+      if (path.isAbsolute(instructions))
+        return warn("is an absolute path; the deployed app reads it there, so it is not copied");
+      if (!existsSync(path.resolve(cds.root, instructions))) return warn("not found; not copied");
       await self.copy(path.resolve(cds.root, instructions)).to(path.join("srv", instructions));
     }
   };

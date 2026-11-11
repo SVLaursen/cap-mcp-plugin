@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -106,4 +106,27 @@ test("cds build copies the instructions file to where the deployed app reads it"
   writeFileSync(path.join(app, "package.json"), JSON.stringify(pkg, null, 2));
   cds("build", "--production");
   expect(readFileSync(path.join(app, "gen", "srv", "docs", "mcp.md"), "utf8")).toBe("Be brief.\n");
+}, 60_000);
+
+test("cds build says when the instructions file cannot be copied (missing, or an absolute path)", () => {
+  const pkgFile = path.join(app, "package.json");
+  const pkg = JSON.parse(readFileSync(pkgFile, "utf8"));
+  const env = { ...process.env };
+  delete env.JEST_WORKER_ID;
+  const build = () => {
+    const out = spawnSync(process.execPath, [CDS, "build", "--production"], {
+      cwd: app,
+      env,
+      encoding: "utf8",
+    });
+    return out.stdout + out.stderr;
+  };
+  pkg.cds.mcp.instructions = { file: "docs/missing.md" };
+  writeFileSync(pkgFile, JSON.stringify(pkg, null, 2));
+  expect(build()).toMatch(/MCP instructions file docs\/missing\.md not found; not copied/);
+  pkg.cds.mcp.instructions = { file: path.join(app, "docs", "mcp.md") };
+  writeFileSync(pkgFile, JSON.stringify(pkg, null, 2));
+  expect(build()).toMatch(
+    /MCP instructions file .*mcp\.md is an absolute path; the deployed app reads it there, so it is not copied/,
+  );
 }, 60_000);
