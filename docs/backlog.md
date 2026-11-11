@@ -78,7 +78,7 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 - [x] Describe and compact _(describe and compact)_
 - [x] Resources as single records + `resource_link` _(resources)_
 - [x] Prompts with role visibility _(prompts)_
-- [ ] MCP Apps via `@modelcontextprotocol/ext-apps` (issue #133), incl. custom registration hook _(MCP Apps)_
+- [x] MCP Apps (issue #133), incl. custom registration hook; no runtime dependency on `@modelcontextprotocol/ext-apps` (ADR 0012) _(MCP Apps)_
 - [x] Confirmation via MRTR `input_required` _(confirmation)_
 - [ ] Completion _(completion)_
 - [x] Auth matrix: XSUAA/IAS × secret/certificate, IAS-only + AMS _(`auth-matrix.test.ts`)_

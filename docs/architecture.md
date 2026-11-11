@@ -85,6 +85,12 @@ record comes back as one `application/json` content. The key segment is the one 
 link to: the value of a single key, or `k1=v1;k2=v2`, URI-encoded. A missing record or a key that
 is not one is the protocol's resource-not-found error (`-32602` with the `uri`).
 
+MCP App UIs (`@mcp.ui`, ADR 0012) are plain resources, registered per request by the adapter
+(`adapter/apps.ts`): `activate()` reads `app/mcp-apps/<path>` for each linked `ui://` URI once
+CAP has served the app, then emits `mcp:apps` so app code can register more. Per request, a tool
+keeps its UI link only if the resource has content, and the caller can list and read exactly the
+UIs their tools link to. No dependency on `@modelcontextprotocol/ext-apps` at runtime.
+
 ## Describe tools and access
 
 Describe tools (`<Service>_describe`, compact `list_entities` / `describe_entity`) never call CAP:

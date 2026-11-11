@@ -54,6 +54,7 @@
     "@cap-js/sqlite": "^3.1.2",
     "@eslint/js": "^10.0.1",
     "@modelcontextprotocol/client": "^2.4.0",
+    "@modelcontextprotocol/ext-apps": "^2.0.4",
     "@sap/cds": "^10.2.2",
     "@sap/cds-dk": "^10.2.1",
     "@types/express": "^5.0.3",

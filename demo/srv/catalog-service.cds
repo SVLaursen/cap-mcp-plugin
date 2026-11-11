@@ -31,7 +31,11 @@ service CatalogService @(path: '/browse') {
   @mcp.wrap.modes: ['create']
   entity Feedback as projection on my.Feedback;
 
-  /** Number of books in stock for a genre. Baseline: functions are exposed by `@mcp` on the service. */
+  /**
+   * Number of books in stock for a genre. Baseline: functions are exposed by `@mcp` on the service.
+   * Its MCP App UI comes from code (`cds.on('mcp:apps')` in server.js), not from app/mcp-apps/.
+   */
+  @mcp.ui: 'ui://bookshop/stock-chart.html'
   function stockByGenre(genre : Integer) returns Integer;
 
   /** A rich card for one book. Rendered as an MCP App (issue #133) by hosts that support it. */

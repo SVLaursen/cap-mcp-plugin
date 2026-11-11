@@ -87,6 +87,19 @@ are also asked for, pre-filled with the agent's values, and the user's answers r
 (parameters a form cannot hold, such as arrays, keep the agent's value). Clients that cannot ask
 (2025-era, or no `elicitation` capability) get a `CONFIRMATION_REQUIRED` tool error saying why.
 
+**MCP Apps** (`@mcp.ui: 'ui://<host>/<path>'`, ADR 0012): the tool's `_meta` links to the UI
+resource, and the HTML comes from `app/mcp-apps/<path>` under the app root, read once at
+startup with the MIME type `text/html;profile=mcp-app`. To supply HTML from code, or to replace
+a file, register it when the plugin asks:
+
+```js
+cds.on("mcp:apps", (apps) => apps.register("ui://bookshop/stock-chart.html", () => html));
+```
+
+The function runs on every read (sync or async). A UI resource is listed and readable only for
+callers who see a tool that links to it. A missing file is a startup warning, and the tool then
+has no UI link; a registration no `@mcp.ui` links to is a warning and is not served.
+
 **Prompts** are listed to callers who can reach their service (its `@requires`). Each `inputs`
 entry is a required argument; prompt arguments are strings on the wire, so an `Integer` or
 `Decimal` input must look like a number and a `Boolean` one is `true` or `false`. `prompts/get`

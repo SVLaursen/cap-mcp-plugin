@@ -283,7 +283,11 @@ describe("protocol: mounting inside CAP", () => {
 
   test("only implemented capabilities are advertised (tools, listChanged off)", async () => {
     const res = await rpc(demo.POST, "bob", "server/discover");
-    expect(res.message?.result?.capabilities).toEqual({ tools: { listChanged: false } });
+    // Bob's resources are the MCP App UIs of his CatalogService tools; he has no prompts.
+    expect(res.message?.result?.capabilities).toEqual({
+      tools: { listChanged: false },
+      resources: { listChanged: false },
+    });
   });
 
   test("activate() leaves cds.env.cdsc untouched, so doc comments stay the app's choice (ADR 0011)", () => {

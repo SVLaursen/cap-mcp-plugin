@@ -1,4 +1,6 @@
-import { bootDemo, type DemoUser } from "../helpers/demo";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { DEMO_DIR, bootDemo, type DemoUser } from "../helpers/demo";
 import { listTools, rpc, type Caller } from "../helpers/mcp";
 import { callTool, expectInvalidArgument, page } from "../helpers/tools";
 
@@ -203,7 +205,9 @@ describe("opt-in: resources", () => {
 
   test("resources/list does not enumerate whole tables", async () => {
     const list = await rpc(demo.POST, "alice", "resources/list");
-    expect(list.message?.result?.resources).toEqual([]);
+    // Only MCP App UIs (ui://) are listed; never cap:// records.
+    const listed = list.message?.result?.resources as { uri: string }[];
+    expect(listed.filter((r) => !r.uri.startsWith("ui://"))).toEqual([]);
     const templates = await rpc(demo.POST, "alice", "resources/templates/list");
     expect(templates.message?.result?.resourceTemplates).toEqual([
       expect.objectContaining({
@@ -221,8 +225,9 @@ describe("opt-in: resources", () => {
     const got = await callTool("bob", "CatalogService_Authors_get", { ID: 101 });
     expect(got.links).toBeUndefined();
     // Bob cannot reach AdminService: no templates, and its resource is not found for him.
-    const discover = await rpc(demo.POST, "bob", "server/discover");
-    expect(discover.message?.result?.capabilities).not.toHaveProperty("resources");
+    // (He still has resources: the MCP App UIs of his CatalogService tools.)
+    const templates = await rpc(demo.POST, "bob", "resources/templates/list");
+    expect(templates.message?.result?.resourceTemplates).toEqual([]);
     expect((await read("bob", "cap://AdminService/Authors/101")).message?.error).toBeDefined();
   });
 
@@ -280,9 +285,45 @@ describe("opt-in: prompts", () => {
 });
 
 describe("opt-in: MCP Apps (issue #133)", () => {
-  test.todo("bookCard is registered as an app tool linked to ui://bookshop/book-card.html");
-  test.todo("the ui resource serves demo/app/mcp-apps/book-card.html with the MCP App mime type");
-  test.todo("a hook lets the app supply its own resource registration");
+  const MIME = "text/html;profile=mcp-app";
+  const read = (uri: string) => rpc(demo.POST, "bob", "resources/read", { uri });
+
+  test("bookCard is registered as an app tool linked to ui://bookshop/book-card.html", async () => {
+    const tools = (await listTools(demo.POST, "bob")).message?.result?.tools as {
+      name: string;
+      _meta?: Record<string, unknown>;
+    }[];
+    expect(tools.find((t) => t.name === "CatalogService_bookCard")?._meta).toMatchObject({
+      ui: { resourceUri: "ui://bookshop/book-card.html" },
+    });
+    // The UI resources are listed: a host reads them before the tool is called.
+    const list = await rpc(demo.POST, "bob", "resources/list");
+    expect(list.message?.result?.resources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ uri: "ui://bookshop/book-card.html", mimeType: MIME }),
+        expect.objectContaining({ uri: "ui://bookshop/stock-chart.html", mimeType: MIME }),
+      ]),
+    );
+  });
+
+  test("the ui resource serves demo/app/mcp-apps/book-card.html with the MCP App mime type", async () => {
+    const html = readFileSync(path.join(DEMO_DIR, "app", "mcp-apps", "book-card.html"), "utf8");
+    expect((await read("ui://bookshop/book-card.html")).message?.result).toMatchObject({
+      contents: [{ uri: "ui://bookshop/book-card.html", mimeType: MIME, text: html }],
+    });
+  });
+
+  test("a hook lets the app supply its own resource registration", async () => {
+    // demo/server.js: cds.on('mcp:apps', apps => apps.register('ui://bookshop/stock-chart.html', …))
+    const res = await read("ui://bookshop/stock-chart.html");
+    expect(res.message?.result).toMatchObject({
+      contents: [{ mimeType: MIME, text: expect.stringContaining("Stock by genre") }],
+    });
+    // Only UI linked from the caller's tools is served.
+    expect((await read("ui://bookshop/nothing.html")).message?.error).toMatchObject({
+      code: -32602,
+    });
+  });
 });
 
 describe("opt-in: confirmation (MRTR)", () => {

@@ -28,6 +28,7 @@ you can also run it with `npm run demo` from the repo root (OData at http://loca
 | `@mcp.resource`                                           | `AdminService.Authors`                                                                                         |
 | `@mcp.prompts`                                            | `AdminService` (`restock-plan`)                                                                                |
 | `@mcp.ui` (MCP Apps, issue #133)                          | `CatalogService.bookCard` → `app/mcp-apps/book-card.html`                                                      |
+| `cds.on('mcp:apps')` hook (UI from code)                  | `CatalogService.stockByGenre` → `ui://bookshop/stock-chart.html`, registered in `server.js`                    |
 | `@mcp.elicit` (confirmation)                              | `OrdersService.Orders.cancel`                                                                                  |
 | `@mcp.completion`                                         | `CatalogService.submitOrder(book)`                                                                             |
 | `@mcp.describe`                                           | `CatalogService`                                                                                               |

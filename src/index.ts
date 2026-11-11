@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { Application, RequestHandler } from "express";
 import { mcpHandler, type RequestContext } from "./adapter";
+import { loadAppFiles } from "./adapter/apps";
 import {
   authErrors,
   checkOrigin,
@@ -17,12 +18,16 @@ import { DEFAULT_LIMITS, type Limits } from "./schema-mapper";
 export interface CdsLike {
   on(event: "served", handler: () => void): unknown;
   on(event: string, handler: (...args: never[]) => void): unknown;
+  emit(event: string, ...args: unknown[]): unknown;
   log(module: string): {
     info(...args: unknown[]): void;
+    warn(...args: unknown[]): void;
     debug(...args: unknown[]): void;
     error(...args: unknown[]): void;
   };
   readonly app: Application;
+  /** The app's root folder; MCP App files are read from `<root>/app/mcp-apps/`. */
+  readonly root: string;
   readonly context?: RequestContext;
   readonly model?: unknown;
   readonly services: Record<string, unknown>;
@@ -62,6 +67,15 @@ export function activate(cds: CdsLike): void {
     const config = cds.env.mcp ?? {};
     const mcpPath = config.path ?? MCP_PATH;
     const registryFor = registryCache({ limits: { ...DEFAULT_LIMITS, ...config.limits } });
+    // MCP Apps (ADR 0012): files for the app's @mcp.ui links, then the app's own registrations.
+    const linked = registryFor(cds.model as object)
+      .spec.services.flatMap((s) => s.operations.map((o) => o.ui))
+      .filter((uri): uri is string => uri !== undefined);
+    const apps = loadAppFiles(cds.root, linked, log);
+    cds.emit("mcp:apps", apps);
+    for (const uri of apps.uris())
+      if (!linked.includes(uri))
+        log.warn(`MCP App ${uri} is registered but no @mcp.ui links to it`);
     const handler = mcpHandler({
       serverInfo: {
         name: config.name ?? "@gavdi/cap-mcp",
@@ -70,6 +84,7 @@ export function activate(cds: CdsLike): void {
       context: () => cds.context,
       model: () => cds.model as object,
       registryFor,
+      apps,
       services: cds.services,
       translate: (key, locale, args) => {
         const text = cds.i18n.messages.at(key, locale, args);

@@ -17,6 +17,7 @@ import type {
 } from "@modelcontextprotocol/server";
 import { toNodeHandler } from "@modelcontextprotocol/node";
 import type { RequestHandler } from "express";
+import { APP_MIME_TYPE, McpApps, linkedUri } from "./apps";
 import { isProduction } from "./auth";
 import {
   ConfirmationRequired,
@@ -77,6 +78,8 @@ export interface AdapterOptions {
   model(): object;
   /** The registry for a model (registryCache). */
   registryFor(model: object): ExposureRegistry;
+  /** MCP App UI resources (ADR 0012); none when omitted. */
+  apps?: McpApps;
   /** CAP services by name (cds.services). */
   services: Record<string, unknown>;
   /** CAP's messages (cds.i18n.messages.at), so errors read as they do over OData. */
@@ -221,28 +224,36 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
     const executor = executorFor(registry);
     const resources = registry.resourcesFor(user);
     const prompts = registry.promptsFor(user);
+    const apps = options.apps ?? new McpApps();
+    // A tool keeps its UI link only if that resource has content; the caller may read it then.
+    const tools = registry
+      .toolsFor(user)
+      .map((tool) => ({ tool, _meta: apps.linkedMeta(tool._meta) }));
+    const uis = [
+      ...new Set(tools.map((t) => linkedUri(t._meta)).filter((u) => u !== undefined)),
+    ].sort();
+    const hasResources = resources.length > 0 || uis.length > 0;
     const listed = { ttlMs: TOOLS_TTL_MS, cacheScope: "private" } as const;
     const server = new McpServer(options.serverInfo, {
       // Registering defaults listChanged to true; we never send that notification.
       capabilities: {
         tools: { listChanged: false },
-        ...(resources.length ? { resources: { listChanged: false } } : {}),
+        ...(hasResources ? { resources: { listChanged: false } } : {}),
         ...(prompts.length ? { prompts: { listChanged: false } } : {}),
       },
       // Lists depend on the user: only the requesting client may cache them.
       cacheHints: {
         "tools/list": listed,
         "server/discover": listed,
-        ...(resources.length
-          ? { "resources/list": listed, "resources/templates/list": listed }
-          : {}),
+        ...(hasResources ? { "resources/list": listed, "resources/templates/list": listed } : {}),
         ...(prompts.length ? { "prompts/list": listed } : {}),
       },
     });
     for (const resource of resources)
       registerResource(server, resource, registry, executor, options);
+    for (const uri of uis) registerApp(server, uri, apps, options);
     for (const prompt of prompts) registerPrompt(server, prompt, argsSchemaFor(prompt));
-    for (const tool of registry.toolsFor(user)) {
+    for (const { tool, _meta } of tools) {
       server.registerTool(
         tool.name,
         {
@@ -251,7 +262,7 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
           inputSchema: schemaFor(tool.inputSchema),
           outputSchema: tool.outputSchema && schemaFor(tool.outputSchema),
           annotations: tool.annotations,
-          _meta: tool._meta,
+          _meta,
         },
         async (args: unknown, ctx: ServerContext) => {
           const service = options.services[serviceOf(registry.spec, tool.target) ?? ""] as
@@ -329,6 +340,20 @@ function registerResource(
       }
     },
   );
+}
+
+/** One MCP App UI resource (ADR 0012): its HTML, as ext-apps' registerAppResource serves it. */
+function registerApp(server: McpServer, uri: string, apps: McpApps, options: AdapterOptions): void {
+  server.registerResource(uri, uri, { mimeType: APP_MIME_TYPE }, async () => {
+    const content = apps.content(uri);
+    if (!content) throw new ResourceNotFoundError(uri);
+    try {
+      return { contents: [{ uri, mimeType: APP_MIME_TYPE, text: await content() }] };
+    } catch (error) {
+      options.log.error(`reading ${uri} failed:`, error);
+      throw error;
+    }
+  });
 }
 
 /** One @mcp.prompts entry: its template as one message, arguments checked by the SDK. */
