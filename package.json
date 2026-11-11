@@ -1,12 +1,18 @@
 {
   "name": "@gavdi/cap-mcp",
   "version": "2.0.0-alpha.0",
-  "description": "MCP plugin for SAP CAP - v2 (stateless, CAP-native, opt-in)",
+  "description": "Expose SAP CAP services to AI agents over the Model Context Protocol (MCP): stateless, opt-in, with CAP doing auth and transactions",
   "keywords": [
-    "MCP",
-    "CAP",
-    "plugin",
-    "SAP"
+    "mcp",
+    "model-context-protocol",
+    "cap",
+    "sap",
+    "sap-cap",
+    "cds",
+    "cds-plugin",
+    "ai",
+    "agents",
+    "llm"
   ],
   "license": "Apache-2.0",
   "author": "Simon Vestergaard Laursen",
