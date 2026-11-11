@@ -12,6 +12,7 @@ const demo = bootDemo();
   name: "bookshop",
   version: "1.2.3",
   limits: { maxRows: 3, defaultRows: 2 },
+  instructions: { file: "mcp-instructions.md" },
 };
 const at = { path: "/ai/mcp" };
 
@@ -26,6 +27,11 @@ describe("configuration (cds.env.mcp)", () => {
     expect(res.message?.result?._meta).toEqual({
       "io.modelcontextprotocol/serverInfo": { name: "bookshop", version: "1.2.3" },
     });
+  });
+
+  test("instructions from a file under the app root reach clients", async () => {
+    const res = await rpc(demo.POST, "bob", "server/discover", {}, at);
+    expect(res.message?.result?.instructions).toMatch(/^Bookshop data over MCP\./);
   });
 
   test("limits shape the advertised schema and what the executor enforces alike", async () => {

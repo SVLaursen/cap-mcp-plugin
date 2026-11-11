@@ -39,6 +39,7 @@ you can also run it with `npm run demo` from the repo root (OData at http://loca
 | Custom handler validation                                 | `AdminService` rejects negative prices                                                                         |
 | Structured CAP errors                                     | `CatalogService.submitOrder` (`ORDER_EXCEEDS_STOCK`, target `quantity`)                                        |
 | Translated error messages (`_i18n/messages*.properties`)  | `ORDER_EXCEEDS_STOCK` in English and German, with arguments; CAP's own `ASSERT_MANDATORY`                      |
+| `cds.env.mcp.instructions` from a file                    | `demo/mcp-instructions.md` (set by `test/behaviour/config.test.ts`)                                            |
 | Failed commit surfaces as error                           | `AdminService` DELETE of Books ID 207 fails at commit                                                          |
 
 When you add a feature to the plugin, add its target here first.

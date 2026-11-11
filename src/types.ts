@@ -176,7 +176,11 @@ export type DiagnosticCode =
   | "OMITTED_KEY"
   | "DRAFT_WRITE_NOT_SUPPORTED"
   | "V1_ANNOTATION"
-  | "V1_DEFAULT_CHANGED";
+  | "V1_DEFAULT_CHANGED"
+  /** A cds.env.mcp key the plugin does not know; ignored. */
+  | "UNKNOWN_CONFIG"
+  /** A cds.env.mcp value of the wrong shape; the key's default is used. */
+  | "INVALID_CONFIG";
 
 /** Reported at startup so developers see why something is (not) exposed. */
 export interface Diagnostic {

@@ -77,6 +77,8 @@ export interface TxService extends ServiceLike {
 export interface AdapterOptions {
   /** The server identity reported in server/discover and initialize. */
   serverInfo: { name: string; version: string };
+  /** Server instructions (cds.env.mcp.instructions), if any. */
+  instructions?: string;
   /** The current request's context (cds.context), read inside the request. */
   context(): RequestContext | undefined;
   /** The app's model, for contexts without a model of their own (cds.model). */
@@ -266,6 +268,7 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
     const hasResources = resources.length > 0 || uis.length > 0;
     const listed = { ttlMs: TOOLS_TTL_MS, cacheScope: "private" } as const;
     const server = new McpServer(options.serverInfo, {
+      ...(options.instructions && { instructions: options.instructions }),
       // Registering defaults listChanged to true; we never send that notification.
       capabilities: {
         tools: { listChanged: false },

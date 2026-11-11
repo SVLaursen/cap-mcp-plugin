@@ -19,18 +19,28 @@ describe("startup exposure report", () => {
     ]);
   });
 
-  test("diagnostics follow, errors first, each with its code and target", () => {
+  test("diagnostics follow (config first), errors first, each with its code and target", () => {
     const registry = registryOf(`
       @mcp service S {
         @mcp.wrap.tools entity Books { key ID: Integer; }
         @mcp.wrap.modes: ['upsert'] entity Authors { key ID: Integer; }
       }
     `);
-    expect(exposureReport(registry, "/ai")).toEqual([
+    const config = {
+      level: "warn" as const,
+      code: "UNKNOWN_CONFIG" as const,
+      target: "cds.mcp.paht",
+      message: "Unknown setting cds.mcp.paht; it has no effect",
+    };
+    expect(exposureReport(registry, "/ai", [config])).toEqual([
       { level: "info", text: "serving 4 tools, 0 resources, 0 prompts at /ai" },
       {
         level: "error",
         text: expect.stringMatching(/^INVALID_ANNOTATION_VALUE S\.Authors: .*upsert/),
+      },
+      {
+        level: "warn",
+        text: "UNKNOWN_CONFIG cds.mcp.paht: Unknown setting cds.mcp.paht; it has no effect",
       },
       {
         level: "warn",

@@ -12,8 +12,9 @@ import {
   type AuthConfig,
 } from "./adapter/auth";
 import { docCommentHint, exposureReport } from "./cli";
+import { readConfig, readInstructions, type McpConfig } from "./config";
 import { registryCache } from "./exposure-registry";
-import { DEFAULT_LIMITS, type Limits } from "./schema-mapper";
+import { DEFAULT_LIMITS } from "./schema-mapper";
 
 /** The parts of the `cds` facade the plugin uses. Passed in, never read from a global (ADR 0005). */
 export interface CdsLike {
@@ -40,19 +41,7 @@ export interface CdsLike {
   readonly i18n: { messages: { at(key: string, locale?: string, args?: unknown): unknown } };
 }
 
-/** `cds.env.mcp` (docs/annotations.md, Configuration). No key turns a feature on. */
-export interface McpConfig {
-  path?: string;
-  name?: string;
-  version?: string;
-  allowedOrigins?: string[];
-  limits?: Partial<Limits>;
-  /**
-   * Multitenant XSUAA: a regular expression over the request host whose first capture group is
-   * the subscriber's subdomain (like the approuter's TENANT_HOST_PATTERN). Off by default.
-   */
-  tenantHostPattern?: string;
-}
+export type { McpConfig } from "./config";
 
 export const MCP_PATH = "/mcp";
 
@@ -75,11 +64,13 @@ export function activate(cds: CdsLike): void {
   const log = cds.log("mcp");
   cds.on("served", async () => {
     // Read once the app's env is complete (profiles applied).
-    const config = cds.env.mcp ?? {};
+    const { config, diagnostics } = readConfig(cds.env.mcp);
+    const instructions = readInstructions(config.instructions, cds.root);
+    if (instructions.diagnostic) diagnostics.push(instructions.diagnostic);
     const mcpPath = config.path ?? MCP_PATH;
     const registryFor = registryCache({ limits: { ...DEFAULT_LIMITS, ...config.limits } });
     const registry = registryFor(cds.model as object);
-    for (const line of exposureReport(registry, mcpPath)) log[line.level](line.text);
+    for (const line of exposureReport(registry, mcpPath, diagnostics)) log[line.level](line.text);
     // MCP Apps (ADR 0012): files for the app's @mcp.ui links, then the app's own registrations.
     const linked = registry.spec.services
       .flatMap((s) => s.operations.map((o) => o.ui))
@@ -90,6 +81,7 @@ export function activate(cds: CdsLike): void {
         name: config.name ?? "@gavdi/cap-mcp",
         version: config.version ?? packageVersion(),
       },
+      instructions: instructions.text,
       context: () => cds.context,
       model: () => cds.model as object,
       registryFor,

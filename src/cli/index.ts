@@ -22,13 +22,17 @@ const ORDER: Record<Diagnostic["level"], number> = { error: 0, warn: 1, info: 2 
 const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
 /** What the plugin logs once CAP has served the app: a summary, then every diagnostic. */
-export function exposureReport(registry: ExposureRegistry, path: string): ReportLine[] {
+export function exposureReport(
+  registry: ExposureRegistry,
+  path: string,
+  configDiagnostics: Diagnostic[] = [],
+): ReportLine[] {
   const summary = [
     count(registry.toolsFor(EVERYONE).length, "tool"),
     count(registry.resourcesFor(EVERYONE).length, "resource"),
     count(registry.promptsFor(EVERYONE).length, "prompt"),
   ].join(", ");
-  const diagnostics = [...registry.diagnostics]
+  const diagnostics = [...configDiagnostics, ...registry.diagnostics]
     .sort((a, b) => ORDER[a.level] - ORDER[b.level])
     .map((d) => ({ level: d.level, text: `${d.code} ${d.target}: ${d.message}` }));
   return [{ level: "info", text: `serving ${summary} at ${path}` }, ...diagnostics];
