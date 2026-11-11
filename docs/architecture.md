@@ -57,8 +57,12 @@ The data passed between them is defined in `src/types.ts`.
    so it is refused with a `CONFIRMATION_REQUIRED` tool error that says why.
    A 2026-07-28 client with the `elicitation` capability confirms through MRTR: the executor
    throws `ConfirmationRequired` (carrying the form, from `elicitationSchema`) before anything
-   runs, the adapter answers `input_required`, and the retry's `inputResponses.confirm` becomes
-   `execute(…, { confirmed, confirmedArgs })`.
+   runs, the adapter answers `input_required` with `requestState` = a SHA-256 digest of (tool,
+   arguments, user id), and the retry's `inputResponses.confirm` becomes
+   `execute(…, { confirmed, confirmedArgs })` only when its echoed `requestState` equals the
+   digest of the retry itself. The digest is recomputed and compared, never decoded, so it needs
+   no shared key across instances; it cannot stop a client that fakes the user's answer (nothing
+   server-side can), only accepts for a call nobody was asked about.
    A 401 (CAP's `next(401)`, e.g. an invalid token) becomes CAP's own login challenge
    (`req._login`, Basic for mocked/basic auth) or, for XSUAA/JWT/IAS,
    `WWW-Authenticate: Bearer resource_metadata="<origin>/.well-known/oauth-protected-resource/mcp"`.

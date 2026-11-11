@@ -15,6 +15,7 @@ import type {
   McpServerFactory,
   ServerContext,
 } from "@modelcontextprotocol/server";
+import { createHash } from "node:crypto";
 import { toNodeHandler } from "@modelcontextprotocol/node";
 import type { RequestHandler } from "express";
 import { APP_MIME_TYPE, McpApps, linkedUri } from "./apps";
@@ -182,6 +183,30 @@ function canElicit(ctx: ServerContext): boolean {
   return !!elicitation && (elicitation.form !== undefined || elicitation.url === undefined);
 }
 
+/** JSON with sorted object keys, so equal arguments give equal text. */
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+/**
+ * The MRTR `requestState` of a confirmation form: a digest of the tool, the agent's arguments
+ * and the user. An accept counts only when the retry echoes the digest of the same call, so an
+ * accept nobody asked for, or one for other arguments, gets a new form instead. The digest is
+ * recomputed, never trusted or decoded; it carries nothing a client could not send itself.
+ */
+function confirmationState(tool: string, args: unknown, user: UserLike): string {
+  return createHash("sha256")
+    .update(canonical({ tool, args, user: user.id }))
+    .digest("base64url");
+}
+
 /**
  * An @mcp.elicit call that was not confirmed, after rollback (nothing ran): ask the user with
  * MRTR `input_required` when this client can, or say why it cannot run.
@@ -190,6 +215,7 @@ function confirmation(
   error: ConfirmationRequired,
   era: string,
   ctx: ServerContext,
+  requestState: string,
 ): InputRequiredResult | CallToolResult {
   const answer = inputResponse(ctx.mcpReq.inputResponses, CONFIRM);
   if (answer.kind === "elicit" && answer.action !== "accept") {
@@ -202,6 +228,7 @@ function confirmation(
   if (era !== "legacy" && canElicit(ctx)) {
     return inputRequired({
       inputRequests: { [CONFIRM]: inputRequired.elicit(error.request as ElicitInputParams) },
+      requestState,
     });
   }
   const why =
@@ -268,9 +295,13 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
           const service = options.services[serviceOf(registry.spec, tool.target) ?? ""] as
             TxService | undefined;
           if (!service) throw new Error(`cap-mcp: no service serves ${tool.name}`);
-          // A retry that carries the user's yes to the confirmation form (MRTR).
+          // A retry that carries the user's yes to the form we asked with for this call (MRTR).
+          const state = confirmationState(tool.name, args ?? {}, user);
           const answer = inputResponse(ctx.mcpReq.inputResponses, CONFIRM);
-          const confirmed = answer.kind === "elicit" && answer.action === "accept";
+          const confirmed =
+            answer.kind === "elicit" &&
+            answer.action === "accept" &&
+            ctx.mcpReq.requestState() === state;
           try {
             // The service's own root transaction, inheriting cds.context (user, tenant,
             // locale). execute() throws on any error, so CAP rolls back before we map it.
@@ -282,7 +313,7 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
             );
             return toCallToolResult(result);
           } catch (error) {
-            if (error instanceof ConfirmationRequired) return confirmation(error, era, ctx);
+            if (error instanceof ConfirmationRequired) return confirmation(error, era, ctx, state);
             const translated = localized(error, options.translate, context.locale);
             const result = errorResult(translated);
             if (result) return toCallToolResult(result);

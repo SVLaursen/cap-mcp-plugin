@@ -330,14 +330,18 @@ describe("opt-in: confirmation (MRTR)", () => {
   /** Bob's submitted order (demo data). */
   const ORDER = "7e2f9c58-1c1d-4c0b-9a7a-6d1f0b5e0a01";
   const ELICITING = { "io.modelcontextprotocol/clientCapabilities": { elicitation: { form: {} } } };
-  const cancel = (extra: Record<string, unknown> = {}) =>
+  const cancel = (extra: Record<string, unknown> = {}, reason = "moved") =>
     rpc(
       demo.POST,
       "bob",
       "tools/call",
-      { name: "OrdersService_Orders_cancel", arguments: { ID: ORDER, reason: "moved" }, ...extra },
+      { name: "OrdersService_Orders_cancel", arguments: { ID: ORDER, reason }, ...extra },
       { meta: ELICITING },
     );
+  /** The requestState of the form the server asked with, for these arguments. */
+  const asked = async (reason = "moved") =>
+    (await cancel({}, reason)).message?.result?.requestState as string;
+  const ACCEPT = { confirm: { action: "accept", content: {} } };
   const status = async () =>
     (
       (await callTool("bob", "OrdersService_Orders_get", { ID: ORDER })).structuredContent as {
@@ -350,6 +354,7 @@ describe("opt-in: confirmation (MRTR)", () => {
     expect(res.message?.result).not.toHaveProperty("content");
     expect(res.message?.result).toMatchObject({
       resultType: "input_required",
+      requestState: expect.any(String),
       inputRequests: {
         confirm: {
           method: "elicitation/create",
@@ -375,8 +380,18 @@ describe("opt-in: confirmation (MRTR)", () => {
     expect(await status()).toBe("submitted");
   });
 
+  test("an accept the server did not ask for, or for other arguments, asks again", async () => {
+    // A first call that already carries an accept: no form was shown for it.
+    const unasked = await cancel({ inputResponses: ACCEPT });
+    expect(unasked.message?.result).toMatchObject({ resultType: "input_required" });
+    // The form was for reason "moved"; the retry changed it.
+    const changed = await cancel({ inputResponses: ACCEPT, requestState: await asked() }, "other");
+    expect(changed.message?.result).toMatchObject({ resultType: "input_required" });
+    expect(await status()).toBe("submitted");
+  });
+
   test("retrying with an accepting inputResponse cancels the order", async () => {
-    const res = await cancel({ inputResponses: { confirm: { action: "accept", content: {} } } });
+    const res = await cancel({ inputResponses: ACCEPT, requestState: await asked() });
     expect(res.message?.result).toMatchObject({
       structuredContent: { value: { ID: ORDER, status: "cancelled", reason: "moved" } },
     });

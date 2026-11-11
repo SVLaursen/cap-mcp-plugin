@@ -80,8 +80,10 @@ Unknown `@mcp.*` keys produce an `UNKNOWN_ANNOTATION` diagnostic at startup.
 
 **Confirmation** (`@mcp.elicit`) runs nothing until the user agrees. A 2026-07-28 client that
 declares the `elicitation` capability gets `resultType: input_required` with one form
-(`inputRequests.confirm`); it shows the form and retries with the answer in
-`inputResponses.confirm`. Accept runs the call; decline or cancel gives a
+(`inputRequests.confirm`) and a `requestState`; it shows the form and retries the same call
+with the answer in `inputResponses.confirm` and the `requestState` echoed. Accept runs the call
+only when the retry is the call the form asked about (same tool, arguments and user); otherwise
+the user is asked again; decline or cancel gives a
 `CONFIRMATION_DECLINED` tool error. `['confirm']` asks only for a yes; listed parameter names
 are also asked for, pre-filled with the agent's values, and the user's answers replace them
 (parameters a form cannot hold, such as arrays, keep the agent's value). Clients that cannot ask
