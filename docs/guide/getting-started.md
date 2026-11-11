@@ -117,7 +117,7 @@ agents may create and update orders, and cancel one after the user confirms:
 service OrdersService {
   entity Orders { key ID : UUID; status : String; reason : String; }
     actions {
-      @mcp.elicit: ['confirm'] action cancel();
+      @mcp @mcp.elicit: ['confirm'] action cancel();
     };
 }
 annotate OrdersService with @mcp;
