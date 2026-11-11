@@ -10,3 +10,11 @@ const underJest = !!process.env.JEST_WORKER_ID;
 const impl = underJest ? require("./src/index.ts") : require("./lib/index.js");
 
 impl.activate(cds);
+
+// `cds add mcp`: cds-dk sets cds.cli before it loads plugins, and only it has cds.add.
+if (cds.cli?.command === "add" && cds.add) {
+  cds.add.register(
+    "mcp",
+    impl.mcpFacet(cds, { name: "@gavdi/cap-mcp", version: impl.packageVersion() }),
+  );
+}

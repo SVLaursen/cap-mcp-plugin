@@ -56,7 +56,10 @@ export interface McpConfig {
 
 export const MCP_PATH = "/mcp";
 
-function packageVersion(): string {
+export { mcpFacet } from "./cli/add";
+
+/** This plugin's own version (server identity default, `cds add mcp` dependency). */
+export function packageVersion(): string {
   const file = path.join(__dirname, "..", "package.json");
   return (JSON.parse(readFileSync(file, "utf8")) as { version: string }).version;
 }

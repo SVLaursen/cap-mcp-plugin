@@ -155,6 +155,14 @@ Targets are written
   production, the startup report compiles the sources once more with doc comments and names the
   exposed definitions that lost one (an `info` line with the setting to add).
 
+## Setup: `cds add mcp`
+
+With the plugin installed (`npm add @gavdi/cap-mcp`), `cds add mcp --service CatalogService`
+writes `annotate CatalogService with @mcp;` to `srv/mcp.cds` (adding to the file if it exists),
+adds the dependency if it is missing, and an `mcp` block with the app's name and version.
+`--service` takes a comma-separated list and is required when the app has several services;
+`--docs` also sets `cdsc.docs` (ADR 0011). Existing config values are never overwritten.
+
 ## Configuration (`cds.env.mcp`)
 
 camelCase, read through `cds.env` only (profiles work as usual). No key turns a feature on.
