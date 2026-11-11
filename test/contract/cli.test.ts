@@ -1,4 +1,4 @@
-import { exposureReport } from "../../src/cli";
+import { docCommentHint, exposureReport } from "../../src/cli";
 import { ExposureRegistry } from "../../src/exposure-registry";
 import { compileSnippet } from "../helpers/snippet";
 
@@ -37,5 +37,34 @@ describe("startup exposure report", () => {
         text: expect.stringMatching(/^V1_ANNOTATION S\.Books: .*@mcp\.wrap\.tools/),
       },
     ]);
+  });
+});
+
+describe("startup report: doc comments MCP cannot see (ADR 0011)", () => {
+  const source = `
+    /** The catalog */
+    @mcp service S {
+      /** Books on sale */
+      entity Books { key ID: Integer; /** Its title */ title: String; }
+      @description: 'Has its own' entity Authors { key ID: Integer; }
+      /** Not exposed */
+      action order();
+    }
+  `;
+  const withoutDocs = ExposureRegistry.fromModel(compileSnippet(source, { docs: false }));
+
+  test("names exposed definitions whose doc comment is lost, and how to turn docs on", () => {
+    expect(docCommentHint(withoutDocs, compileSnippet(source))).toEqual({
+      level: "info",
+      text:
+        "3 exposed definitions have doc comments that MCP does not see (S, S.Books, S.Books:title): " +
+        'set "cdsc": { "docs": true } in the app\'s cds config to use them as descriptions ' +
+        "(this also adds them to the OData $metadata, see ADR 0011)",
+    });
+  });
+
+  test("says nothing when the served model has its doc comments", () => {
+    const withDocs = ExposureRegistry.fromModel(compileSnippet(source));
+    expect(docCommentHint(withDocs, compileSnippet(source))).toBeUndefined();
   });
 });

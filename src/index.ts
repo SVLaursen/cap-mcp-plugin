@@ -11,7 +11,7 @@ import {
   requireUser,
   type AuthConfig,
 } from "./adapter/auth";
-import { exposureReport } from "./cli";
+import { docCommentHint, exposureReport } from "./cli";
 import { registryCache } from "./exposure-registry";
 import { DEFAULT_LIMITS, type Limits } from "./schema-mapper";
 
@@ -34,7 +34,9 @@ export interface CdsLike {
   readonly services: Record<string, unknown>;
   readonly middlewares: { before: RequestHandler[] };
   readonly requires: { auth?: AuthConfig };
-  readonly env: { mcp?: McpConfig };
+  readonly env: { mcp?: McpConfig; cdsc?: { docs?: boolean } };
+  /** Used once at startup, to compare the model with its doc comments (ADR 0011). */
+  load(files: string | string[], options: { docComment: true; silent: true }): Promise<unknown>;
   readonly i18n: { messages: { at(key: string, locale?: string, args?: unknown): unknown } };
 }
 
@@ -68,7 +70,7 @@ function packageVersion(): string {
  */
 export function activate(cds: CdsLike): void {
   const log = cds.log("mcp");
-  cds.on("served", () => {
+  cds.on("served", async () => {
     // Read once the app's env is complete (profiles applied).
     const config = cds.env.mcp ?? {};
     const mcpPath = config.path ?? MCP_PATH;
@@ -117,5 +119,30 @@ export function activate(cds: CdsLike): void {
       authErrors(auth),
     );
     log.debug(`MCP endpoint mounted at ${mcpPath}`);
+    if (!cds.env.cdsc?.docs && process.env.NODE_ENV !== "production") {
+      await reportLostDocComments(cds, registry, log);
+    }
   });
+}
+
+/**
+ * ADR 0011: without `cdsc.docs`, doc comments never reach MCP. In development, compile the
+ * app's sources once more with them (silently: no `loaded` event for other plugins) and say
+ * which exposed definitions lost one. Best effort: a failure here only skips the hint.
+ */
+async function reportLostDocComments(
+  cds: CdsLike,
+  registry: Parameters<typeof docCommentHint>[0],
+  log: ReturnType<CdsLike["log"]>,
+): Promise<void> {
+  const sources = (cds.model as { $sources?: string[] } | undefined)?.$sources;
+  try {
+    // `docComment` is the compiler's own option: CAP lets cds.env.cdsc override `docs`.
+    const options = { docComment: true, silent: true } as const;
+    const docs = await cds.load(sources?.length ? sources : "*", options);
+    const hint = docCommentHint(registry, docs as Parameters<typeof docCommentHint>[1]);
+    if (hint) log[hint.level](hint.text);
+  } catch (error) {
+    log.debug("Skipped the doc comment check:", error);
+  }
 }

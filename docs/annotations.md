@@ -151,7 +151,9 @@ Targets are written
 - Title: `@mcp.name` → `@title` → definition name.
 - Element description: `@mcp.hint` → `@description` → doc comment.
 - Doc comments need `cds.env.cdsc.docs = true` in the app's own config. The plugin does not set
-  it, because it also changes the app's OData `$metadata` (ADR 0011).
+  it, because it also changes the app's OData `$metadata` (ADR 0011). When it is off, outside
+  production, the startup report compiles the sources once more with doc comments and names the
+  exposed definitions that lost one (an `info` line with the setting to add).
 
 ## Configuration (`cds.env.mcp`)
 
