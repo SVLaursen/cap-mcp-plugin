@@ -113,6 +113,8 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 - [x] Query tools advertise and use CAP's row limits: `@cds.query.limit` (entity, then service) and `cds.query.limit`, capped by `cds.mcp.limits`. CAP already clamps MCP queries to them; the schema said 200/25 regardless, and CAP's `default` was never used _(`executor.test.ts` › reads)_
 - [x] Review: run the `reviewer` agent on it (fixed: CAP's default precedence, entity's bare value before the service's default; a bad service value reported once; key completion stays within CAP's max and reports `hasMore`; a compact-tool test and demo target. Left as is: MCP can be stricter than OData when the global max is below an entity's own, documented in docs/annotations.md)
 
+- [x] Code review for readability: comments say why rather than which milestone; shared helpers in `src/util.ts`; type-aware ESLint (`no-floating-promises`, `no-misused-promises`, `eqeqeq`); `allowedOrigins` read once; peer `@sap/cds` `^10` with a test against CAP's own paging; `cds-plugin.js` without test logic; the executor, model reader (v1 shim in `v1.ts`) and registry split by concern (docs/architecture.md, Modules)
+
 Decided against (maintainer, 2026-11-11):
 
 - **Per-tool row budgets** (`@mcp.limits`): CAP's `@cds.query.limit` already applies to MCP queries, the same limit as OData. Operations returning arrays stay uncapped, as over OData; a handler that can return a lot limits its own result.

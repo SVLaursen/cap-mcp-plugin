@@ -29,7 +29,21 @@ flowchart LR
 | `adapter`           | M4        | JSON-RPC, protocol versions, auth metadata, the HTTP entry point                        | SDK v2, registry, executor                                 | Behaviour + conformance     |
 | `cli`               | M6        | `cds add mcp`, build task, startup report (no stdio command, see below)                 | `cds`                                                      | Smoke                       |
 
-The data passed between them is defined in `src/types.ts`.
+The data passed between them is defined in `src/types.ts`. Two small shared files sit beside
+the modules: `src/access.ts` (who can reach what, as CAP's `@requires` and `@restrict` roles
+decide it; used by the registry and the executor) and `src/util.ts` (pure helpers).
+
+Inside the larger modules, one file per concern; each module's `index.ts` header lists them:
+
+- `model-reader/`: `index.ts` (readModel, services), `entities.ts`, `operations.ts`, `fields.ts`,
+  `opt-in.ts`, `checks.ts` (annotation diagnostics), `v1.ts` (the whole v1 shim),
+  `definitions.ts` (CSN shapes and shared readers).
+- `exposure-registry/`: `index.ts` (the registry: name checks, clashes, per-user lists, prompts),
+  `tools.ts` (one tool), `builtin.ts` (describe and compact tools), `prompts.ts`, `app-meta.ts`.
+- `executor/`: `index.ts` (the Executor: one dispatch over the tool target), `arguments.ts`,
+  `reads.ts`, `writes.ts` (drafts included), `operations.ts`, `describe.ts`, `resources.ts`,
+  `completion.ts`, `errors.ts`, `results.ts`.
+- `cli/`: `startup-report.ts`, `add.ts` (`cds add mcp`), `build.ts` (the build task).
 
 ## Request lifecycle
 
@@ -110,7 +124,7 @@ UIs their tools link to. No dependency on `@modelcontextprotocol/ext-apps` at ru
 ## Describe tools and access
 
 Describe tools (`<Service>_describe`, compact `list_entities` / `describe_entity`) never call CAP:
-they describe the spec, scoped by `exposure-registry/access.ts`, the plugin's copy of CAP's
+they describe the spec, scoped by `src/access.ts`, the plugin's copy of CAP's
 `@requires` / `@restrict` role rules (the same rules that hide tools). That is advertising, as
 CAP's `$metadata` is; if the copy ever drifts from CAP, metadata could over- or under-share, so
 changes to CAP's auth rules must be mirrored there with a test.

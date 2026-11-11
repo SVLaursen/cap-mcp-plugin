@@ -57,14 +57,16 @@ Demo users (mocked auth): `alice/alice` (admin), `bob/bob` (no roles), `carol/ca
 
 ```
 src/
-  index.ts              activate(cds): wires the plugin into CAP
+  index.ts              plugin(cds) / activate(cds): wires the plugin into CAP
   types.ts              ExposureSpec, EntitySpec, ToolSpec, … — the module contract
-  model-reader/         M1  CSN + @mcp → ExposureSpec (pure)
-  schema-mapper/        M1  FieldSpec → JSON Schema 2020-12 (pure)
-  exposure-registry/    M2  ExposureSpec → ToolSpec[], per-user filtering, caching
-  executor/             M3  tool call → CQN → srv.run/send → ToolResult
-  adapter/              M4  MCP protocol edge (SDK v2, stateless, auth metadata)
-  cli/                  M6  cds add mcp, cds mcp (stdio), startup report
+  access.ts             who can reach what (@requires, @restrict roles), for registry + executor
+  util.ts               small pure helpers
+  model-reader/         CSN + @mcp → ExposureSpec (pure); v1.ts is the v1 shim
+  schema-mapper/        FieldSpec → JSON Schema 2020-12 (pure)
+  exposure-registry/    ExposureSpec → ToolSpec[], per-user filtering, caching
+  executor/             tool call → CQN → srv.run/send → ToolResult, one file per concern
+  adapter/              MCP protocol edge (SDK v2, stateless, auth metadata, MCP Apps)
+  cli/                  cds add mcp, cds build task, startup report
 test/
   helpers/              snippet.ts (compile CDS), demo.ts (cds.test + users), mcp.ts (JSON-RPC)
   contract/             M1–M2 pure tests
