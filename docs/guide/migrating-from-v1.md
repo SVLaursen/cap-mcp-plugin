@@ -67,6 +67,7 @@ nothing.
 | `enable_model_description` (default on)                  | Ignored; `@mcp.describe` on the service (default off) |
 | `auth: 'none'`                                           | Ignored; CAP's own auth applies                       |
 | `capabilities.*.listChanged`                             | Ignored; lists never change while the server runs     |
+| `tool_call_timeout` (v1.9, default 10 s)                 | Ignored; no timeout, a call runs until CAP finishes   |
 | The block as a JSON string                               | Not read (`INVALID_CONFIG`); write it as an object    |
 
 ## A worked example

@@ -283,6 +283,20 @@ describe("v1 shim: config", () => {
       ],
     ]);
   });
+
+  // v1.9 (gavdilabs/cap-mcp-plugin#168) made v1's 10 s entity-tool timeout configurable.
+  test("tool_call_timeout (v1.9) is reported: v2 has no tool-call timeout", () => {
+    const { config, diagnostics } = readConfig({ tool_call_timeout: 30000 });
+    expect(config).toEqual({});
+    expect(diagnostics.map((d) => [d.level, d.code, d.target, d.message])).toEqual([
+      [
+        "warn",
+        "V1_DEFAULT_CHANGED",
+        "cds.mcp.tool_call_timeout",
+        "cds.mcp.tool_call_timeout is v1 and ignored: v2 has no tool-call timeout; a call runs until CAP finishes it (commit or rollback). Set timeouts on the remote services it calls",
+      ],
+    ]);
+  });
 });
 
 describe("v1 shim: review fixes (M6)", () => {

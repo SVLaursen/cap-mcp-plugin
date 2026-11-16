@@ -56,6 +56,9 @@ const V1_KEYS: Record<string, string> = {
   wrap_entities_to_actions: "use @mcp on the service or entity",
   wrap_entity_modes: "writes need @mcp.wrap.modes on the entity",
   enable_model_description: "use @mcp.describe on a service",
+  // v1.9: v1 raced entity tools against a timer, leaving the work running when it fired.
+  tool_call_timeout:
+    "v2 has no tool-call timeout; a call runs until CAP finishes it (commit or rollback). Set timeouts on the remote services it calls",
 };
 
 /** What the v1 keys said, for the model reader's V1_DEFAULT_CHANGED checks. */
