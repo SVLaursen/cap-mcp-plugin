@@ -130,6 +130,21 @@ Plugins and app code register MCP resources through a `mcp:resources` event: a f
 - [x] Maintainer: accept ADR 0013 (accepted 2026-11-17)
 - [x] Review: run the `reviewer` agent on the block's diff and fix what it finds, test first (fixed: a template the SDK cannot parse, or that is not canonical once expanded, fails startup instead of every request; the cap:// name clash uses every template in the model, not the caller's; a `list` returning no array or reserved URIs, and a `read` returning no string, are contained; `visible` failures and clashes are logged once; `complete` only for the template's variables; the contract types exported; tests for `cds.context` inside `read`, raw params, no caching, a failing startup. Left as is: a template's 404 reports the normalised URI, while the SDK echoes an unmatched one as sent)
 
+### mcp:hints (other plugins' instructions and tool notes)
+
+Plugins and app code add text to the server instructions and short notes to generated tools' descriptions through a `mcp:hints` event, per caller (ADR 0014). Asked for by the cap-okf benchmark (M2): agents use knowledge only when told it exists and applies. Branch `feat/benchmark-m2-improvements`.
+
+- [x] Demo target: `demo/server.js` adds a returns-policy pointer to the instructions and to `OrdersService.Orders.cancel` for support and admin; bob's output is unchanged
+- [x] Registry: `contractVersion: 1`; closed after the emit; an empty `id`, a non-function callback, or an `id` registered twice for one method throws
+- [x] Emit: once, right after `mcp:resources`, also when nothing else is configured
+- [x] Instructions: the app's own, then each provider's trimmed text, a blank line apart, in registration order; 1,500 characters each (warned once); both eras
+- [x] Tool notes: one call per generated tool per request with `{ tool, service, definition, kind }`; appended as paragraphs, 400 characters each; describe and compact tools get none
+- [x] Errors and context: a failing provider is skipped and logged, its message never sent; providers get user, tenant and locale inside `cds.context`; nothing cached
+- [x] No providers: output byte for byte as before (contract test; demo baseline captured at 51b3a6e)
+- [x] Docs: ADR 0014 (proposed), `docs/annotations.md`, `docs/guide/features.md`, README, `docs/architecture.md`
+- [ ] Maintainer: accept ADR 0014
+- [ ] Review: run the `reviewer` agent on the block's diff and fix what it finds
+
 Decided against (maintainer, 2026-11-11):
 
 - **Per-tool row budgets** (`@mcp.limits`): CAP's `@cds.query.limit` already applies to MCP queries, the same limit as OData. Operations returning arrays stay uncapped, as over OData; a handler that can return a lot limits its own result.

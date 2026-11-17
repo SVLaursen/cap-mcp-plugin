@@ -4,6 +4,7 @@ import type { Application, RequestHandler } from "express";
 import { mcpHandler, type RequestContext, type TxService } from "./adapter";
 import { setUpApps } from "./adapter/apps";
 import { setUpResources } from "./adapter/registered-resources";
+import { setUpHints } from "./adapter/hints";
 import {
   authErrors,
   checkOrigin,
@@ -59,6 +60,14 @@ export type {
   ResourceRegistry,
   TemplateResource,
 } from "./adapter/registered-resources";
+/** The `mcp:hints` contract (ADR 0014), for listeners written in TypeScript. Types only. */
+export type {
+  HintContext,
+  HintRegistry,
+  InstructionsProvider,
+  ToolNotesProvider,
+  ToolTarget,
+} from "./adapter/hints";
 
 export const MCP_PATH = "/mcp";
 
@@ -125,6 +134,8 @@ export function activate(cds: CdsLike): void {
     const resources = setUpResources((registry) => cds.emit("mcp:resources", registry));
     const fromCode = registeredReport(resources);
     if (fromCode) log[fromCode.level](fromCode.text);
+    // Hints from code (ADR 0014): instructions and tool notes, asked as the caller per request.
+    const hints = setUpHints((registry) => cds.emit("mcp:hints", registry));
     const handler = mcpHandler({
       serverInfo: {
         name: config.name ?? "@gavdi/cap-mcp",
@@ -136,6 +147,7 @@ export function activate(cds: CdsLike): void {
       registryFor,
       apps,
       resources,
+      hints,
       services: cds.services,
       translate: (key, locale, args) => {
         // at(key, args) when there is no locale: CAP reads a non-string 2nd argument as args, so

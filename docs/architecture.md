@@ -44,7 +44,8 @@ Inside the larger modules, one file per concern; each module's `index.ts` header
   `reads.ts`, `writes.ts` (drafts included), `operations.ts`, `describe.ts`, `resources.ts`,
   `completion.ts`, `errors.ts`, `results.ts`.
 - `adapter/`: `index.ts` (the per-request server factory and the HTTP handler), `auth.ts`,
-  `apps.ts` (MCP Apps, `mcp:apps`), `registered-resources.ts` (`mcp:resources`).
+  `apps.ts` (MCP Apps, `mcp:apps`), `registered-resources.ts` (`mcp:resources`), `hints.ts`
+  (`mcp:hints`).
 - `cli/`: `startup-report.ts`, `add.ts` (`cds add mcp`), `build.ts` (the build task).
 
 ## Request lifecycle
@@ -132,6 +133,14 @@ towards the `resources` capability and are registered on that request's `McpServ
 UIs; a template's `complete` joins our own `completion/complete` handler. Their callbacks run
 in `cds.context`, outside `srv.tx` (not our CAP data access, ADR 0003); a 404 from `read` is
 resource-not-found, anything else an internal error.
+
+Hints from code (ADR 0014, `adapter/hints.ts`): after `mcp:resources`, `activate()` emits
+`mcp:hints` with a `RegisteredHints` registry, closes it, and passes it to the handler. When a
+provider is registered, the (then async) factory asks every instructions provider and, for each
+generated tool the caller gets, every notes provider, as the caller inside `cds.context`,
+before it builds the `McpServer`: the texts follow the app's instructions, the notes end the
+tool descriptions. Nothing is cached; a provider that fails is logged and skipped. Without
+providers nothing is awaited and the output is unchanged.
 
 ## Describe tools and access
 

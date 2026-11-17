@@ -23,6 +23,7 @@ import { toNodeHandler } from "@modelcontextprotocol/node";
 import type { RequestHandler } from "express";
 import { APP_MIME_TYPE, McpApps, linkedUri } from "./apps";
 import { isProduction } from "./auth";
+import { hintsFor, withNotes, type RegisteredHints, type ToolTarget } from "./hints";
 import {
   isNotFound,
   visibleFixed,
@@ -100,11 +101,14 @@ export interface AdapterOptions {
   apps?: McpApps;
   /** Resources from code (`mcp:resources`, ADR 0013); none when omitted. */
   resources?: RegisteredResources;
+  /** Instructions and tool notes from code (`mcp:hints`, ADR 0014); none when omitted. */
+  hints?: RegisteredHints;
   /** CAP services by name (cds.services). */
   services: Record<string, TxService | undefined>;
   /** CAP's messages (cds.i18n.messages.at), so errors read as they do over OData. */
   translate?: Translate;
-  log: { error(...args: unknown[]): void };
+  /** `warn` is for hints cut to their limit (ADR 0014); errors go to `error` without it. */
+  log: { error(...args: unknown[]): void; warn?(...args: unknown[]): void };
 }
 
 /**
@@ -266,9 +270,41 @@ function confirmation(
   return toCallToolResult(errorResult(refused) as ToolResult);
 }
 
+/**
+ * What a tools notes provider is told about a generated tool (ADR 0014): its service and the
+ * entity, action or function behind it. Describe and compact tools act on a whole service, so
+ * they have no such definition and get no notes.
+ */
+function toolTarget(spec: ExposureSpec, tool: ToolSpec): ToolTarget | undefined {
+  const { target } = tool;
+  const service = serviceOf(spec, target);
+  if (!service) return undefined;
+  if (target.kind === "entity")
+    return { tool: tool.name, service, definition: target.entity, kind: "entity" };
+  if (target.kind !== "operation") return undefined;
+  const operation = spec.services
+    .flatMap((s) => s.operations)
+    .find((o) => o.name === target.operation);
+  if (!operation) return undefined;
+  return { tool: tool.name, service, definition: operation.name, kind: operation.kind };
+}
+
 /** The per-request server factory: one McpServer with the caller's tools. */
 export function serverFactory(options: AdapterOptions): McpServerFactory {
   const { executorFor, schemaFor, argsSchemaFor } = caches();
+  // Hints from code (ADR 0014): asked on every request, never cached; nothing to do without them.
+  const hints = options.hints
+    ? hintsFor(options.hints, {
+        error: (...args) => options.log.error(...args),
+        warn: (...args) => (options.log.warn ?? options.log.error)(...args),
+      })
+    : undefined;
+  // Per model: each generated tool's target for notes providers (structure only, no answers).
+  const targets = new WeakMap<ToolSpec, ToolTarget | null>();
+  const targetOf = (registry: ExposureRegistry, tool: ToolSpec) => {
+    if (!targets.has(tool)) targets.set(tool, toolTarget(registry.spec, tool) ?? null);
+    return targets.get(tool) ?? undefined;
+  };
   // Problems with registrations from code are logged once per activation, not per request.
   const reported = new Set<string>();
   const once = (key: string, ...message: unknown[]) => {
@@ -294,7 +330,7 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
     }
     return kept;
   };
-  return ({ era }) => {
+  return async ({ era }) => {
     const context = options.context();
     if (!context)
       throw new Error("cap-mcp: no cds.context; is /mcp mounted behind CAP's middlewares?");
@@ -323,8 +359,20 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
     const hasResources =
       resources.length > 0 || uis.length > 0 || fixed.length > 0 || templates.length > 0;
     const listed = { ttlMs: TOOLS_TTL_MS, cacheScope: "private" } as const;
+    // Hints (ADR 0014), as this caller, inside the request's cds.context; skipped without providers.
+    const hinted = hints?.active
+      ? await Promise.all([
+          hints.instructions(options.instructions, caller),
+          hints.notes(
+            tools.map(({ tool }) => targetOf(registry, tool)).filter((t) => t !== undefined),
+            caller,
+          ),
+        ])
+      : undefined;
+    const instructions = hinted ? hinted[0] : options.instructions;
+    const notes = hinted?.[1];
     const server = new McpServer(options.serverInfo, {
-      ...(options.instructions && { instructions: options.instructions }),
+      ...(instructions && { instructions }),
       // Registering defaults listChanged to true; we never send that notification.
       capabilities: {
         tools: { listChanged: false },
@@ -356,7 +404,7 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
         tool.name,
         {
           title: tool.title,
-          description: tool.description,
+          description: withNotes(tool.description, notes?.get(tool.name)),
           inputSchema: schemaFor(tool.inputSchema),
           outputSchema: tool.outputSchema && schemaFor(tool.outputSchema),
           annotations: tool.annotations,

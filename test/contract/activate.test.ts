@@ -72,8 +72,45 @@ test("mcp:resources is emitted once, after mcp:apps, with an open registry that 
     lateRegister = () => resources.register({ ...note, uri: "notes://x/b.md" });
   });
   await served();
-  expect(events.map(([event]) => event)).toEqual(["mcp:apps", "mcp:resources"]);
+  expect(events.map(([event]) => event)).toEqual(["mcp:apps", "mcp:resources", "mcp:hints"]);
   expect(lateRegister).toThrow(/after the mcp:resources event/);
+});
+
+// ADR 0014: the same for hints, right after mcp:resources, with nothing else configured.
+test("mcp:hints is emitted once, after mcp:resources, with an open registry that closes after", async () => {
+  const events: string[] = [];
+  let late: (() => void)[] = [];
+  const { served } = fakeCds({}, (event, registry) => {
+    events.push(event);
+    if (event !== "mcp:hints") return;
+    const hints = registry as {
+      contractVersion: number;
+      addInstructions(p: unknown): void;
+      addToolNotes(p: unknown): void;
+    };
+    expect(hints.contractVersion).toBe(1);
+    hints.addInstructions({ id: "a", text: () => "Hint." });
+    hints.addToolNotes({ id: "a", note: () => undefined });
+    late = [
+      () => hints.addInstructions({ id: "b", text: () => "Late." }),
+      () => hints.addToolNotes({ id: "b", note: () => "Late." }),
+    ];
+  });
+  await served();
+  expect(events.filter((e) => e === "mcp:hints")).toHaveLength(1);
+  expect(events.indexOf("mcp:hints")).toBe(events.indexOf("mcp:resources") + 1);
+  expect(late).toHaveLength(2);
+  for (const add of late) expect(add).toThrow(/after the mcp:hints event/);
+});
+
+test("a duplicate hint provider fails startup with the plugin's message", () => {
+  const { served } = fakeCds({}, (event, registry) => {
+    if (event !== "mcp:hints") return;
+    const hints = registry as { addToolNotes(p: unknown): void };
+    hints.addToolNotes({ id: "a", note: () => undefined });
+    hints.addToolNotes({ id: "a", note: () => undefined });
+  });
+  expect(served).toThrow(/^cap-mcp: .*already registered/);
 });
 
 test("a bad registration fails startup with the plugin's message", () => {

@@ -34,6 +34,24 @@ cds.middlewares.add(function grantFromHeader(req: Request, _res: unknown, next: 
 
 /** What tools/list publishes for a tool: the spec without the executor's back-reference. */
 const listed = ({ target: _target, ...tool }: ToolSpec) => tool;
+
+/** The note demo/server.js adds through `mcp:hints` for support and admin (ADR 0014). */
+const DEMO_NOTE =
+  "A cancelled order that was delivered is a return: read notes://bookshop/returns-policy.md first.";
+
+/** The caller's tools as the registry specifies them, with the demo's own tool note. */
+function expectedTools(registry: ExposureRegistry, who: Parameters<typeof demoUser>[0]) {
+  const user = demoUser(who);
+  const staff = user.is("support") || user.is("admin");
+  return registry
+    .toolsFor(user)
+    .map(listed)
+    .map((tool) =>
+      staff && tool.name === "OrdersService_Orders_cancel"
+        ? { ...tool, description: `${tool.description}\n\n${DEMO_NOTE}` }
+        : tool,
+    );
+}
 describe("protocol: stateless 2026-07-28", () => {
   test("tools/list works without any initialize handshake", async () => {
     const res = await listTools(demo.POST, "bob");
@@ -128,7 +146,7 @@ describe("protocol: stateless 2026-07-28", () => {
     const lists = await Promise.all(callers.map((who) => listTools(demo.POST, who)));
     lists.forEach((res, i) => {
       const who = callers[i] ?? "bob";
-      expect(res.message?.result?.tools).toEqual(registry.toolsFor(demoUser(who)).map(listed));
+      expect(res.message?.result?.tools).toEqual(expectedTools(registry, who));
     });
   });
 });
@@ -152,7 +170,7 @@ describe("protocol: older clients (2025-era, stateless; ADR 0010)", () => {
     for (const who of ["alice", "bob"] as const) {
       const list = await legacyRpc(demo.POST, who, "tools/list");
       expect(list.headers["mcp-session-id"]).toBeUndefined();
-      expect(list.message?.result?.tools).toEqual(registry.toolsFor(demoUser(who)).map(listed));
+      expect(list.message?.result?.tools).toEqual(expectedTools(registry, who));
     }
     const call = await legacyRpc(demo.POST, "bob", "tools/call", {
       name: "CatalogService_Books_get",
@@ -303,7 +321,7 @@ describe("protocol: mounting inside CAP", () => {
     for (const who of ["alice", "bob"] as const) {
       const res = await listTools(demo.POST, who);
       expect(res.status).toBe(200);
-      expect(res.message?.result?.tools).toEqual(registry.toolsFor(demoUser(who)).map(listed));
+      expect(res.message?.result?.tools).toEqual(expectedTools(registry, who));
     }
   });
 

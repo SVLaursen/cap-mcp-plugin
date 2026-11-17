@@ -158,6 +158,48 @@ cds.on("mcp:resources", (resources) => {
 - Fixed resources run on every request (each builds its own server): keep them to a few entry
   points and serve many documents through one template.
 
+**Hints from code** (`mcp:hints`, ADR 0014): app code and other plugins add text to the server
+instructions and short notes to the descriptions of generated tools, per caller, so agents
+learn that something exists and when it applies. Not an annotation: a provider is the opt-in,
+and with none `/mcp` is unchanged byte for byte.
+
+```js
+cds.on("mcp:hints", (hints) => {
+  hints.addInstructions({
+    id: "shop-policies",
+    text: (ctx) => "Read notes://shop/returns.md before answering questions about returns.",
+  });
+  hints.addToolNotes({
+    id: "shop-policies",
+    note: (target, ctx) =>
+      target.definition === "OrdersService.Orders.cancel"
+        ? "See notes://shop/returns.md."
+        : undefined,
+  });
+});
+```
+
+- The plugin emits `mcp:hints` once, right after `mcp:resources`, whether or not anything else
+  is configured. Register synchronously inside the listener; afterwards both methods throw, and
+  a registration that throws fails startup. `hints.contractVersion` is `1`.
+- Both methods throw (`cap-mcp: …`) for an empty `id`, a callback that is not a function, and
+  an `id` already registered with the same method (one plugin may use one `id` for both).
+- Providers get `{ user, locale, tenant }` and run inside the request's `cds.context`, not in a
+  CAP transaction, on every request; nothing they return is cached. They may be async.
+- Instructions: the app's own (`cds.mcp.instructions`), then each provider's text, trimmed, a
+  blank line apart, in registration order. `undefined` and empty texts add nothing; each text
+  is cut at 1,500 characters (with one warning). 2026-07-28 clients read them in
+  `server/discover`, 2025-era clients in `initialize`.
+- Tool notes: `note(target, ctx)` is called once per generated tool, per request, with
+  `{ tool, service, definition, kind }` (`kind` is `entity`, `action` or `function`; the
+  definition is fully qualified, bound operations as `Service.Entity.op`). Each note, trimmed
+  and cut at 400 characters, is appended to that tool's description as its own paragraph,
+  in registration order. Plain text, passed on as is. Describe and compact tools get no notes.
+- A provider that throws, rejects or returns something other than text is skipped for that
+  request and logged; its message never reaches the client.
+- `note` runs for every tool on every request, `tools/call` included: answer from memory (an
+  index built at startup), not with I/O per tool.
+
 **Completion** (`@mcp.completion` on the key of a single-key `@mcp.resource` entity): a client
 sends `completion/complete` with `ref/resource` and the template
 `cap://<Service>/<Entity>/{key}`; the plugin answers with keys that start with the typed value,

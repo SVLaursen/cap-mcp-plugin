@@ -50,6 +50,27 @@ cds.on("mcp:resources", (resources) => {
   });
 });
 
+// Hints from code (docs/annotations.md, ADR 0014): say where the notes above apply, in the server
+// instructions and on the tool they concern. Only for shop staff (support, admin): what bob
+// gets is unchanged.
+cds.on("mcp:hints", (hints) => {
+  const staff = (user) => user.is("support") || user.is("admin");
+  hints.addInstructions({
+    id: "bookshop-policies",
+    text: ({ user }) =>
+      staff(user)
+        ? "Shop policies are MCP resources. Read notes://bookshop/returns-policy.md before you answer a question about returns or cancellations."
+        : undefined,
+  });
+  hints.addToolNotes({
+    id: "bookshop-policies",
+    note: ({ definition }, { user }) =>
+      staff(user) && definition === "OrdersService.Orders.cancel"
+        ? "A cancelled order that was delivered is a return: read notes://bookshop/returns-policy.md first."
+        : undefined,
+  });
+});
+
 /** The notes behind notes://bookshop/topics/{+path}; a real plugin would read files. */
 const TOPICS = {
   "shipping.md": "# Shipping\n\nOrders ship within two working days.\n",

@@ -19,3 +19,4 @@ supersedes the old one; don't edit history.
 | [0011](0011-doc-comments-are-the-apps-choice.md)       | Doc comments are the app's choice; the plugin does not set `cdsc.docs` | accepted                   |
 | [0012](0012-mcp-apps-without-ext-apps-runtime.md)      | MCP Apps without a runtime dependency on `ext-apps`                    | accepted                   |
 | [0013](0013-resources-from-code.md)                    | Resources from code: the `mcp:resources` event                         | accepted                   |
+| [0014](0014-hints-from-code.md)                        | Hints from code: the `mcp:hints` event                                 | proposed                   |

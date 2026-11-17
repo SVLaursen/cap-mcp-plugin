@@ -14,6 +14,8 @@ transaction, exactly as it does for OData. Nothing is exposed unless you annotat
 - Tools with JSON Schema inputs and outputs, paging with totals, CAP search, structured errors
 - Resources, prompts, MCP Apps UI, user confirmation (MRTR) and key completion
 - Resources from code: other plugins and app code add documents through `mcp:resources`
+- Hints from code: other plugins and app code add to server instructions and tool descriptions
+  through `mcp:hints`
 - XSUAA and IAS (also with X.509 credentials), `@sap/ams`, multitenant XSUAA, RFC 9728 metadata
 - A startup report that tells you what is served and what in your model needs a look
 
@@ -95,6 +97,7 @@ processes over stdio use a bridge such as [`mcp-remote`](https://www.npmjs.com/p
 | Prompts                             | `@mcp.prompts` on the service                             |
 | MCP Apps UI                         | `@mcp.ui: 'ui://…'` on the operation                      |
 | Documents as resources, from code   | `cds.on('mcp:resources')` in your app or another plugin   |
+| Hints in instructions and tools     | `cds.on('mcp:hints')` in your app or another plugin       |
 | User confirmation before a call     | `@mcp.elicit` on the operation                            |
 | Key completion                      | `@mcp.completion` on the key of an `@mcp.resource` entity |
 | Model description tool              | `@mcp.describe` on the service                            |

@@ -79,6 +79,44 @@ cds.on("mcp:resources", (resources) => {
 The demo's `server.js` registers these notes; see
 [the demo app](../../demo/README.md).
 
+## Hints from code: `mcp:hints`
+
+Agents use what a server offers when something tells them it exists and when it applies. Two
+places every agent reads are the server instructions and the tool descriptions. Add to them
+from code, per caller:
+
+```js
+cds.on("mcp:hints", (hints) => {
+  hints.addInstructions({
+    id: "bookshop-policies",
+    text: ({ user }) =>
+      user.is("support")
+        ? "Read notes://bookshop/returns-policy.md before answering about returns."
+        : undefined,
+  });
+  hints.addToolNotes({
+    id: "bookshop-policies",
+    note: ({ definition }, { user }) =>
+      user.is("support") && definition === "OrdersService.Orders.cancel"
+        ? "A cancelled order that was delivered is a return: read notes://bookshop/returns-policy.md first."
+        : undefined,
+  });
+});
+```
+
+- Nothing changes until a provider returns text: this is the opt-in.
+- Register synchronously, inside the listener. `id`s are unique per method; a duplicate fails
+  startup with a `cap-mcp:` message.
+- Instructions texts follow your own `cds.mcp.instructions`, a blank line apart, at most 1,500
+  characters each. Tool notes end the tool's description as their own paragraph, at most 400
+  characters each. Return `undefined` to add nothing.
+- Providers run on every request (each builds its own server), as the caller, inside
+  `cds.context`. Answer from memory; a provider that does I/O per tool slows every call.
+- A provider that throws is skipped for that request and logged; the client never sees its
+  message.
+
+The demo adds a hint for support and admin users; see [the demo app](../../demo/README.md).
+
 ## Prompts
 
 Prompts are reusable instructions the user picks in the client.
