@@ -115,6 +115,20 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 
 - [x] Code review for readability: comments say why rather than which milestone; shared helpers in `src/util.ts`; type-aware ESLint (`no-floating-promises`, `no-misused-promises`, `eqeqeq`); `allowedOrigins` read once; peer `@sap/cds` `^10` with a test against CAP's own paging; `cds-plugin.js` without test logic; the executor, model reader (v1 shim in `v1.ts`) and registry split by concern (docs/architecture.md, Modules)
 
+### mcp:resources (other plugins' resources)
+
+Plugins and app code register MCP resources through a `mcp:resources` event: a few fixed resources, and templates for many documents (ADR 0013, proposed). First user: cap-okf. One commit per task, test first.
+
+- [ ] Demo targets: in `demo/server.js`, fixed `notes://bookshop/returns-policy.md` (everyone), `notes://bookshop/stock-policy.md` (`visible` for `admin` only; `read` uses `ctx.locale`), `notes://bookshop/missing.md` (`read` throws a 404 error), and a template `notes://bookshop/topics/{+path}` over a small in-memory map (`read` 404s unknown paths, `complete`, no `list`); rows in `demo/README.md`
+- [ ] R1 Registry and validation: `contractVersion: 1`; closed after the emit; rejects non-absolute or non-canonical URIs, `cap:`/`ui:` schemes, duplicate URIs, templates and template names, empty `name`/`mimeType`/`uriTemplate`, a template without a variable, and callbacks that are not functions; URIs and templates come back sorted _(`test/contract/registered-resources.test.ts`)_
+- [ ] R2 Emit at startup and report: emitted once after `mcp:apps`, also when nothing else produces resources; the startup report lists fixed URIs and templates; with no listener, the report and `/mcp` are unchanged
+- [ ] R3 List per caller: `visible` decides per user (alice sees stock-policy, bob and anonymous do not); a throwing `visible` hides and logs; the `resources` capability and private cache hints follow the caller's resources (none: no capability); order is `ui://`, fixed by URI, then template `list` results; a throwing `list` is logged and adds nothing
+- [ ] R4 Read fixed resources: text with its MIME type; `ctx.user`, `ctx.locale` and `ctx.tenant` reach `read`; a 404 error becomes resource-not-found with the URI only; any other error is logged and not leaked; a hidden URI answers exactly like an unknown one
+- [ ] R5 Templates: listed in `resources/templates/list`; a matching URI reads with `params`; a fixed URI wins over a matching template; `complete` answers `completion/complete` (at most 100, `hasMore`), a throwing `complete` offers nothing; a template named like a `cap://` template is skipped and logged
+- [ ] R6 2025-era clients: the same list, read and completion over a stateless 2025-era request
+- [ ] R7 Docs: `docs/annotations.md` "Resources from code (`mcp:resources`)" next to MCP Apps (example, rules, errors, few fixed and templates for many); `docs/architecture.md` request lifecycle; README feature list; ADR 0013 accepted
+- [ ] Review: run the `reviewer` agent on the block's diff and fix what it finds, test first
+
 Decided against (maintainer, 2026-11-11):
 
 - **Per-tool row budgets** (`@mcp.limits`): CAP's `@cds.query.limit` already applies to MCP queries, the same limit as OData. Operations returning arrays stay uncapped, as over OData; a handler that can return a lot limits its own result.
