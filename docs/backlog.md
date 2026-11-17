@@ -117,7 +117,7 @@ From here, tests run against the demo (`npm run test:behaviour`). Since M4 they 
 
 ### mcp:resources (other plugins' resources)
 
-Plugins and app code register MCP resources through a `mcp:resources` event: a few fixed resources, and templates for many documents (ADR 0013, proposed). First user: cap-okf. One commit per task, test first.
+Plugins and app code register MCP resources through a `mcp:resources` event: a few fixed resources, and templates for many documents (ADR 0013). First user: cap-okf. One commit per task, test first.
 
 - [x] Demo targets: in `demo/server.js`, fixed `notes://bookshop/returns-policy.md` (everyone), `notes://bookshop/stock-policy.md` (`visible` for `admin` only; `read` uses `ctx.locale`), `notes://bookshop/missing.md` (`read` throws a 404 error), and a template `notes://bookshop/topics/{+path}` over a small in-memory map (`read` 404s unknown paths, `complete`, no `list`); rows in `demo/README.md`
 - [x] R1 Registry and validation: `contractVersion: 1`; closed after the emit; rejects non-absolute or non-canonical URIs, `cap:`/`ui:` schemes, duplicate URIs, templates and template names, empty `name`/`mimeType`/`uriTemplate`, a template without a variable, and callbacks that are not functions; URIs and templates come back sorted _(`test/contract/registered-resources.test.ts`)_
@@ -127,7 +127,7 @@ Plugins and app code register MCP resources through a `mcp:resources` event: a f
 - [x] R5 Templates: listed in `resources/templates/list`; a matching URI reads with `params`; a fixed URI wins over a matching template; `complete` answers `completion/complete` (at most 100, `hasMore`), a throwing `complete` offers nothing; a template named like a `cap://` template is skipped and logged
 - [x] R6 2025-era clients: the same list, read and completion over a stateless 2025-era request
 - [x] R7 Docs: `docs/annotations.md` "Resources from code (`mcp:resources`)" next to MCP Apps (example, rules, errors, few fixed and templates for many); `docs/architecture.md` request lifecycle and adapter files; the user guide (`docs/guide/features.md`); README feature list and opt-in table
-- [ ] Maintainer: accept ADR 0013 (status proposed until then)
+- [x] Maintainer: accept ADR 0013 (accepted 2026-11-17)
 - [x] Review: run the `reviewer` agent on the block's diff and fix what it finds, test first (fixed: a template the SDK cannot parse, or that is not canonical once expanded, fails startup instead of every request; the cap:// name clash uses every template in the model, not the caller's; a `list` returning no array or reserved URIs, and a `read` returning no string, are contained; `visible` failures and clashes are logged once; `complete` only for the template's variables; the contract types exported; tests for `cds.context` inside `read`, raw params, no caching, a failing startup. Left as is: a template's 404 reports the normalised URI, while the SDK echoes an unmatched one as sent)
 
 Decided against (maintainer, 2026-11-11):

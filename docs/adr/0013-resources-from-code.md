@@ -1,6 +1,6 @@
 # 0013 — Resources from code: the `mcp:resources` event
 
-Status: proposed · 2026-11-17 (after 2.0)
+Status: accepted · 2026-11-17 (after 2.0)
 
 ## Context
 
