@@ -281,3 +281,113 @@ describe("mcp:resources: reading fixed resources (ADR 0013)", () => {
     expect(shape(secret, "notes://x/secret.md")).toBe(shape(unknown, "notes://x/nope.md"));
   });
 });
+
+describe("mcp:resources: templates (ADR 0013)", () => {
+  const complete = (
+    call: ReturnType<typeof serve>["call"],
+    uri: string,
+    name = "path",
+    value = "",
+  ) =>
+    call("completion/complete", {
+      ref: { type: "ref/resource", uri },
+      argument: { name, value },
+    });
+
+  test("a matching URI is read with the template's params, as the caller", async () => {
+    const seen: unknown[] = [];
+    const template = topics({
+      read: (ctx) => {
+        seen.push(ctx);
+        return `topic ${ctx.params.path}`;
+      },
+    });
+    const { call } = serve({ templates: [template], locale: "en" });
+    const uri = "notes://x/topics/gifts/wrapping.md";
+    const res = await call("resources/read", { uri });
+    expect(res.result?.contents).toEqual([
+      { uri, mimeType: "text/markdown", text: "topic gifts/wrapping.md" },
+    ]);
+    expect(seen).toEqual([
+      expect.objectContaining({ uri, params: { path: "gifts/wrapping.md" }, locale: "en" }),
+    ]);
+  });
+
+  test("a 404 from a template's read is resource-not-found with the URI only", async () => {
+    const template = topics({ read: thrown("no such topic here", { status: 404 }) });
+    const { call } = serve({ templates: [template] });
+    const uri = "notes://x/topics/nope.md";
+    const res = await call("resources/read", { uri });
+    expect(res.error).toMatchObject({ code: -32602, data: { uri } });
+    expect(JSON.stringify(res)).not.toMatch(/no such topic here/);
+  });
+
+  test("a fixed URI wins over a template that matches it", async () => {
+    const uri = "notes://x/topics/a.md";
+    const { call } = serve({ fixed: [note(uri, { read: () => "fixed" })], templates: [topics()] });
+    const res = await call("resources/read", { uri });
+    expect(res.result?.contents).toEqual([{ uri, mimeType: "text/markdown", text: "fixed" }]);
+  });
+
+  test("a hidden fixed URI that a template matches is answered by the template's read", async () => {
+    const uri = "notes://x/topics/a.md";
+    const hidden = note(uri, { read: () => "fixed", visible: () => false });
+    const template = topics({ read: thrown("hidden", { status: 404 }) });
+    const { call } = serve({ fixed: [hidden], templates: [template] });
+    const res = await call("resources/read", { uri });
+    expect(res.error).toMatchObject({ code: -32602, data: { uri } });
+  });
+
+  test("complete answers completion/complete as the caller, at most 100 values with hasMore", async () => {
+    const seen: unknown[] = [];
+    const template = topics({
+      complete: (ctx, param, value) => {
+        seen.push([ctx, param, value]);
+        return Array.from({ length: 101 }, (_, i) => `${value}${i}.md`);
+      },
+    });
+    const { call } = serve({ templates: [template], locale: "de" });
+    expect(await capabilities({ templates: [template] })).toHaveProperty("completions");
+    const res = await complete(call, "notes://x/topics/{+path}", "path", "a");
+    const completion = res.result?.completion as { values: string[]; hasMore: boolean };
+    expect(completion.values).toHaveLength(100);
+    expect(completion.values[0]).toBe("a0.md");
+    expect(completion.hasMore).toBe(true);
+    expect(seen).toEqual([[expect.objectContaining({ locale: "de" }), "path", "a"]]);
+  });
+
+  test("a template without complete offers nothing; one whose complete throws offers nothing and is logged", async () => {
+    const plain = topics();
+    const failing = topics({
+      uriTemplate: "notes://x/other/{id}",
+      name: "other",
+      complete: thrown("index down"),
+    });
+    const { call, errors } = serve({ templates: [plain, failing] });
+    for (const uri of ["notes://x/topics/{+path}", "notes://x/other/{id}"]) {
+      const res = await complete(call, uri, uri.includes("other") ? "id" : "path");
+      expect(res.result?.completion).toMatchObject({ values: [], hasMore: false });
+    }
+    expect(errors).toEqual([[expect.stringContaining("notes://x/other/{id}"), expect.any(Error)]]);
+  });
+
+  test("without complete anywhere there is no completions capability", async () => {
+    expect(await capabilities({ templates: [topics()] })).not.toHaveProperty("completions");
+    // A cap:// resource without @mcp.completion is no reason for it either.
+    const cdl = `@mcp service S { @mcp.resource entity Genres { key ID : Integer; } }`;
+    const caps = await capabilities({ cdl, templates: [topics()] });
+    expect(caps).toHaveProperty("resources");
+    expect(caps).not.toHaveProperty("completions");
+  });
+
+  test("a template named like a cap:// template in the model is skipped for that request, and logged", async () => {
+    const cdl = `@mcp service S { @mcp.resource entity Books { key ID : Integer; } }`;
+    const clashing = topics({ name: "S_Books" });
+    const { call, errors } = serve({ cdl, templates: [clashing], fixed: [note("notes://x/a.md")] });
+    const res = await call("resources/templates/list");
+    expect(
+      (res.result?.resourceTemplates as { uriTemplate: string }[]).map((t) => t.uriTemplate),
+    ).toEqual(["cap://S/Books/{key}"]);
+    expect(errors).toEqual([[expect.stringMatching(/notes:\/\/x\/topics\/\{\+path\}.*S_Books/)]]);
+  });
+});

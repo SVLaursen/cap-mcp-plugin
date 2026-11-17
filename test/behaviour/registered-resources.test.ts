@@ -90,3 +90,31 @@ describe("mcp:resources: reading", () => {
     );
   });
 });
+
+describe("mcp:resources: the topics template", () => {
+  const read = (uri: string) => rpc(demo.POST, "bob", "resources/read", { uri });
+
+  test("a path with slashes reads through the template", async () => {
+    const uri = `${NOTES}topics/gifts/wrapping.md`;
+    const res = await read(uri);
+    expect(res.message?.result?.contents).toEqual([
+      { uri, mimeType: "text/markdown", text: expect.stringContaining("Gift wrapping") },
+    ]);
+  });
+
+  test("an unknown topic is resource-not-found", async () => {
+    const uri = `${NOTES}topics/nothing.md`;
+    expect((await read(uri)).message?.error).toMatchObject({ code: -32602, data: { uri } });
+  });
+
+  test("completion offers the topic paths", async () => {
+    const res = await rpc(demo.POST, "bob", "completion/complete", {
+      ref: { type: "ref/resource", uri: `${NOTES}topics/{+path}` },
+      argument: { name: "path", value: "g" },
+    });
+    expect(res.message?.result?.completion).toMatchObject({
+      values: ["gifts/wrapping.md"],
+      hasMore: false,
+    });
+  });
+});

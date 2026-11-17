@@ -453,14 +453,12 @@ describe("opt-in: completion", () => {
     ).toBeDefined();
   });
 
-  test("a resource without @mcp.completion completes nothing, and is no reason for the capability", async () => {
-    // CatalogService.Genres is a resource without @mcp.completion; it is all bob can read.
-    // With nothing to complete for him, the server does not offer completion/complete at all.
+  test("a resource without @mcp.completion completes nothing", async () => {
+    // CatalogService.Genres is a resource without @mcp.completion. Bob still has completion
+    // (the demo's notes template from code completes), but Genres offers no values. That such a
+    // resource alone is no reason for the capability: contract/adapter-resources.test.ts.
     const res = await complete("bob", "cap://CatalogService/Genres/{key}", "1");
-    expect(res.message?.error).toMatchObject({ code: -32601 });
-    const discover = await rpc(demo.POST, "bob", "server/discover");
-    expect(discover.message?.result?.capabilities).toHaveProperty("resources");
-    expect(discover.message?.result?.capabilities).not.toHaveProperty("completions");
+    expect(res.message?.result?.completion).toMatchObject({ values: [], hasMore: false });
   });
 });
 

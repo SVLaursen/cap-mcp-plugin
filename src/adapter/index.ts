@@ -34,6 +34,7 @@ import {
 import {
   ConfirmationRequired,
   Executor,
+  MAX_COMPLETIONS,
   ToolError,
   errorResult,
   type ServiceLike,
@@ -291,7 +292,15 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
           options.log.error(`visible of ${uri} failed; hidden for this request:`, error),
         )
       : [];
-    const templates = options.resources?.templates() ?? [];
+    // The SDK keys templates by name: a cap:// template's name in this model wins.
+    const capNames = new Set(resources.map((r) => r.name));
+    const templates = (options.resources?.templates() ?? []).filter((t) => {
+      if (!capNames.has(t.name)) return true;
+      options.log.error(
+        `${t.uriTemplate} is not served: its name ${t.name} is a cap:// template's name in this model`,
+      );
+      return false;
+    });
     const hasResources =
       resources.length > 0 || uis.length > 0 || fixed.length > 0 || templates.length > 0;
     const listed = { ttlMs: TOOLS_TTL_MS, cacheScope: "private" } as const;
@@ -313,7 +322,7 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
     });
     for (const resource of resources)
       registerResource(server, resource, registry, executor, options);
-    registerCompletion(server, resources, registry, executor, options);
+    registerCompletion(server, resources, templates, caller, { registry, executor, options });
     for (const uri of uis) registerApp(server, uri, apps, options);
     for (const resource of fixed) registerFixed(server, resource, caller, options);
     for (const template of templates) registerFromTemplate(server, template, caller, options);
@@ -422,30 +431,49 @@ function resourceService(
 function registerCompletion(
   server: McpServer,
   resources: ResourceSpec[],
-  registry: ExposureRegistry,
-  executor: Executor,
-  options: AdapterOptions,
+  templates: TemplateResource[],
+  caller: ResourceContext,
+  {
+    registry,
+    executor,
+    options,
+  }: { registry: ExposureRegistry; executor: Executor; options: AdapterOptions },
 ): void {
-  if (!resources.some((r) => r.completion)) return;
+  if (!resources.some((r) => r.completion) && !templates.some((t) => t.complete)) return;
   server.server.registerCapabilities({ completions: {} });
+  const none = { completion: { values: [], hasMore: false } };
   server.server.setRequestHandler("completion/complete", async (request) => {
     const { ref, argument } = request.params;
-    const resource =
-      ref.type === "ref/resource" ? resources.find((r) => r.uriTemplate === ref.uri) : undefined;
+    const uri = ref.type === "ref/resource" ? ref.uri : undefined;
+    const fromCode = templates.find((t) => t.uriTemplate === uri);
+    if (fromCode) {
+      if (!fromCode.complete) return none;
+      try {
+        const values = await fromCode.complete(caller, argument.name, argument.value);
+        return {
+          completion: {
+            values: values.slice(0, MAX_COMPLETIONS),
+            hasMore: values.length > MAX_COMPLETIONS,
+          },
+        };
+      } catch (error) {
+        options.log.error(`complete of ${fromCode.uriTemplate} failed; offering nothing:`, error);
+        return none;
+      }
+    }
+    const resource = resources.find((r) => r.uriTemplate === uri);
     if (!resource) {
-      const what = ref.type === "ref/resource" ? `Resource template ${ref.uri}` : "This reference";
+      const what = uri !== undefined ? `Resource template ${uri}` : "This reference";
       throw new ProtocolError(INVALID_PARAMS, `${what} has no completion`);
     }
-    if (!resource.completion || argument.name !== "key") {
-      return { completion: { values: [], hasMore: false } };
-    }
+    if (!resource.completion || argument.name !== "key") return none;
     try {
       const completion = await resourceService(resource, registry, options).tx((tx) =>
         executor.completeKey(resource.entity, argument.value, tx),
       );
       return { completion };
     } catch (error) {
-      if (errorResult(error)) return { completion: { values: [], hasMore: false } };
+      if (errorResult(error)) return none;
       throw internalError(`completing ${resource.uriTemplate} failed:`, error, options);
     }
   });
