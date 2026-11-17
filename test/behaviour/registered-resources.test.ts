@@ -1,5 +1,5 @@
 import { bootDemo } from "../helpers/demo";
-import { rpc, type Caller } from "../helpers/mcp";
+import { legacyRpc, rpc, type Caller } from "../helpers/mcp";
 
 /**
  * Resources from code (ADR 0013) over /mcp: what demo/server.js registers through
@@ -116,5 +116,53 @@ describe("mcp:resources: the topics template", () => {
       values: ["gifts/wrapping.md"],
       hasMore: false,
     });
+  });
+});
+
+describe("mcp:resources: 2025-era clients (stateless, ADR 0010)", () => {
+  const legacy = (who: Caller, method: string, params: Record<string, unknown> = {}) =>
+    legacyRpc(demo.POST, who, method, params);
+
+  test("they list the same notes and templates per caller", async () => {
+    for (const who of ["alice", "bob"] as const) {
+      const now = await rpc(demo.POST, who, "resources/list");
+      const then = await legacy(who, "resources/list");
+      expect(then.message?.result?.resources).toEqual(now.message?.result?.resources);
+      const templates = await legacy(who, "resources/templates/list");
+      expect(templates.message?.result?.resourceTemplates).toContainEqual(
+        expect.objectContaining({ uriTemplate: `${NOTES}topics/{+path}` }),
+      );
+    }
+  });
+
+  test("they read fixed and template resources, and complete topic paths", async () => {
+    const fixed = await legacy("bob", "resources/read", { uri: `${NOTES}returns-policy.md` });
+    expect(fixed.message?.result?.contents).toEqual([
+      expect.objectContaining({
+        mimeType: "text/markdown",
+        text: expect.stringContaining("30 days"),
+      }),
+    ]);
+    const topic = await legacy("bob", "resources/read", { uri: `${NOTES}topics/shipping.md` });
+    expect(topic.message?.result?.contents).toEqual([
+      expect.objectContaining({ text: expect.stringContaining("Shipping") }),
+    ]);
+    const completion = await legacy("bob", "completion/complete", {
+      ref: { type: "ref/resource", uri: `${NOTES}topics/{+path}` },
+      argument: { name: "path", value: "s" },
+    });
+    expect(completion.message?.result?.completion).toMatchObject({ values: ["shipping.md"] });
+  });
+
+  test("a hidden note, a 404 and an unknown URI answer alike", async () => {
+    const shape = async (uri: string) =>
+      JSON.stringify((await legacy("bob", "resources/read", { uri })).message?.error).replaceAll(
+        uri,
+        "<uri>",
+      );
+    const unknown = await shape(`${NOTES}no-such-note.md`);
+    expect(unknown).toMatch(/code/);
+    expect(await shape(`${NOTES}stock-policy.md`)).toBe(unknown);
+    expect(await shape(`${NOTES}missing.md`)).toBe(unknown);
   });
 });
