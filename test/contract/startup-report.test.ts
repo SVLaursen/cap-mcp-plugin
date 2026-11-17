@@ -1,4 +1,5 @@
-import { docCommentHint, exposureReport } from "../../src/cli/startup-report";
+import { RegisteredResources } from "../../src/adapter/registered-resources";
+import { docCommentHint, exposureReport, registeredReport } from "../../src/cli/startup-report";
 import { ExposureRegistry } from "../../src/exposure-registry";
 import { compileSnippet } from "../helpers/snippet";
 
@@ -76,5 +77,23 @@ describe("startup report: doc comments MCP cannot see (ADR 0011)", () => {
   test("says nothing when the served model has its doc comments", () => {
     const withDocs = ExposureRegistry.fromModel(compileSnippet(source));
     expect(docCommentHint(withDocs, compileSnippet(source))).toBeUndefined();
+  });
+});
+
+describe("startup report: resources from code (ADR 0013)", () => {
+  test("names what mcp:resources listeners registered, sorted", () => {
+    const resources = new RegisteredResources();
+    const note = (uri: string) => ({ uri, name: uri, mimeType: "text/plain", read: () => "" });
+    resources.register(note("notes://x/b.md"));
+    resources.register(note("notes://x/a.md"));
+    resources.registerTemplate({ ...note(""), uriTemplate: "notes://x/t/{+path}", name: "t" });
+    expect(registeredReport(resources)).toEqual({
+      level: "info",
+      text: "from code (mcp:resources): 2 resources (notes://x/a.md, notes://x/b.md), 1 resource template (notes://x/t/{+path})",
+    });
+  });
+
+  test("says nothing when nothing was registered", () => {
+    expect(registeredReport(new RegisteredResources())).toBeUndefined();
   });
 });

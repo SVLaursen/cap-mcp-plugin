@@ -19,6 +19,11 @@ test("the plugin logs what it serves and every diagnostic when the app is served
     "info",
     expect.stringMatching(/^serving \d+ tools, 2 resources, 1 prompt at \/mcp$/),
   ]);
+  // demo/server.js registers notes through mcp:resources (ADR 0013).
+  expect(lines[1]).toEqual([
+    "info",
+    "from code (mcp:resources): 3 resources (notes://bookshop/missing.md, notes://bookshop/returns-policy.md, notes://bookshop/stock-policy.md), 1 resource template (notes://bookshop/topics/{+path})",
+  ]);
   // The demo reads cleanly: nothing but the summary.
   expect(lines.filter(([level]) => level !== "info")).toEqual([]);
 });

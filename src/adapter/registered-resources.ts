@@ -139,3 +139,17 @@ export class RegisteredResources implements ResourceRegistry {
     if (typeof entry.read !== "function") fail(`read of ${uri} must be a function`);
   }
 }
+
+/**
+ * Startup: let `mcp:resources` listeners register (synchronously, during the emit), then close
+ * the registry. Emitted whether or not the app has other resources, so listeners can rely on it.
+ */
+export function setUpResources(emit: (registry: ResourceRegistry) => void): RegisteredResources {
+  const resources = new RegisteredResources();
+  try {
+    emit(resources);
+  } finally {
+    resources.close();
+  }
+  return resources;
+}

@@ -1,3 +1,4 @@
+import type { RegisteredResources } from "../adapter/registered-resources";
 import type { ExposureRegistry } from "../exposure-registry";
 import type { Diagnostic, FieldSpec, UserLike } from "../types";
 
@@ -32,6 +33,21 @@ export function exposureReport(
     .sort((a, b) => ORDER[a.level] - ORDER[b.level])
     .map((d) => ({ level: d.level, text: `${d.code} ${d.target}: ${d.message}` }));
   return [{ level: "info", text: `serving ${summary} at ${path}` }, ...diagnostics];
+}
+
+/** What `mcp:resources` listeners registered (ADR 0013); undefined when nothing was. */
+export function registeredReport(resources: RegisteredResources): ReportLine | undefined {
+  const uris = resources.fixed().map((r) => r.uri);
+  const templates = resources.templates().map((t) => t.uriTemplate);
+  const parts = [
+    ...(uris.length ? [`${count(uris.length, "resource")} (${uris.join(", ")})`] : []),
+    ...(templates.length
+      ? [`${count(templates.length, "resource template")} (${templates.join(", ")})`]
+      : []),
+  ];
+  return parts.length
+    ? { level: "info", text: `from code (mcp:resources): ${parts.join(", ")}` }
+    : undefined;
 }
 
 /** The slice of a CSN definition the doc-comment check reads. */

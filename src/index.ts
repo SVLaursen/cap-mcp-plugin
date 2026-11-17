@@ -3,6 +3,7 @@ import path from "node:path";
 import type { Application, RequestHandler } from "express";
 import { mcpHandler, type RequestContext, type TxService } from "./adapter";
 import { setUpApps } from "./adapter/apps";
+import { setUpResources } from "./adapter/registered-resources";
 import {
   authErrors,
   checkOrigin,
@@ -11,7 +12,7 @@ import {
   requireUser,
   type AuthConfig,
 } from "./adapter/auth";
-import { docCommentHint, exposureReport } from "./cli/startup-report";
+import { docCommentHint, exposureReport, registeredReport } from "./cli/startup-report";
 import { mcpFacet, type FacetCds } from "./cli/add";
 import { mcpBuildTask, type BuildCds } from "./cli/build";
 import { capQueryLimit, readConfig, readInstructions } from "./config";
@@ -112,6 +113,10 @@ export function activate(cds: CdsLike): void {
       .flatMap((s) => s.operations.map((o) => o.ui))
       .filter((uri): uri is string => uri !== undefined);
     const apps = setUpApps(cds.root, linked, (registry) => cds.emit("mcp:apps", registry), log);
+    // Resources from code (ADR 0013): other plugins and app code register them here.
+    const resources = setUpResources((registry) => cds.emit("mcp:resources", registry));
+    const fromCode = registeredReport(resources);
+    if (fromCode) log[fromCode.level](fromCode.text);
     const handler = mcpHandler({
       serverInfo: {
         name: config.name ?? "@gavdi/cap-mcp",
