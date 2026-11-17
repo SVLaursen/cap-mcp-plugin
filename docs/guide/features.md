@@ -31,6 +31,51 @@ annotate AdminService with @mcp;
 `@mcp.resource` does not expose the entity by itself: it needs `@mcp` on the service or the
 entity.
 
+## Resources from code: `mcp:resources`
+
+Some documents an agent should read are not records: a returns policy, a how-to, another
+plugin's knowledge index. Register them from code, in your `server.js` or in a plugin:
+
+```js
+cds.on("mcp:resources", (resources) => {
+  // A few fixed resources, as entry points.
+  resources.register({
+    uri: "notes://bookshop/stock-policy.md",
+    name: "stock-policy",
+    title: "Stock policy",
+    mimeType: "text/markdown",
+    read: ({ locale }) => policyText(locale),
+    visible: ({ user }) => user.is("admin"), // optional; without it everyone sees it
+  });
+  // Many documents behind one template.
+  resources.registerTemplate({
+    uriTemplate: "notes://bookshop/topics/{+path}",
+    name: "bookshop-topics",
+    mimeType: "text/markdown",
+    read: ({ params }) => topicText(params.path), // throw { status: 404 } for an unknown path
+    complete: (ctx, param, value) => topicPaths().filter((p) => p.startsWith(value)),
+  });
+});
+```
+
+- Nothing is served until something registers: this is the opt-in.
+- Register synchronously, inside the listener. Afterwards the registry is closed.
+- URIs must be absolute and canonical (`new URL(uri).href === uri`: encode spaces), and not
+  `cap:` or `ui:`, which the plugin uses itself. A URI registered twice throws, so two plugins
+  never silently replace each other's resources.
+- The callbacks get `{ user, locale, tenant }` of the caller and run inside the request's
+  `cds.context`. Read data the way your own code normally does; the plugin opens no
+  transaction for them.
+- Throw an error with `status: 404` (or `code: "NOT_FOUND"`) for a document that does not
+  exist, or that this caller may not see: the client gets MCP's resource-not-found error. Other
+  errors are logged and reach the client only as "Internal error".
+- Every fixed resource costs a little on every request. Keep them few; put many documents of
+  one kind behind a template. A template's `list` is optional: leave it out for large sets, so
+  `resources/list` stays short.
+
+The demo's `server.js` registers these notes; see
+[the demo app](../../demo/README.md).
+
 ## Prompts
 
 Prompts are reusable instructions the user picks in the client.

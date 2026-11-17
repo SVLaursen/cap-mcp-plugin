@@ -126,7 +126,8 @@ Plugins and app code register MCP resources through a `mcp:resources` event: a f
 - [x] R4 Read fixed resources: text with its MIME type; `ctx.user`, `ctx.locale` and `ctx.tenant` reach `read`; a 404 error becomes resource-not-found with the URI only; any other error is logged and not leaked; a hidden URI answers exactly like an unknown one
 - [x] R5 Templates: listed in `resources/templates/list`; a matching URI reads with `params`; a fixed URI wins over a matching template; `complete` answers `completion/complete` (at most 100, `hasMore`), a throwing `complete` offers nothing; a template named like a `cap://` template is skipped and logged
 - [x] R6 2025-era clients: the same list, read and completion over a stateless 2025-era request
-- [ ] R7 Docs: `docs/annotations.md` "Resources from code (`mcp:resources`)" next to MCP Apps (example, rules, errors, few fixed and templates for many); `docs/architecture.md` request lifecycle; README feature list; ADR 0013 accepted
+- [x] R7 Docs: `docs/annotations.md` "Resources from code (`mcp:resources`)" next to MCP Apps (example, rules, errors, few fixed and templates for many); `docs/architecture.md` request lifecycle and adapter files; the user guide (`docs/guide/features.md`); README feature list and opt-in table
+- [ ] Maintainer: accept ADR 0013 (status proposed until then)
 - [ ] Review: run the `reviewer` agent on the block's diff and fix what it finds, test first
 
 Decided against (maintainer, 2026-11-11):

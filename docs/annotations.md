@@ -105,6 +105,53 @@ every read and may be async. A UI resource is listed and readable only for
 callers who see a tool that links to it. A missing file is a startup warning (unless app code registers that URI), and the tool then
 has no UI link; a registration no `@mcp.ui` links to is a warning and is not served.
 
+**Resources from code** (`mcp:resources`, ADR 0013): app code and other plugins register
+documents that are not CDS records, such as a policy text or a knowledge index. Not an
+annotation: the registration is the opt-in, and with none `/mcp` is unchanged.
+
+```js
+cds.on("mcp:resources", (resources) => {
+  resources.register({
+    uri: "notes://shop/returns.md",
+    name: "returns",
+    mimeType: "text/markdown",
+    read: (ctx) => text,
+    visible: (ctx) => ctx.user.is("admin"),
+  });
+  resources.registerTemplate({
+    uriTemplate: "notes://shop/topics/{+path}",
+    name: "topics",
+    mimeType: "text/markdown",
+    read: (ctx) => topic(ctx.params.path),
+    complete: (ctx, param, value) => paths,
+  });
+});
+```
+
+- The plugin emits `mcp:resources` once, after `mcp:apps`, when CAP has served the app, whether
+  or not anything else produces resources. Register inside the listener, synchronously; after
+  it, `register` and `registerTemplate` throw. `resources.contractVersion` is `1`.
+- `register` throws (`cap-mcp: …`, naming the URI) for a URI that is not absolute or not
+  canonical (`new URL(uri).href` must equal it), the `cap:` and `ui:` schemes, a URI or
+  template registered twice, a second template with the same `name`, a template without a
+  variable, an empty `name` or `mimeType`, and callbacks that are not functions.
+- Every callback gets `{ user, locale, tenant }` from the request's `cds.context` and runs
+  inside it, not in a CAP transaction; nothing it returns is cached. A template's `read` also
+  gets `uri` and `params` (strings).
+- A fixed resource is listed and readable for callers whose `visible` returns `true` (no
+  `visible`: everyone). `visible` is synchronous; one that throws hides the resource for that
+  request. Every template is served to every caller; its `read` decides what exists for whom.
+- A `read` that throws an error with `status` or `statusCode` 404, or `code: "NOT_FOUND"`, gives
+  resource-not-found with the URI only. Any other error is logged and answered as Internal
+  error. A hidden fixed URI answers like an unknown one (or, if a template matches it, the
+  template's `read` answers).
+- `resources/list` holds the MCP App UIs, then the visible fixed resources by URI, then what
+  templates' `list` returns (a `list` that throws adds nothing). Templates appear in
+  `resources/templates/list`; `complete` answers `completion/complete` (at most 100 values,
+  `hasMore`). A template named like a `cap://` template in the request's model is skipped.
+- Fixed resources run on every request (each builds its own server): keep them to a few entry
+  points and serve many documents through one template.
+
 **Completion** (`@mcp.completion` on the key of a single-key `@mcp.resource` entity): a client
 sends `completion/complete` with `ref/resource` and the template
 `cap://<Service>/<Entity>/{key}`; the plugin answers with keys that start with the typed value,

@@ -43,6 +43,8 @@ Inside the larger modules, one file per concern; each module's `index.ts` header
 - `executor/`: `index.ts` (the Executor: one dispatch over the tool target), `arguments.ts`,
   `reads.ts`, `writes.ts` (drafts included), `operations.ts`, `describe.ts`, `resources.ts`,
   `completion.ts`, `errors.ts`, `results.ts`.
+- `adapter/`: `index.ts` (the per-request server factory and the HTTP handler), `auth.ts`,
+  `apps.ts` (MCP Apps, `mcp:apps`), `registered-resources.ts` (`mcp:resources`).
 - `cli/`: `startup-report.ts`, `add.ts` (`cds add mcp`), `build.ts` (the build task).
 
 ## Request lifecycle
@@ -120,6 +122,16 @@ CAP has served the app, then emits `mcp:apps` so app code can register more, and
 that still have no content. Per request, a tool
 keeps its UI link only if the resource has content, and the caller can list and read exactly the
 UIs their tools link to. No dependency on `@modelcontextprotocol/ext-apps` at runtime.
+
+Resources from code (ADR 0013, `adapter/registered-resources.ts`): after `mcp:apps`,
+`activate()` emits `mcp:resources` with a `RegisteredResources` registry, closes it when the
+emit returns, and passes it to the handler. Per request, the factory builds a `ResourceContext`
+(user, locale, tenant from `cds.context`), keeps the fixed resources whose `visible` allows the
+caller, and every template not named like one of the model's `cap://` templates. They count
+towards the `resources` capability and are registered on that request's `McpServer` like the
+UIs; a template's `complete` joins our own `completion/complete` handler. Their callbacks run
+in `cds.context`, outside `srv.tx` (not our CAP data access, ADR 0003); a 404 from `read` is
+resource-not-found, anything else an internal error.
 
 ## Describe tools and access
 
