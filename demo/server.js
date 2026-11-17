@@ -6,6 +6,56 @@ cds.on("mcp:apps", (apps) => {
   apps.register("ui://bookshop/stock-chart.html", stockChart);
 });
 
+// Resources from code (docs/annotations.md, ADR 0013): documents for agents, registered by app
+// code or another plugin. A few fixed resources for entry points, a template for many.
+cds.on("mcp:resources", (resources) => {
+  resources.register({
+    uri: "notes://bookshop/returns-policy.md",
+    name: "returns-policy",
+    title: "Returns policy",
+    description: "How customers return books",
+    mimeType: "text/markdown",
+    read: () => "# Returns policy\n\nBooks can be returned within 30 days, unread.\n",
+  });
+  resources.register({
+    uri: "notes://bookshop/stock-policy.md",
+    name: "stock-policy",
+    title: "Stock policy",
+    description: "When to restock (admins only)",
+    mimeType: "text/markdown",
+    read: ({ locale }) => `# Stock policy (${locale ?? "no locale"})\n\nRestock below 10 copies.\n`,
+    visible: ({ user }) => user.is("admin"),
+  });
+  resources.register({
+    uri: "notes://bookshop/missing.md",
+    name: "missing",
+    mimeType: "text/markdown",
+    read: () => {
+      throw Object.assign(new Error("This note was deleted"), { status: 404 });
+    },
+  });
+  resources.registerTemplate({
+    uriTemplate: "notes://bookshop/topics/{+path}",
+    name: "bookshop-topics",
+    title: "Bookshop topics",
+    description: "Short notes on shop topics, by path",
+    mimeType: "text/markdown",
+    read: ({ params }) => {
+      const text = TOPICS[params.path];
+      if (text === undefined) throw Object.assign(new Error("No such topic"), { status: 404 });
+      return text;
+    },
+    complete: (_ctx, param, value) =>
+      param === "path" ? Object.keys(TOPICS).filter((p) => p.startsWith(value)) : [],
+  });
+});
+
+/** The notes behind notes://bookshop/topics/{+path}; a real plugin would read files. */
+const TOPICS = {
+  "shipping.md": "# Shipping\n\nOrders ship within two working days.\n",
+  "gifts/wrapping.md": "# Gift wrapping\n\nAny book can be gift-wrapped for free.\n",
+};
+
 /**
  * The UI of CatalogService.stockByGenre: the genre (from the tool's arguments) and its stock as a
  * bar. Built in code to show the hook; a real app might render a template or read a bundle here.
