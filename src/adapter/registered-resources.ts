@@ -153,3 +153,23 @@ export function setUpResources(emit: (registry: ResourceRegistry) => void): Regi
   }
   return resources;
 }
+
+/**
+ * The fixed resources this caller may see: no `visible`, or `visible(ctx)` is true. A `visible`
+ * that throws hides its resource for this request; `onError` reports it.
+ */
+export function visibleFixed(
+  resources: RegisteredResources,
+  ctx: ResourceContext,
+  onError: (uri: string, error: unknown) => void,
+): FixedResource[] {
+  return resources.fixed().filter((resource) => {
+    if (!resource.visible) return true;
+    try {
+      return resource.visible(ctx) === true;
+    } catch (error) {
+      onError(resource.uri, error);
+      return false;
+    }
+  });
+}

@@ -127,6 +127,7 @@ export function activate(cds: CdsLike): void {
       model: () => cds.model as object,
       registryFor,
       apps,
+      resources,
       services: cds.services,
       translate: (key, locale, args) => {
         // at(key, args) when there is no locale: CAP reads a non-string 2nd argument as args, so

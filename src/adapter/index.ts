@@ -24,6 +24,13 @@ import type { RequestHandler } from "express";
 import { APP_MIME_TYPE, McpApps, linkedUri } from "./apps";
 import { isProduction } from "./auth";
 import {
+  visibleFixed,
+  type FixedResource,
+  type RegisteredResources,
+  type ResourceContext,
+  type TemplateResource,
+} from "./registered-resources";
+import {
   ConfirmationRequired,
   Executor,
   ToolError,
@@ -64,6 +71,7 @@ export interface RequestContext {
   user: UserLike;
   model?: object;
   locale?: string;
+  tenant?: string;
 }
 
 /** A message bundle lookup, as `cds.i18n.messages.at(key, locale, args)`. */
@@ -87,6 +95,8 @@ export interface AdapterOptions {
   registryFor(model: object): ExposureRegistry;
   /** MCP App UI resources (ADR 0012); none when omitted. */
   apps?: McpApps;
+  /** Resources from code (`mcp:resources`, ADR 0013); none when omitted. */
+  resources?: RegisteredResources;
   /** CAP services by name (cds.services). */
   services: Record<string, TxService | undefined>;
   /** CAP's messages (cds.i18n.messages.at), so errors read as they do over OData. */
@@ -273,7 +283,16 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
     const uis = [
       ...new Set(tools.map((t) => linkedUri(t._meta)).filter((u) => u !== undefined)),
     ].sort();
-    const hasResources = resources.length > 0 || uis.length > 0;
+    // Resources from code (ADR 0013): the fixed ones this caller may see, and every template.
+    const caller: ResourceContext = { user, locale: context.locale, tenant: context.tenant };
+    const fixed = options.resources
+      ? visibleFixed(options.resources, caller, (uri, error) =>
+          options.log.error(`visible of ${uri} failed; hidden for this request:`, error),
+        )
+      : [];
+    const templates = options.resources?.templates() ?? [];
+    const hasResources =
+      resources.length > 0 || uis.length > 0 || fixed.length > 0 || templates.length > 0;
     const listed = { ttlMs: TOOLS_TTL_MS, cacheScope: "private" } as const;
     const server = new McpServer(options.serverInfo, {
       ...(options.instructions && { instructions: options.instructions }),
@@ -295,6 +314,8 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
       registerResource(server, resource, registry, executor, options);
     registerCompletion(server, resources, registry, executor, options);
     for (const uri of uis) registerApp(server, uri, apps, options);
+    for (const resource of fixed) registerFixed(server, resource, caller);
+    for (const template of templates) registerFromTemplate(server, template, caller, options);
     for (const prompt of prompts) registerPrompt(server, prompt, argsSchemaFor(prompt));
     for (const { tool, _meta } of tools) {
       server.registerTool(
@@ -450,6 +471,56 @@ function registerApp(server: McpServer, uri: string, apps: McpApps, options: Ada
       throw internalError(`reading ${uri} failed:`, error, options);
     }
   });
+}
+
+/** A fixed resource from code (ADR 0013): `read` inside the request's cds.context, no srv.tx. */
+function registerFixed(
+  server: McpServer,
+  resource: FixedResource,
+  caller: ResourceContext,
+): void {
+  const { uri, name, title, description, mimeType } = resource;
+  server.registerResource(
+    name,
+    uri,
+    { mimeType, ...(title && { title }), ...(description && { description }) },
+    async () => {
+      return { contents: [{ uri, mimeType, text: await resource.read(caller) }] };
+    },
+  );
+}
+
+/** A resource template from code (ADR 0013): `list` and `read` run as the caller. */
+function registerFromTemplate(
+  server: McpServer,
+  template: TemplateResource,
+  caller: ResourceContext,
+  options: AdapterOptions,
+): void {
+  const { uriTemplate, name, title, description, mimeType, list } = template;
+  const listed = list
+    ? async () => {
+        try {
+          return { resources: await list.call(template, caller) };
+        } catch (error) {
+          // One failing template must not break resources/list for everything else.
+          options.log.error(`list of ${uriTemplate} failed; it adds nothing:`, error);
+          return { resources: [] };
+        }
+      }
+    : undefined;
+  server.registerResource(
+    name,
+    new ResourceTemplate(uriTemplate, { list: listed }),
+    { mimeType, ...(title && { title }), ...(description && { description }) },
+    async (uri, variables) => {
+      const params = Object.fromEntries(
+        Object.entries(variables).map(([key, value]) => [key, [value].flat().join(",")]),
+      );
+      const text = await template.read({ ...caller, uri: uri.href, params });
+      return { contents: [{ uri: uri.href, mimeType, text }] };
+    },
+  );
 }
 
 /** One @mcp.prompts entry: its template as one message, arguments checked by the SDK. */

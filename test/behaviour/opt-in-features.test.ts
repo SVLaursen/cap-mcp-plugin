@@ -207,11 +207,11 @@ describe("opt-in: resources", () => {
 
   test("resources/list does not enumerate whole tables", async () => {
     const list = await rpc(demo.POST, "alice", "resources/list");
-    // Only MCP App UIs (ui://) are listed; never cap:// records.
+    // Never cap:// records (the demo also lists ui:// apps and notes from code, ADR 0013).
     const listed = list.message?.result?.resources as { uri: string }[];
-    expect(listed.filter((r) => !r.uri.startsWith("ui://"))).toEqual([]);
+    expect(listed.filter((r) => r.uri.startsWith("cap://"))).toEqual([]);
     const templates = await rpc(demo.POST, "alice", "resources/templates/list");
-    expect(templates.message?.result?.resourceTemplates).toEqual([
+    expect(capTemplates(templates.message?.result?.resourceTemplates)).toEqual([
       expect.objectContaining({
         uriTemplate: "cap://AdminService/Authors/{key}",
         name: "AdminService_Authors",
@@ -229,7 +229,7 @@ describe("opt-in: resources", () => {
     expect(got.links).toBeUndefined();
     // Bob cannot reach AdminService: not its template, and its resource is not found for him.
     const templates = await rpc(demo.POST, "bob", "resources/templates/list");
-    expect(templates.message?.result?.resourceTemplates).toEqual([
+    expect(capTemplates(templates.message?.result?.resourceTemplates)).toEqual([
       expect.objectContaining({ uriTemplate: "cap://CatalogService/Genres/{key}" }),
     ]);
     expect((await read("bob", "cap://AdminService/Authors/101")).message?.error).toBeDefined();
@@ -463,3 +463,8 @@ describe("opt-in: completion", () => {
     expect(discover.message?.result?.capabilities).not.toHaveProperty("completions");
   });
 });
+
+/** The cap:// record templates in a resources/templates/list result (not templates from code). */
+function capTemplates(templates: unknown): unknown[] {
+  return (templates as { uriTemplate: string }[]).filter((t) => t.uriTemplate.startsWith("cap://"));
+}
