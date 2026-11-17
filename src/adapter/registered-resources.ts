@@ -1,3 +1,4 @@
+import { UriTemplate } from "@modelcontextprotocol/server";
 import { compareText } from "../util";
 
 /**
@@ -73,6 +74,8 @@ export class RegisteredResources implements ResourceRegistry {
   readonly contractVersion = 1 as const;
   readonly #fixed = new Map<string, FixedResource>();
   readonly #templates = new Map<string, TemplateResource>();
+  /** Each template's variable names, parsed once. */
+  readonly #variables = new Map<string, string[]>();
   #closed = false;
 
   register(resource: FixedResource): void {
@@ -97,7 +100,25 @@ export class RegisteredResources implements ResourceRegistry {
     const uri = template?.uriTemplate;
     if (typeof uri !== "string" || !SCHEME.test(uri))
       fail(`a resource template needs an absolute URI template, got ${String(uri)}`);
-    if (!/\{[^}\s]+\}/.test(uri)) fail(`${uri} has no variable; register it as a fixed resource`);
+    // Parsed as the SDK will parse it on every request: a bad template must fail startup.
+    let names: string[] = [];
+    try {
+      names = new UriTemplate(uri).variableNames;
+    } catch {
+      fail(`${uri} is not a valid URI template`);
+    }
+    if (names.length === 0) fail(`${uri} has no variable; register it as a fixed resource`);
+    if (names.some((n) => !n)) fail(`${uri} is not a valid URI template`);
+    // The SDK matches against new URL(uri).toString(): a template that URL would rewrite never
+    // matches. Expand it with a plain value and check that URL leaves it alone.
+    const expanded = new UriTemplate(uri).expand(Object.fromEntries(names.map((n) => [n, "v"])));
+    let href: string | undefined;
+    try {
+      href = new URL(expanded).href;
+    } catch {
+      fail(`${uri} is not a valid URI template`);
+    }
+    if (href !== expanded) fail(`${uri} is not canonical; it would be read as ${href}`);
     this.#check(uri, template);
     for (const key of ["list", "complete"] as const) {
       if (template[key] !== undefined && typeof template[key] !== "function")
@@ -108,6 +129,12 @@ export class RegisteredResources implements ResourceRegistry {
     if (clash)
       fail(`${uri}: there is already a template named ${template.name} (${clash.uriTemplate})`);
     this.#templates.set(uri, template);
+    this.#variables.set(uri, names);
+  }
+
+  /** The variable names of a registered template. */
+  variables(uriTemplate: string): string[] {
+    return this.#variables.get(uriTemplate) ?? [];
   }
 
   /** After the event: later registrations throw. */

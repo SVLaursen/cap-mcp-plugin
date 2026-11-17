@@ -75,3 +75,11 @@ test("mcp:resources is emitted once, after mcp:apps, with an open registry that 
   expect(events.map(([event]) => event)).toEqual(["mcp:apps", "mcp:resources"]);
   expect(lateRegister).toThrow(/after the mcp:resources event/);
 });
+
+test("a bad registration fails startup with the plugin's message", () => {
+  const { served } = fakeCds({}, (event, registry) => {
+    if (event === "mcp:resources")
+      (registry as { register(r: unknown): void }).register({ uri: "no-scheme", name: "x" });
+  });
+  expect(served).toThrow(/^cap-mcp: /);
+});

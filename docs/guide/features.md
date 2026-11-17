@@ -59,13 +59,16 @@ cds.on("mcp:resources", (resources) => {
 ```
 
 - Nothing is served until something registers: this is the opt-in.
-- Register synchronously, inside the listener. Afterwards the registry is closed.
+- Register synchronously, inside the listener, not after an `await`. Afterwards the registry
+  is closed, and a registration that throws fails startup with a `cap-mcp:` message.
 - URIs must be absolute and canonical (`new URL(uri).href === uri`: encode spaces), and not
   `cap:` or `ui:`, which the plugin uses itself. A URI registered twice throws, so two plugins
   never silently replace each other's resources.
 - The callbacks get `{ user, locale, tenant }` of the caller and run inside the request's
   `cds.context`. Read data the way your own code normally does; the plugin opens no
   transaction for them.
+- `params` arrive exactly as sent, still percent-encoded. Treat them as untrusted: decode and
+  check a path before you read a file with it.
 - Throw an error with `status: 404` (or `code: "NOT_FOUND"`) for a document that does not
   exist, or that this caller may not see: the client gets MCP's resource-not-found error. Other
   errors are logged and reach the client only as "Internal error".

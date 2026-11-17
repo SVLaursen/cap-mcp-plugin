@@ -1,10 +1,33 @@
-import { bootDemo } from "../helpers/demo";
+import cds from "@sap/cds";
+import { as, bootDemo } from "../helpers/demo";
 import { legacyRpc, rpc, type Caller } from "../helpers/mcp";
 
 /**
  * Resources from code (ADR 0013) over /mcp: what demo/server.js registers through
  * `mcp:resources`, as each demo user gets it.
  */
+// Test-only: a read that uses cds.context and a CAP service, as a plugin like cap-okf would.
+(cds as unknown as { on(e: string, fn: (r: { register(r: unknown): void }) => void): void }).on(
+  "mcp:resources",
+  (resources) => {
+    resources.register({
+      uri: "test://context/orders.json",
+      name: "orders-as-caller",
+      mimeType: "application/json",
+      read: async () => {
+        const srv = await cds.connect.to("OrdersService");
+        const rows = (await srv.run(
+          SELECT.from("OrdersService.Orders").columns("orderNo").orderBy("orderNo"),
+        )) as { orderNo: string }[];
+        return JSON.stringify({
+          user: cds.context?.user?.id,
+          orderNos: rows.map((r) => r.orderNo),
+        });
+      },
+    });
+  },
+);
+
 const demo = bootDemo();
 
 const NOTES = "notes://bookshop/";
@@ -164,5 +187,19 @@ describe("mcp:resources: 2025-era clients (stateless, ADR 0010)", () => {
     expect(unknown).toMatch(/code/);
     expect(await shape(`${NOTES}stock-policy.md`)).toBe(unknown);
     expect(await shape(`${NOTES}missing.md`)).toBe(unknown);
+  });
+});
+
+describe("mcp:resources: callbacks run in the request's cds.context", () => {
+  test("read sees the caller as cds.context.user, and CAP applies @restrict to what it reads", async () => {
+    const res = await rpc(demo.POST, "bob", "resources/read", {
+      uri: "test://context/orders.json",
+    });
+    const [content] = res.message?.result?.contents as { text: string }[];
+    const odata = await demo.GET("/orders/Orders?$select=orderNo&$orderby=orderNo", as("bob"));
+    expect(JSON.parse(content?.text ?? "{}")).toEqual({
+      user: "bob",
+      orderNos: odata.data.value.map((o: { orderNo: string }) => o.orderNo),
+    });
   });
 });

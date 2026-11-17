@@ -51,6 +51,14 @@ export interface CdsLike {
 }
 
 export type { McpConfig } from "./config";
+/** The `mcp:resources` contract (ADR 0013), for listeners written in TypeScript. Types only. */
+export type {
+  FixedResource,
+  ListedResource,
+  ResourceContext,
+  ResourceRegistry,
+  TemplateResource,
+} from "./adapter/registered-resources";
 
 export const MCP_PATH = "/mcp";
 

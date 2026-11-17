@@ -85,14 +85,18 @@ interface ListedResource {
 ### Registration (startup)
 
 Listeners register synchronously while the event runs. Afterwards the registry is closed, and
-`register` and `registerTemplate` throw. Each of these throws a `cap-mcp: …` error naming the
+`register` and `registerTemplate` throw (so does a listener that awaits something first and
+registers after it). A registration that throws fails startup. Each of these throws a `cap-mcp: …` error naming the
 URI:
 
 - `uri` is not an absolute URI, or not in canonical form (`new URL(uri).href !== uri`);
 - `uri` or `uriTemplate` uses the `cap:` or `ui:` scheme (records and MCP Apps stay ours);
 - a duplicate `uri`, a duplicate `uriTemplate`, or a duplicate template `name` (the SDK keys
   templates by name);
-- a missing or empty `name`, `mimeType` or `uriTemplate`, or a template without a variable;
+- a `uriTemplate` the SDK's `UriTemplate` cannot parse, one without a variable, or one that is
+  not canonical once expanded (the SDK matches templates against `new URL(uri).toString()`
+  too, so `Notes://…` or `https://Example.com/…` would never match);
+- a missing or empty `name`, `mimeType` or `uriTemplate`;
 - `read` is not a function, or `visible`, `list` or `complete` is given and is not one.
 
 Duplicate names of fixed resources are allowed: MCP does not require them to be unique. The
@@ -101,32 +105,41 @@ startup report lists the registered fixed URIs and templates, sorted.
 ### Per request
 
 - **Visibility.** A fixed resource is added when it has no `visible`, or `visible(ctx)` returns
-  `true`. A `visible` that throws hides the resource for that request and is logged once. Every
+  `true`. A `visible` that throws hides the resource while it throws, and is logged once per activation
+  (not on every request). Every
   registered template is added for every caller; its `read` decides what exists for that caller.
 - **Capability.** The `resources` capability (`listChanged: false`) and the private cache hints
   are advertised when the caller has any resource: a `cap://` template, a `ui://` app, a visible
   fixed resource, or a registered template. Without any, `/mcp` behaves as before.
 - **Order.** `resources/list` holds the `ui://` apps, then the visible fixed resources sorted by
-  URI, then what the templates' `list` returns. A `list` that throws is logged and adds nothing;
-  the rest of the list still answers.
+  URI, then what the templates' `list` returns. A `list` that throws or returns no array is logged
+  and adds nothing; the rest of the list still answers. Only entries with a string `uri` and
+  `name`, outside the `cap:` and `ui:` schemes, are passed on, and only `uri`, `name`, `title`
+  and `description`; the SDK adds the template's `mimeType` (and its `title` and `description`
+  where the entry has none).
 - **Context.** `read`, `list`, `complete` and `visible` run inside the request's `cds.context`
   (user, tenant, locale) and are not wrapped in `srv.tx`: they are not CAP data access through
   this plugin (ADR 0003 applies to what we run; the registering code owns its own). Nothing they
   return is cached across requests.
 - **Templates.** A matching URI calls `read` with the `uri` and the template's `params` as
-  strings. A fixed URI wins over a template that matches it (the SDK checks fixed first).
-  `completion/complete` for a registered template calls `complete`; at most 100 values are
+  strings, exactly as sent: still percent-encoded and untrusted (decode and check them before
+  using one as a path). Overlapping templates match in the order of their sorted
+  `uriTemplate`s. A fixed URI wins over a template that matches it (the SDK checks fixed first).
+  `completion/complete` for a registered template calls `complete` for its own variables only
+  (any other argument name offers nothing); at most 100 values are
   returned, with `hasMore` when there are more. A `complete` that throws is logged and offers
   nothing, as a CAP refusal does for `cap://` keys.
 - **Names.** A registered template whose name equals a `cap://` template's name in the request's
-  model is not added for that request, and is logged. The tenant's model decides `cap://` names,
-  so this cannot be checked once at startup.
+  model (any of them, whoever may read it, so the answer does not depend on roles) is not added,
+  and is logged once per model. The tenant's model decides `cap://` names, so this cannot be
+  checked once at startup.
 
 ### Errors
 
 - An error from `read` with `status` or `statusCode` 404, or `code: "NOT_FOUND"`, becomes the
   protocol's resource-not-found error, with the URI only. Its message is not passed on: it was
   written for the plugin, not for agents.
+- A `read` that returns anything but a string is an internal error.
 - Any other error goes through the internal-error path: logged, and answered as JSON-RPC
   Internal error, with the message only outside production (as for `cap://` today).
 - A fixed resource a caller cannot see is not on that request's server, so reading it answers

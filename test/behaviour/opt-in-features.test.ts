@@ -207,9 +207,10 @@ describe("opt-in: resources", () => {
 
   test("resources/list does not enumerate whole tables", async () => {
     const list = await rpc(demo.POST, "alice", "resources/list");
-    // Never cap:// records (the demo also lists ui:// apps and notes from code, ADR 0013).
+    // Never cap:// records: only MCP App UIs and the demo's notes from code (ADR 0013).
     const listed = list.message?.result?.resources as { uri: string }[];
-    expect(listed.filter((r) => r.uri.startsWith("cap://"))).toEqual([]);
+    const allowed = (uri: string) => uri.startsWith("ui://") || uri.startsWith("notes://bookshop/");
+    expect(listed.filter((r) => !allowed(r.uri))).toEqual([]);
     const templates = await rpc(demo.POST, "alice", "resources/templates/list");
     expect(capTemplates(templates.message?.result?.resourceTemplates)).toEqual([
       expect.objectContaining({

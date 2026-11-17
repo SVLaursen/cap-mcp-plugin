@@ -135,6 +135,15 @@ export class ExposureRegistry {
     );
   }
 
+  /** The names of every cap:// template in the model, whoever may read them. */
+  resourceNames(): string[] {
+    return this.spec.services.flatMap((service) =>
+      service.entities
+        .filter((e) => e.resource && e.modes.has("get"))
+        .map((e) => resourceSpec(service, e).name),
+    );
+  }
+
   /**
    * The @mcp.prompts of every service this user can reach (its @requires), sorted by name.
    * A prompt is text for the user to send; it reads nothing, but it names the service's data,

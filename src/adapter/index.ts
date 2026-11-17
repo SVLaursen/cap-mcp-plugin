@@ -27,6 +27,7 @@ import {
   isNotFound,
   visibleFixed,
   type FixedResource,
+  type ListedResource,
   type RegisteredResources,
   type ResourceContext,
   type TemplateResource,
@@ -268,6 +269,31 @@ function confirmation(
 /** The per-request server factory: one McpServer with the caller's tools. */
 export function serverFactory(options: AdapterOptions): McpServerFactory {
   const { executorFor, schemaFor, argsSchemaFor } = caches();
+  // Problems with registrations from code are logged once per activation, not per request.
+  const reported = new Set<string>();
+  const once = (key: string, ...message: unknown[]) => {
+    if (reported.has(key)) return;
+    reported.add(key);
+    options.log.error(...message);
+  };
+  // Per model: the code templates whose names do not clash with its cap:// templates.
+  const servedTemplates = new WeakMap<ExposureRegistry, TemplateResource[]>();
+  const templatesFor = (registry: ExposureRegistry): TemplateResource[] => {
+    let kept = servedTemplates.get(registry);
+    if (!kept) {
+      // Every cap:// template in the model, not only the caller's: the answer must not depend on roles.
+      const capNames = new Set(registry.resourceNames());
+      kept = (options.resources?.templates() ?? []).filter((t) => {
+        if (!capNames.has(t.name)) return true;
+        options.log.error(
+          `${t.uriTemplate} is not served: its name ${t.name} is a cap:// template's name in this model`,
+        );
+        return false;
+      });
+      servedTemplates.set(registry, kept);
+    }
+    return kept;
+  };
   return ({ era }) => {
     const context = options.context();
     if (!context)
@@ -289,18 +315,11 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
     const caller: ResourceContext = { user, locale: context.locale, tenant: context.tenant };
     const fixed = options.resources
       ? visibleFixed(options.resources, caller, (uri, error) =>
-          options.log.error(`visible of ${uri} failed; hidden for this request:`, error),
+          once(`visible ${uri}`, `visible of ${uri} failed; hidden while it fails:`, error),
         )
       : [];
     // The SDK keys templates by name: a cap:// template's name in this model wins.
-    const capNames = new Set(resources.map((r) => r.name));
-    const templates = (options.resources?.templates() ?? []).filter((t) => {
-      if (!capNames.has(t.name)) return true;
-      options.log.error(
-        `${t.uriTemplate} is not served: its name ${t.name} is a cap:// template's name in this model`,
-      );
-      return false;
-    });
+    const templates = templatesFor(registry);
     const hasResources =
       resources.length > 0 || uis.length > 0 || fixed.length > 0 || templates.length > 0;
     const listed = { ttlMs: TOOLS_TTL_MS, cacheScope: "private" } as const;
@@ -322,7 +341,12 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
     });
     for (const resource of resources)
       registerResource(server, resource, registry, executor, options);
-    registerCompletion(server, resources, templates, caller, { registry, executor, options });
+    registerCompletion(server, resources, templates, caller, {
+      registry,
+      executor,
+      options,
+      variables: (t) => options.resources?.variables(t.uriTemplate) ?? [],
+    });
     for (const uri of uis) registerApp(server, uri, apps, options);
     for (const resource of fixed) registerFixed(server, resource, caller, options);
     for (const template of templates) registerFromTemplate(server, template, caller, options);
@@ -437,7 +461,13 @@ function registerCompletion(
     registry,
     executor,
     options,
-  }: { registry: ExposureRegistry; executor: Executor; options: AdapterOptions },
+    variables,
+  }: {
+    registry: ExposureRegistry;
+    executor: Executor;
+    options: AdapterOptions;
+    variables: (template: TemplateResource) => string[];
+  },
 ): void {
   if (!resources.some((r) => r.completion) && !templates.some((t) => t.complete)) return;
   server.server.registerCapabilities({ completions: {} });
@@ -447,7 +477,7 @@ function registerCompletion(
     const uri = ref.type === "ref/resource" ? ref.uri : undefined;
     const fromCode = templates.find((t) => t.uriTemplate === uri);
     if (fromCode) {
-      if (!fromCode.complete) return none;
+      if (!fromCode.complete || !variables(fromCode).includes(argument.name)) return none;
       try {
         const values = await fromCode.complete(caller, argument.name, argument.value);
         return {
@@ -528,7 +558,12 @@ function registerFromTemplate(
   const listed = list
     ? async () => {
         try {
-          return { resources: await list.call(template, caller) };
+          const result: unknown = await list.call(template, caller);
+          if (!Array.isArray(result)) {
+            options.log.error(`list of ${uriTemplate} returned no array; it adds nothing:`, result);
+            return { resources: [] };
+          }
+          return { resources: result.filter(isListable).map(listedEntry) };
         } catch (error) {
           // One failing template must not break resources/list for everything else.
           options.log.error(`list of ${uriTemplate} failed; it adds nothing:`, error);
@@ -563,12 +598,30 @@ async function readFromCode(
   read: () => string | Promise<string>,
   options: AdapterOptions,
 ): Promise<string> {
+  let text: unknown;
   try {
-    return await read();
+    text = await read();
   } catch (error) {
     if (isNotFound(error)) throw new ResourceNotFoundError(uri);
     throw internalError(`reading ${uri} failed:`, error, options);
   }
+  if (typeof text !== "string") {
+    const error = new Error(`read returned ${typeof text}, not text`);
+    throw internalError(`reading ${uri} failed:`, error, options);
+  }
+  return text;
+}
+
+/** A template's `list` entry we pass on: a string URI outside our own schemes, and a name. */
+function isListable(entry: unknown): entry is ListedResource {
+  if (!entry || typeof entry !== "object") return false;
+  const { uri, name } = entry as Record<string, unknown>;
+  return typeof uri === "string" && typeof name === "string" && !/^(cap|ui):/i.test(uri);
+}
+
+/** Only the fields MCP lists; anything else a registrant returned stays on the server. */
+function listedEntry({ uri, name, title, description }: ListedResource): ListedResource {
+  return { uri, name, ...(title && { title }), ...(description && { description }) };
 }
 
 /** One @mcp.prompts entry: its template as one message, arguments checked by the SDK. */

@@ -174,7 +174,8 @@ describe("mcp:resources: listing per caller (ADR 0013)", () => {
         mimeType: "text/markdown",
       },
       { uri: "notes://x/z.md", name: "z.md", mimeType: "text/markdown" },
-      expect.objectContaining({ uri: "notes://x/topics/b.md", name: "b", title: "B" }),
+      // A listed entry inherits the template's metadata unless it has its own.
+      { uri: "notes://x/topics/b.md", name: "b", title: "B", mimeType: "text/markdown" },
     ]);
     expect(res.result).toMatchObject({ cacheScope: "private" });
   });
@@ -389,5 +390,101 @@ describe("mcp:resources: templates (ADR 0013)", () => {
       (res.result?.resourceTemplates as { uriTemplate: string }[]).map((t) => t.uriTemplate),
     ).toEqual(["cap://S/Books/{key}"]);
     expect(errors).toEqual([[expect.stringMatching(/notes:\/\/x\/topics\/\{\+path\}.*S_Books/)]]);
+  });
+});
+
+describe("mcp:resources: review fixes (ADR 0013)", () => {
+  test("a template named like a cap:// template is skipped for callers who cannot see that template too", async () => {
+    const cdl = `@mcp @requires: 'admin' service S { @mcp.resource entity Books { key ID : Integer; } }`;
+    const clashing = topics({ name: "S_Books" });
+    const { call, errors } = serve({ cdl, templates: [clashing] });
+    const res = await call("resources/templates/list");
+    expect(res.result?.resourceTemplates ?? []).toEqual([]);
+    expect(errors).toHaveLength(1);
+  });
+
+  test("a clash and a throwing visible are logged once, not on every request", async () => {
+    const cdl = `@mcp service S { @mcp.resource entity Books { key ID : Integer; } }`;
+    const broken = note("notes://x/broken.md", {
+      visible: () => {
+        throw new Error("boom");
+      },
+    });
+    const { call, errors } = serve({
+      cdl,
+      fixed: [broken],
+      templates: [topics({ name: "S_Books" })],
+    });
+    await call("resources/list");
+    await call("tools/list");
+    expect(errors).toHaveLength(2);
+  });
+
+  test("a list that returns no array adds nothing; entries with reserved or no URIs are dropped", async () => {
+    const odd = topics({ list: () => undefined as never });
+    const sneaky = topics({
+      uriTemplate: "notes://x/other/{id}",
+      name: "other",
+      list: () => [
+        { uri: "cap://S/Books/1", name: "record" },
+        { uri: "ui://x/app.html", name: "app" },
+        { uri: 42 as never, name: "number" },
+        { uri: "notes://x/other/1", name: "one" },
+      ],
+    });
+    const { call, errors } = serve({ fixed: [note("notes://x/a.md")], templates: [odd, sneaky] });
+    const res = await inProduction(() => call("resources/list"));
+    expect((res.result?.resources as { uri: string }[]).map((r) => r.uri)).toEqual([
+      "notes://x/a.md",
+      "notes://x/other/1",
+    ]);
+    expect(errors).toEqual([[expect.stringContaining("notes://x/topics/{+path}"), undefined]]);
+  });
+
+  test("a read that returns no string is an Internal error", async () => {
+    const uri = "notes://x/a.md";
+    const { call, errors } = serve({ fixed: [note(uri, { read: () => undefined as never })] });
+    const res = await inProduction(() => call("resources/read", { uri }));
+    expect(res.error).toMatchObject({ code: -32603, message: "Internal error" });
+    expect(errors).toHaveLength(1);
+  });
+
+  test("complete is asked only about the template's own variables", async () => {
+    const complete = jest.fn(() => ["x"]);
+    const { call } = serve({ templates: [topics({ complete })] });
+    const res = await call("completion/complete", {
+      ref: { type: "ref/resource", uri: "notes://x/topics/{+path}" },
+      argument: { name: "other", value: "" },
+    });
+    expect(res.result?.completion).toMatchObject({ values: [], hasMore: false });
+    expect(complete).not.toHaveBeenCalled();
+  });
+
+  test("template params arrive as sent, still percent-encoded", async () => {
+    const seen: Record<string, string>[] = [];
+    const template = topics({
+      uriTemplate: "notes://x/item/{id}",
+      name: "item",
+      read: ({ params }) => {
+        seen.push(params);
+        return "x";
+      },
+    });
+    const { call } = serve({ templates: [template] });
+    await call("resources/read", { uri: "notes://x/item/a%2Fb" });
+    expect(seen).toEqual([{ id: "a%2Fb" }]);
+  });
+
+  test("nothing a callback returns is cached across requests", async () => {
+    let n = 0;
+    const { call } = serve({ fixed: [note("notes://x/a.md", { read: () => `read ${++n}` })] });
+    const text = async () =>
+      (
+        (await call("resources/read", { uri: "notes://x/a.md" })).result?.contents as {
+          text: string;
+        }[]
+      )[0]?.text;
+    expect(await text()).toBe("read 1");
+    expect(await text()).toBe("read 2");
   });
 });
