@@ -50,3 +50,43 @@ describe("mcp:resources: listing", () => {
     );
   });
 });
+
+describe("mcp:resources: reading", () => {
+  const read = (who: Caller, uri: string, headers: Record<string, string> = {}) =>
+    rpc(demo.POST, who, "resources/read", { uri }, { headers });
+
+  test("a public note reads as Markdown", async () => {
+    const res = await read("bob", `${NOTES}returns-policy.md`);
+    expect(res.message?.result?.contents).toEqual([
+      {
+        uri: `${NOTES}returns-policy.md`,
+        mimeType: "text/markdown",
+        text: expect.stringContaining("within 30 days"),
+      },
+    ]);
+  });
+
+  test("read gets the request's locale from cds.context", async () => {
+    const res = await read("alice", `${NOTES}stock-policy.md`, { "accept-language": "de" });
+    const [content] = res.message?.result?.contents as { text: string }[];
+    expect(content?.text).toContain("Stock policy (de)");
+  });
+
+  test("a note whose read throws a 404 is resource-not-found", async () => {
+    const uri = `${NOTES}missing.md`;
+    const res = await read("bob", uri);
+    expect(res.message?.error).toMatchObject({ code: -32602, data: { uri } });
+    expect(JSON.stringify(res.message)).not.toMatch(/was deleted/);
+  });
+
+  test("bob reading the admins' note gets the same answer as for a note that does not exist", async () => {
+    const hidden = await read("bob", `${NOTES}stock-policy.md`);
+    const unknown = await read("bob", `${NOTES}no-such-note.md`);
+    const shape = (res: typeof hidden, uri: string) =>
+      JSON.stringify(res.message?.error).replaceAll(uri, "<uri>");
+    expect(hidden.message?.error).toBeDefined();
+    expect(shape(hidden, `${NOTES}stock-policy.md`)).toBe(
+      shape(unknown, `${NOTES}no-such-note.md`),
+    );
+  });
+});

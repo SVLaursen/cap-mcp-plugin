@@ -209,3 +209,75 @@ describe("mcp:resources: listing per caller (ADR 0013)", () => {
     ]);
   });
 });
+
+const inProduction = async <T>(fn: () => Promise<T>) => {
+  const env = process.env.NODE_ENV;
+  process.env.NODE_ENV = "production";
+  try {
+    return await fn();
+  } finally {
+    process.env.NODE_ENV = env;
+  }
+};
+
+/** An error as a registering plugin would throw it. */
+const thrown =
+  (message: string, props: Record<string, unknown> = {}) =>
+  () => {
+    throw Object.assign(new Error(message), props);
+  };
+
+describe("mcp:resources: reading fixed resources (ADR 0013)", () => {
+  test("read returns the text with the resource's MIME type, as the caller", async () => {
+    const seen: ResourceContext[] = [];
+    const resource = note("notes://x/a.md", {
+      read: (ctx) => {
+        seen.push(ctx);
+        return Promise.resolve(`hello ${ctx.locale}`);
+      },
+    });
+    const { call } = serve({ fixed: [resource], locale: "de", tenant: "t1" });
+    const res = await call("resources/read", { uri: "notes://x/a.md" });
+    expect(res.result?.contents).toEqual([
+      { uri: "notes://x/a.md", mimeType: "text/markdown", text: "hello de" },
+    ]);
+    expect(seen).toEqual([
+      { user: expect.objectContaining({ id: "someone" }), locale: "de", tenant: "t1" },
+    ]);
+  });
+
+  test.each([
+    ["status 404", { status: 404 }],
+    ["statusCode 404", { statusCode: 404 }],
+    ['code "NOT_FOUND"', { code: "NOT_FOUND" }],
+  ])("an error with %s is resource-not-found, with the URI only", async (_what, props) => {
+    const uri = "notes://x/gone.md";
+    const { call, errors } = serve({
+      fixed: [note(uri, { read: thrown("private detail", props) })],
+    });
+    const res = await call("resources/read", { uri });
+    expect(res.error).toMatchObject({ code: -32602, data: { uri } });
+    expect(JSON.stringify(res)).not.toMatch(/private detail/);
+    expect(errors).toEqual([]);
+  });
+
+  test("any other error is logged and answered as Internal error, without its text", async () => {
+    const uri = "notes://x/broken.md";
+    const { call, errors } = serve({ fixed: [note(uri, { read: thrown("disk on fire") })] });
+    const res = await inProduction(() => call("resources/read", { uri }));
+    expect(res.error).toMatchObject({ code: -32603, message: "Internal error" });
+    expect(JSON.stringify(res)).not.toMatch(/disk on fire/);
+    expect(errors).toEqual([[expect.stringContaining(uri), expect.any(Error)]]);
+  });
+
+  test("a hidden resource answers exactly like an unknown URI", async () => {
+    const hidden = note("notes://x/secret.md", { visible: () => false });
+    const { call } = serve({ fixed: [hidden, note("notes://x/a.md")] });
+    const secret = await call("resources/read", { uri: "notes://x/secret.md" });
+    const unknown = await call("resources/read", { uri: "notes://x/nope.md" });
+    const shape = (res: typeof secret, uri: string) =>
+      JSON.stringify(res.error).replaceAll(uri, "<uri>");
+    expect(secret.error).toBeDefined();
+    expect(shape(secret, "notes://x/secret.md")).toBe(shape(unknown, "notes://x/nope.md"));
+  });
+});

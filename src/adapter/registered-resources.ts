@@ -173,3 +173,10 @@ export function visibleFixed(
     }
   });
 }
+
+/** A registrant's way to say "no such resource": status or statusCode 404, or code NOT_FOUND. */
+export function isNotFound(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const { status, statusCode, code } = error as Record<string, unknown>;
+  return Number(status) === 404 || Number(statusCode) === 404 || code === "NOT_FOUND";
+}

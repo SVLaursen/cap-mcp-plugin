@@ -24,6 +24,7 @@ import type { RequestHandler } from "express";
 import { APP_MIME_TYPE, McpApps, linkedUri } from "./apps";
 import { isProduction } from "./auth";
 import {
+  isNotFound,
   visibleFixed,
   type FixedResource,
   type RegisteredResources,
@@ -314,7 +315,7 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
       registerResource(server, resource, registry, executor, options);
     registerCompletion(server, resources, registry, executor, options);
     for (const uri of uis) registerApp(server, uri, apps, options);
-    for (const resource of fixed) registerFixed(server, resource, caller);
+    for (const resource of fixed) registerFixed(server, resource, caller, options);
     for (const template of templates) registerFromTemplate(server, template, caller, options);
     for (const prompt of prompts) registerPrompt(server, prompt, argsSchemaFor(prompt));
     for (const { tool, _meta } of tools) {
@@ -478,16 +479,14 @@ function registerFixed(
   server: McpServer,
   resource: FixedResource,
   caller: ResourceContext,
+  options: AdapterOptions,
 ): void {
   const { uri, name, title, description, mimeType } = resource;
-  server.registerResource(
-    name,
-    uri,
-    { mimeType, ...(title && { title }), ...(description && { description }) },
-    async () => {
-      return { contents: [{ uri, mimeType, text: await resource.read(caller) }] };
-    },
-  );
+  const metadata = { mimeType, ...(title && { title }), ...(description && { description }) };
+  server.registerResource(name, uri, metadata, async () => {
+    const text = await readFromCode(uri, () => resource.read(caller), options);
+    return { contents: [{ uri, mimeType, text }] };
+  });
 }
 
 /** A resource template from code (ADR 0013): `list` and `read` run as the caller. */
@@ -517,10 +516,31 @@ function registerFromTemplate(
       const params = Object.fromEntries(
         Object.entries(variables).map(([key, value]) => [key, [value].flat().join(",")]),
       );
-      const text = await template.read({ ...caller, uri: uri.href, params });
+      const text = await readFromCode(
+        uri.href,
+        () => template.read({ ...caller, uri: uri.href, params }),
+        options,
+      );
       return { contents: [{ uri: uri.href, mimeType, text }] };
     },
   );
+}
+
+/**
+ * Run a registrant's `read`: its 404 is resource-not-found with the URI only (its message was
+ * written for the plugin, not for agents); anything else is an internal error, logged.
+ */
+async function readFromCode(
+  uri: string,
+  read: () => string | Promise<string>,
+  options: AdapterOptions,
+): Promise<string> {
+  try {
+    return await read();
+  } catch (error) {
+    if (isNotFound(error)) throw new ResourceNotFoundError(uri);
+    throw internalError(`reading ${uri} failed:`, error, options);
+  }
 }
 
 /** One @mcp.prompts entry: its template as one message, arguments checked by the SDK. */
