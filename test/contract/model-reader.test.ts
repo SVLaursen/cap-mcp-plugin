@@ -939,7 +939,7 @@ describe("model-reader: @restrict grants", () => {
       { grant: "CREATE", to: ["admin"] },
       { grant: "UPDATE", to: ["admin"] },
       { grant: "DELETE", to: ["admin"] },
-      { grant: "READ", to: ["any"] },
+      { grant: "READ", to: ["any"], where: true },
       { grant: "cancel", to: ["support"] },
     ]);
     // On an operation, a grant is always for the operation itself.

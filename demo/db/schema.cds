@@ -59,6 +59,12 @@ entity OrderItems : cuid {
   amount   : Decimal(9, 2);
 }
 
+/** Returns that support staff log against orders. */
+entity Returns : cuid, managed {
+  order  : Association to Orders;
+  reason : String;
+}
+
 /** Internal audit notes. Must never be reachable over MCP, even via @mcp on a service. */
 entity AuditNotes : cuid, managed {
   subject : String;

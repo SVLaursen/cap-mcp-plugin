@@ -22,6 +22,11 @@ export interface McpConfig {
   /** Server instructions: the text, or a file relative to the app root. */
   instructions?: string | { file: string };
   limits?: Partial<Limits>;
+  /**
+   * Tell the agent when CAP filters its reads by a `@restrict` `where` (ADR 0015). On unless set
+   * to false: it exposes nothing, it only explains a smaller result.
+   */
+  filterNotices?: boolean;
 }
 
 type Check = (value: unknown) => string | undefined;
@@ -30,6 +35,8 @@ const isString = (v: unknown): v is string => typeof v === "string";
 const string: Check = (v) => (isString(v) && v.length > 0 ? undefined : "a non-empty string");
 const positiveInteger: Check = (v) =>
   Number.isInteger(v) && (v as number) > 0 ? undefined : "a positive integer";
+
+const boolean: Check = (v) => (typeof v === "boolean" ? undefined : "true or false");
 
 const CHECKS: Record<Exclude<keyof McpConfig, "limits">, Check> = {
   path: (v) => (isString(v) && v.startsWith("/") ? undefined : 'a path starting with "/"'),
@@ -43,6 +50,7 @@ const CHECKS: Record<Exclude<keyof McpConfig, "limits">, Check> = {
     (isObject(v) && Object.keys(v).join() === "file" && isString(v.file))
       ? undefined
       : "a string, or { file } naming a file relative to the app root",
+  filterNotices: boolean,
 };
 const LIMITS: Record<keyof Limits, Check> = {
   maxRows: positiveInteger,

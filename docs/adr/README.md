@@ -20,3 +20,4 @@ supersedes the old one; don't edit history.
 | [0012](0012-mcp-apps-without-ext-apps-runtime.md)      | MCP Apps without a runtime dependency on `ext-apps`                    | accepted                   |
 | [0013](0013-resources-from-code.md)                    | Resources from code: the `mcp:resources` event                         | accepted                   |
 | [0014](0014-hints-from-code.md)                        | Hints from code: the `mcp:hints` event                                 | proposed                   |
+| [0015](0015-filtered-read-notices.md)                  | Tell the agent when its reads are filtered                             | proposed                   |

@@ -1,4 +1,4 @@
-import { view } from "../access";
+import { readsFiltered, view } from "../access";
 import { DEFAULT_LIMITS, type Limits } from "../schema-mapper";
 import type {
   EntityMode,
@@ -62,6 +62,8 @@ export interface ServiceLike {
 
 export interface ExecutorOptions {
   limits?: Limits;
+  /** cds.mcp.filterNotices (ADR 0015): say when CAP filters the caller's reads. Default true. */
+  filterNotices?: boolean;
 }
 
 /** Per call: whether the user confirmed it (@mcp.elicit, through MRTR), and with what values. */
@@ -88,12 +90,14 @@ export class Executor {
   private readonly operations: Map<string, OperationSpec>;
   private readonly services: Map<string, ServiceSpec>;
   private readonly limits: Limits;
+  private readonly filterNotices: boolean;
 
   constructor(spec: ExposureSpec, options: ExecutorOptions = {}) {
     this.entities = new Map(spec.services.flatMap((s) => s.entities.map((e) => [e.name, e])));
     this.services = new Map(spec.services.map((s) => [s.name, s]));
     this.operations = new Map(spec.services.flatMap((s) => s.operations.map((o) => [o.name, o])));
     this.limits = options.limits ?? DEFAULT_LIMITS;
+    this.filterNotices = options.filterNotices !== false;
   }
 
   /**
@@ -117,13 +121,13 @@ export class Executor {
       case "entity": {
         const entity = this.entity(target.entity);
         if (target.mode === "query" || target.mode === "create") {
-          return this.run(entity, target.mode, {}, args, service);
+          return this.run(entity, target.mode, {}, args, service, user);
         }
         // Per-entity tools take keys (and, for update, fields) at the top level.
         const isKey = (name: string) => entity.keys.some((k) => k.name === name);
         const keys = Object.fromEntries(Object.entries(args).filter(([k]) => isKey(k)));
         const rest = Object.fromEntries(Object.entries(args).filter(([k]) => !isKey(k)));
-        return this.run(entity, target.mode, keys, rest, service);
+        return this.run(entity, target.mode, keys, rest, service, user);
       }
       case "compact": {
         const action = target.action;
@@ -143,11 +147,11 @@ export class Executor {
         // Compact tools name the entity, and take `key` and `data` (query: its own arguments).
         const { entity: name, key, data, ...rest } = args;
         const entity = this.entity(String(name), target.service, action);
-        if (action === "query") return this.run(entity, action, {}, rest, service);
+        if (action === "query") return this.run(entity, action, {}, rest, service, user);
         allowOnly(rest, []);
         const address = action === "create" ? {} : object(key, "key");
         const writes = action === "create" || action === "update";
-        return this.run(entity, action, address, writes ? object(data, "data") : {}, service);
+        return this.run(entity, action, address, writes ? object(data, "data") : {}, service, user);
       }
     }
   }
@@ -181,14 +185,17 @@ export class Executor {
     key: Args,
     data: Args,
     service: ServiceLike,
+    user: UserLike,
   ): Promise<ToolResult> {
     const lookup = (name: string) => this.entities.get(name);
+    // ADR 0015: decided from the model and the caller, never by querying what was left out.
+    const filtered = this.filterNotices && readsFiltered(user, entity);
     switch (mode) {
       case "query":
-        return query(entity, data, service, this.limits);
+        return query(entity, data, service, this.limits, filtered);
       case "get":
         allowOnly(data, []);
-        return get(entity, key, service);
+        return get(entity, key, service, filtered);
       case "create":
         return create(entity, data, service, lookup);
       case "update":

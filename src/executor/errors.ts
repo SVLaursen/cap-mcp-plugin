@@ -31,8 +31,14 @@ export class ConfirmationRequired extends ToolError {
   }
 }
 
-export const notFound = (entity: EntitySpec, key: Record<string, unknown>) =>
-  new ToolError("NOT_FOUND", `No ${entity.title} with ${JSON.stringify(key)}`);
+export const notFound = (entity: EntitySpec, key: Record<string, unknown>, filtered = false) =>
+  new ToolError(
+    "NOT_FOUND",
+    `No ${entity.title} with ${JSON.stringify(key)}` +
+      (filtered
+        ? `, or it is not visible to you: your authorization limits which ${entity.title} records you can see.`
+        : ""),
+  );
 
 /**
  * Map an error from execute() to an `isError` tool result, or undefined if it is not one the agent

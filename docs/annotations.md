@@ -266,6 +266,7 @@ adds the dependency if it is in neither `dependencies` nor `devDependencies`, an
 ## Configuration (`cds.env.mcp`)
 
 camelCase, read through `cds.env` only (profiles work as usual). No key turns a feature on.
+`filterNotices` turns one off: it exposes nothing, it only explains a filtered result.
 
 | Key                  | Default                          | Meaning                                                                                                                                                                                                                                                                                                                         |
 | -------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -276,6 +277,7 @@ camelCase, read through `cds.env` only (profiles work as usual). No key turns a 
 | `instructions`       | none                             | Server instructions sent to clients: a string, or `{ file }` relative to the app root, read once at startup (a missing file is an error and the server has none). `cds build` copies the file to `gen/srv/<file>` and warns when it is missing or an absolute path; with an explicit `build.tasks` list, add `{ "for": "mcp" }` |
 | `limits.maxRows`     | `200`                            | Upper bound for `top`                                                                                                                                                                                                                                                                                                           |
 | `limits.defaultRows` | `25`                             | Default page size                                                                                                                                                                                                                                                                                                               |
+| `filterNotices`      | `true`                           | `false` turns off the filtered-read notices (ADR 0015): the line in read tools' descriptions, `notice` in query results and the "or it is not visible to you" in get's not-found. They expose nothing, so they are on unless switched off                                                                                       |
 
 Read once, when CAP has served the app; a change needs a restart, as for the rest of CAP. This is
 the full list:

@@ -314,6 +314,17 @@ function object(fields: FieldSpec[], required: FieldSpec[]): JsonSchema {
   return schema;
 }
 
+/**
+ * A query tool's output schema with the optional `notice` (ADR 0015), for callers whose reads
+ * CAP filters. Everyone else keeps the schema without it.
+ */
+export function withNotice(schema: JsonSchema): JsonSchema {
+  return {
+    ...schema,
+    properties: { notice: { type: "string" }, ...(schema.properties as JsonSchema) },
+  };
+}
+
 /** What the executor returns as structuredContent for an entity tool. */
 export function entityOutputSchema(entity: EntitySpec, mode: EntityMode): JsonSchema {
   const row = record(entity.fields);

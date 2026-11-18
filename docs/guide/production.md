@@ -96,6 +96,27 @@ annotate OrdersService with @mcp;
 - **Never exposed:** fields with `@mcp.omit` are never selected, filtered, searched or described.
   Use it for fields agents must not see, rather than trusting the agent to ignore them.
 
+### When a `where` filters the caller's rows
+
+An agent that gets an empty result tends to tell the user that the data does not exist. So when
+CAP filters a caller's reads, the plugin says so (ADR 0015). In the example above, a user
+without `support` reads `Orders` only through the `where` grant, and gets:
+
+- one more line in the `query` and `get` tools' descriptions: "Your access to these records is
+  limited by authorization.";
+- a `notice` first in every query result: "Your authorization limits which OrdersService.Orders
+  records you can see. Records outside it are not included in this result. An empty or smaller
+  result does not mean that no other records exist.";
+- from `get`, for a key it cannot find: "No OrdersService.Orders with {…}, or it is not visible
+  to you: your authorization limits which OrdersService.Orders records you can see."
+
+A `support` user also holds a grant without `where`, reads everything, and sees none of this.
+The notices never name the condition, an attribute, a value or a count.
+
+The plugin only knows `@restrict`. Rows filtered by your own `READ` handlers, `@sap/ams`
+attribute policies or the database are not announced; add your own text through `mcp:hints` if
+agents need it. Set `cds.mcp.filterNotices: false` to turn the notices off.
+
 ## Exposure
 
 - Expose only what agents need. `@mcp` on a service is read-only; treat every

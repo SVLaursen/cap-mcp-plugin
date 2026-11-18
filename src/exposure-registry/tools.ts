@@ -3,6 +3,7 @@ import {
   entityInputSchema,
   entityOutputSchema,
   operationInputSchema,
+  withNotice,
   operationOutputSchema,
   type SchemaOptions,
 } from "../schema-mapper";
@@ -57,6 +58,19 @@ export function entityTool(
     outputSchema: entityOutputSchema(entity, mode),
     annotations: HINTS[mode],
     target: { kind: "entity", entity: entity.name, mode },
+  };
+}
+
+/** ADR 0015: the line read tools carry for callers whose reads CAP filters. */
+export const FILTERED_LINE = "Your access to these records is limited by authorization.";
+
+/** A read tool as a caller whose reads are filtered sees it: one more line, and `notice`. */
+export function filteredTool(tool: ToolSpec): ToolSpec {
+  const query = tool.target.kind === "entity" && tool.target.mode === "query";
+  return {
+    ...tool,
+    description: `${tool.description}\n\n${FILTERED_LINE}`,
+    ...(query && tool.outputSchema && { outputSchema: withNotice(tool.outputSchema) }),
   };
 }
 

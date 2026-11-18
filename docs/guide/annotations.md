@@ -105,7 +105,9 @@ parameter with the name of one of the entity's keys is refused (`PARAMETER_SHADO
   `WRITE` for writes, the operation's name for operations.
 
 `where` conditions in `@restrict` filter rows and never hide a tool. This is advertising, not
-enforcement: CAP checks every call, as it does for OData.
+enforcement: CAP checks every call, as it does for OData. When `where` grants are all that let
+a caller read an entity, its read tools say that the records are limited by authorization (see
+[Authentication and production](production.md#when-a-where-filters-the-callers-rows)).
 
 ## Annotations on other layers
 

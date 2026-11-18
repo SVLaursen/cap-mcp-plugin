@@ -33,6 +33,7 @@ export async function query(
   args: Args,
   service: ServiceLike,
   limits: Limits,
+  filtered = false,
 ): Promise<ToolResult> {
   allowOnly(args, ["q", "where", "orderby", "select", "top", "cursor"]);
   const fields = byName(entity.fields);
@@ -75,6 +76,8 @@ export async function query(
   const selected = columns.map((column) => column.ref[0] as string);
   return result(
     {
+      // First, so an agent reads it before the rows (ADR 0015).
+      ...(filtered && { notice: filterNotice(entity) }),
       rows: rows.map((row) => project(row, selected)),
       total,
       ...(next < total && rows.length > 0 && { nextCursor: encodeCursor(next) }),
@@ -96,17 +99,29 @@ export async function count(service: ServiceLike, from: unknown, where: unknown[
   return Number(counted?.total ?? 0);
 }
 
-/** The get tool: one record by its key, NOT_FOUND when the caller cannot read it. */
+/**
+ * ADR 0015: what a filtered query result says. Nothing about the condition, its attribute, a
+ * value, or how many records were left out: only that a filter applies.
+ */
+export const filterNotice = (entity: EntitySpec) =>
+  `Your authorization limits which ${entity.title} records you can see. Records outside it are ` +
+  "not included in this result. An empty or smaller result does not mean that no other records exist.";
+
+/**
+ * The get tool: one record by its key, NOT_FOUND when the caller cannot read it. When CAP
+ * filters the caller's reads, not found may also mean not visible, and the error says so.
+ */
 export async function get(
   entity: EntitySpec,
   args: Args,
   service: ServiceLike,
+  filtered = false,
 ): Promise<ToolResult> {
   const key = keyOf(entity, args);
   const names = entity.fields.map((f) => f.name);
   const row = (await service.run({
     SELECT: { one: true, from: addressed(entity, key), columns: names.map(ref) },
   })) as Args | undefined;
-  if (!row) throw notFound(entity, key);
+  if (!row) throw notFound(entity, key, filtered);
   return result(project(row, names), resourceLinks(entity, [row]));
 }

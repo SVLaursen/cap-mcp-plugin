@@ -188,7 +188,13 @@ export function entityAccess(
   while (current && !seen.has(current)) {
     seen.add(current);
     if (current["@requires"] !== undefined || current["@restrict"] !== undefined) {
-      return { requires: roles(current), restrict: grants(current) };
+      // CAP adds an ancestor's `where` only to the ancestor's path, never to a direct read of
+      // the child, so inherited grants filter nothing (ADR 0015).
+      const restrict = grants(current);
+      return {
+        requires: roles(current),
+        restrict: current === def ? restrict : restrict?.map(({ grant, to }) => ({ grant, to })),
+      };
     }
     const parent: string | undefined = current.elements?.up_?.target;
     current = parent ? ctx.definitions[parent] : undefined;
@@ -198,16 +204,21 @@ export function entityAccess(
 
 /**
  * @restrict as CAP normalizes it (generic/auth/restrictions.js): one grant per event, WRITE as
- * CREATE + UPDATE + DELETE, `grant` defaulting to `*` and `to` to `any`. `where` only filters
- * rows, so it is not kept.
+ * CREATE + UPDATE + DELETE, `grant` defaulting to `*` and `to` to `any`. A `where` only filters
+ * rows: whether there is one is kept (ADR 0015), the condition is not.
  */
 export function grants(def: Definition): GrantSpec[] | undefined {
   const restrict = def["@restrict"];
   if (!Array.isArray(restrict)) return undefined;
-  return restrict.flatMap((r: { grant?: unknown; to?: unknown }) => {
+  return restrict.flatMap((r: { grant?: unknown; to?: unknown; where?: unknown }) => {
     const to = list(r.to) ?? ["any"];
+    const where = r.where !== undefined && r.where !== null ? { where: true as const } : {};
     return (list(r.grant) ?? ["*"]).flatMap((grant) =>
-      (grant === "WRITE" ? ["CREATE", "UPDATE", "DELETE"] : [grant]).map((g) => ({ grant: g, to })),
+      (grant === "WRITE" ? ["CREATE", "UPDATE", "DELETE"] : [grant]).map((g) => ({
+        grant: g,
+        to,
+        ...where,
+      })),
     );
   });
 }

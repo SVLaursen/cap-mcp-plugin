@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import cds from "@sap/cds";
 import { bootDemo } from "../helpers/demo";
 import { legacyInitialize, legacyRpc, rpc } from "../helpers/mcp";
 
@@ -10,6 +11,11 @@ import { legacyInitialize, legacyRpc, rpc } from "../helpers/mcp";
  * (With no providers registered at all, the adapter skips hints entirely: test/contract/hints.)
  */
 const demo = bootDemo();
+// Bob's Orders reads are filtered, so ADR 0015 (a later change) adds a line to two of his tools.
+// That is not what this file is about: it compares with notices off. ADR 0015's own baseline is
+// test/behaviour/filter-notice.test.ts.
+const env = cds.env as unknown as { mcp?: Record<string, unknown> };
+env.mcp = { ...env.mcp, filterNotices: false };
 
 const baseline = JSON.parse(
   readFileSync(path.join(__dirname, "fixtures", "no-hints-baseline.json"), "utf8"),

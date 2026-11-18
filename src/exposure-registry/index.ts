@@ -1,8 +1,9 @@
 import { readModel } from "../model-reader";
-import { canCall, canUseMode, view, viewKey } from "../access";
+import { canCall, canUseMode, readsFiltered, view, viewKey } from "../access";
 import { DEFAULT_LIMITS, type Limits } from "../schema-mapper";
 import type {
   Diagnostic,
+  EntitySpec,
   ExposureSpec,
   PromptSpec,
   ResourceSpec,
@@ -12,7 +13,7 @@ import type {
   V1Options,
 } from "../types";
 import { byNameOrder } from "../util";
-import { entityTool, operationTool, resourceSpec, describeTarget } from "./tools";
+import { entityTool, filteredTool, operationTool, resourceSpec, describeTarget } from "./tools";
 import { builtinTools, isBuiltin } from "./builtin";
 
 /**
@@ -37,6 +38,8 @@ export interface RegistryOptions {
   limits?: Limits;
   /** What a v1 app's config said (v1 shim): only for V1_DEFAULT_CHANGED diagnostics. */
   v1?: V1Options;
+  /** cds.mcp.filterNotices: say when CAP filters a user's reads (ADR 0015). Default true. */
+  filterNotices?: boolean;
 }
 
 /** MCP tool names (SEP-986, kept in 2026-07-28); the SDK enforces the same pattern. */
@@ -66,6 +69,8 @@ export function registryCache(options: RegistryOptions = {}): (model: object) =>
 interface Entry {
   tool: ToolSpec;
   visible: (user: UserLike) => boolean;
+  /** A read tool: the entity it reads, and the tool as callers whose reads are filtered see it. */
+  reads?: { entity: EntitySpec; filtered: ToolSpec };
 }
 
 export class ExposureRegistry {
@@ -90,6 +95,11 @@ export class ExposureRegistry {
     this.buildPrompts();
   }
 
+  /** Whether filtered reads are announced (ADR 0015); the executor must do the same. */
+  get filterNotices(): boolean {
+    return this.options.filterNotices !== false;
+  }
+
   /** The limits the tools advertise; the executor must enforce the same. */
   get limits(): Limits {
     return this.options.limits ?? DEFAULT_LIMITS;
@@ -108,15 +118,28 @@ export class ExposureRegistry {
    */
   toolsFor(user: UserLike): ToolSpec[] {
     const views = this.spec.services.map((service) => view(service, user));
-    const entries = this.entries.filter((entry) => entry.visible(user));
-    const key = JSON.stringify([entries.map((e) => e.tool.name), views.map(viewKey)]);
+    // Read tools of entities whose reads CAP filters for this user say so (ADR 0015).
+    const picked = this.entries
+      .filter((entry) => entry.visible(user))
+      .map((entry) => {
+        const filtered =
+          this.filterNotices &&
+          entry.reads !== undefined &&
+          readsFiltered(user, entry.reads.entity);
+        return { tool: filtered && entry.reads ? entry.reads.filtered : entry.tool, filtered };
+      });
+    const tools = picked.map((p) => p.tool);
+    const key = JSON.stringify([
+      picked.map((p) => (p.filtered ? [p.tool.name, 1] : p.tool.name)),
+      views.map(viewKey),
+    ]);
     let list = this.lists.get(key);
     if (!list) {
       const builtins = views
         .flatMap((service) => builtinTools(service, this.options.limits))
         .filter((tool) => this.builtinNames.has(tool.name))
         .map(deepFreeze);
-      list = sortByName([...entries.map((e) => e.tool), ...builtins]);
+      list = sortByName([...tools, ...builtins]);
       this.lists.set(key, list);
     }
     return list;
@@ -220,7 +243,14 @@ export class ExposureRegistry {
       const kept =
         candidates.length === 1 ? candidates[0] : builtin.length === 1 ? builtin[0] : undefined;
       if (kept && isBuiltin(kept.tool)) this.builtinNames.add(name);
-      else if (kept) this.entries.push({ ...kept, tool: deepFreeze(kept.tool) });
+      else if (kept)
+        this.entries.push({
+          ...kept,
+          tool: deepFreeze(kept.tool),
+          ...(kept.reads && {
+            reads: { ...kept.reads, filtered: deepFreeze(kept.reads.filtered) },
+          }),
+        });
       if (candidates.length === 1) continue;
       this.diagnostics.push({
         level: "error",
@@ -248,9 +278,15 @@ export class ExposureRegistry {
     if (!service.compact) {
       for (const entity of service.entities) {
         for (const mode of entity.modes) {
+          const tool = entityTool(service, entity, mode, { limits, entities: lookup });
+          const read = mode === "query" || mode === "get";
           entries.push({
-            tool: entityTool(service, entity, mode, { limits, entities: lookup }),
+            tool,
             visible: (user) => canUseMode(user, service, entity, mode),
+            ...(read &&
+              entity.restrict?.some((g) => g.where) && {
+                reads: { entity, filtered: filteredTool(tool) },
+              }),
           });
         }
       }

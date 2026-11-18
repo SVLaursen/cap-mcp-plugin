@@ -122,6 +122,7 @@ export function activate(cds: CdsLike): void {
     const registryFor = registryCache({
       limits: capQueryLimit({ ...DEFAULT_LIMITS, ...config.limits }, cds.env.query?.limit),
       v1,
+      filterNotices: config.filterNotices,
     });
     const registry = registryFor(cds.model as object);
     for (const line of exposureReport(registry, mcpPath, diagnostics)) log[line.level](line.text);

@@ -46,6 +46,11 @@ export interface GrantSpec {
   grant: string;
   /** Roles; `any` when the grant has no `to`. */
   to: string[];
+  /**
+   * The grant has a `where`, so CAP filters the rows it grants (ADR 0015). Only whether there is
+   * one: the condition itself is never kept. Not set on grants a composition child inherits.
+   */
+  where?: true;
 }
 
 export interface DeepInsertSpec {

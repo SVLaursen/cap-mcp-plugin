@@ -120,6 +120,10 @@ CAP does the security work; the plugin never re-implements it.
   OData. Each call runs in the caller's `cds.context` and one transaction, rolled back on error.
 - **Hidden by the plugin, for the agent's sake:** `tools/list` leaves out tools CAP would always
   refuse for the caller. That is advertising, not enforcement.
+- **Said by the plugin, for the agent's sake:** when every grant that lets the caller read an
+  entity has a `where`, its query and get tools say that authorization limits the records, so an
+  agent does not take an empty result for "does not exist". The condition is never shown
+  ([ADR 0015](docs/adr/0015-filtered-read-notices.md); `filterNotices: false` turns it off).
 - **Never exposed:** `@mcp.omit` fields, entities and operations you did not annotate, and
   actions without their own `@mcp`.
 - **Browser requests (DNS rebinding):** a request with an `Origin` header gets `403` unless that
@@ -142,6 +146,7 @@ a feature on.
 | `tenantHostPattern`  | none                             | Multitenant XSUAA: regular expression over the request host, first group = subscriber subdomain     |
 | `limits.maxRows`     | `200`                            | Upper bound for `top` in query tools                                                                |
 | `limits.defaultRows` | `25`                             | Page size when the agent gives none                                                                 |
+| `filterNotices`      | `true`                           | `false` turns off the notices that tell agents when `@restrict … where` filters their reads         |
 
 ```json
 {

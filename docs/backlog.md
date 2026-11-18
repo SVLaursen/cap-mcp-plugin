@@ -145,6 +145,19 @@ Plugins and app code add text to the server instructions and short notes to gene
 - [ ] Maintainer: accept ADR 0014
 - [ ] Review: run the `reviewer` agent on the block's diff and fix what it finds
 
+### Filtered-read notices
+
+Tell the agent when `@restrict … where` filters its reads, only then (ADR 0015). Asked for by the cap-okf benchmark (round 2): agents took empty filtered results for "does not exist". Branch `feat/benchmark-m2-improvements`.
+
+- [x] Demo target: `OrdersService.Returns` (support filtered, admin not, bob no access); `Orders` (bob and alice filtered, carol not); baseline captured at 83e6d69
+- [x] Model and rule: `GrantSpec.where` (whether, never the condition; not on inherited grants); `readsFiltered` mirrors CAP's grant rule
+- [x] Query results: `notice` first, declared in the filtered caller's output schema; get: "or it is not visible to you"; compact `_query`/`_get` too
+- [x] Descriptions: one line on the query and get tools of filtered callers; everyone else byte for byte as before
+- [x] Config: `cds.mcp.filterNotices: false` turns it off
+- [x] Docs: ADR 0015 (proposed), `docs/annotations.md`, `docs/guide/production.md`, `docs/guide/annotations.md`, README, `docs/architecture.md`
+- [ ] Maintainer: accept ADR 0015
+- [ ] Review: run the `reviewer` agent on the block's diff and fix what it finds
+
 Decided against (maintainer, 2026-11-11):
 
 - **Per-tool row budgets** (`@mcp.limits`): CAP's `@cds.query.limit` already applies to MCP queries, the same limit as OData. Operations returning arrays stay uncapped, as over OData; a handler that can return a lot limits its own result.

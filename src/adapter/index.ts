@@ -123,7 +123,10 @@ function caches() {
     executorFor(registry: ExposureRegistry): Executor {
       let executor = executors.get(registry);
       if (!executor) {
-        executor = new Executor(registry.spec, { limits: registry.limits });
+        executor = new Executor(registry.spec, {
+          limits: registry.limits,
+          filterNotices: registry.filterNotices,
+        });
         executors.set(registry, executor);
       }
       return executor;

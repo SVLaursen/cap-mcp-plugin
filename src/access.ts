@@ -35,11 +35,37 @@ function meets(user: UserLike, roles: string[] | undefined): boolean {
  * to one of the user's roles. CRUD stays open when every grant is for a bound operation.
  */
 function permits(user: UserLike, restrict: GrantSpec[] | undefined, event: string): boolean {
-  if (!restrict) return true;
-  if (CRUD.has(event) && restrict.every((g) => g.grant !== "*" && !CRUD.has(g.grant))) return true;
+  return grantFor(user, restrict, event) !== "refused";
+}
+
+/** "open": not restricted for the event; "granted": by some grant; "refused": by none. */
+function grantFor(
+  user: UserLike,
+  restrict: GrantSpec[] | undefined,
+  event: string,
+): "open" | "granted" | "refused" {
+  if (!restrict) return "open";
+  if (CRUD.has(event) && restrict.every((g) => g.grant !== "*" && !CRUD.has(g.grant)))
+    return "open";
   return restrict.some(
     (g) => (g.grant === "*" || g.grant === event) && g.to.some((role) => has(user, role)),
+  )
+    ? "granted"
+    : "refused";
+}
+
+/**
+ * Whether CAP filters this user's reads of the entity by a `where` (ADR 0015): every grant
+ * that lets the user READ it has one. Not filtered when one grant has none, when the entity is
+ * not restricted for READ, or when the user may not read it at all (the tools are hidden then).
+ */
+export function readsFiltered(user: UserLike, entity: EntitySpec): boolean {
+  const restrict = entity.restrict;
+  if (!restrict || grantFor(user, restrict, "READ") !== "granted") return false;
+  const applicable = restrict.filter(
+    (g) => (g.grant === "*" || g.grant === "READ") && g.to.some((role) => has(user, role)),
   );
+  return applicable.every((g) => g.where);
 }
 
 export function canUseMode(

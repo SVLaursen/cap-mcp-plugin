@@ -5,7 +5,8 @@ using {sap.capire.bookshop as my} from '../db/schema';
 //   - @mcp.deepInsert on Orders.items
 //   - a bound action `cancel` with @mcp.elicit (confirmation via MRTR input_required)
 // Authorization is pure CAP: @restrict with a `where` clause. Bob sees only Bob's orders,
-// over OData AND over MCP. The plugin must not re-implement this.
+// over OData AND over MCP. The plugin must not re-implement this; it only says that a filter
+// applies (ADR 0015).
 /** Customers manage their own orders. */
 @requires: 'authenticated-user'
 @mcp
@@ -37,6 +38,23 @@ service OrdersService @(path: '/orders') {
     };
 
   entity OrderItems as projection on my.OrderItems;
+
+  // Filtered reads (ADR 0015): carol (support) reads only the returns she logged, alice (admin)
+  // reads all of them, bob may not read them at all. On Orders, bob and alice see only their
+  // own orders, and carol, who also has the unconditional support grant, sees all.
+  /** Returns logged against orders. */
+  @restrict: [
+    {
+      grant: 'READ',
+      to   : 'support',
+      where: 'createdBy = $user'
+    },
+    {
+      grant: 'READ',
+      to   : 'admin'
+    }
+  ]
+  entity Returns    as projection on my.Returns;
 }
 
 annotate OrdersService.Orders with {
