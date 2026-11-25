@@ -58,3 +58,37 @@ content).
 - Files are read for the `@mcp.ui` links of the app's base model. A link that exists only in a
   tenant's extended model has no file content unless the hook registers it; the tool then has
   no UI link. Revisit if extensions ask for MCP Apps.
+
+## Addendum: what the extension asks of a server (2026-11-25, 2.0 RC2)
+
+Read: `specification/2026-01-26/apps.mdx` in modelcontextprotocol/ext-apps (status "Stable
+(2026-01-26)"), against ext-apps 2.0.4 (`EXTENSION_ID = "io.modelcontextprotocol/ui"`). The
+decision above stands; this records what the specification says, so the next change starts
+from it.
+
+- **Declaring the extension.** Only clients declare it: hosts put
+  `extensions["io.modelcontextprotocol/ui"] = { mimeTypes: ["text/html;profile=mcp-app"] }` in
+  their capabilities. The specification defines no server-side declaration, no shape for one,
+  and no MUST, SHOULD or MAY for it. So `server/discover` and `initialize` carry no
+  `extensions` entry for MCP Apps, and RC2 adds none (no code). If a later revision of the
+  extension asks servers to declare it, advertise it only to callers with at least one UI tool,
+  as for every other capability (ADR 0004).
+- **Checking the client.** "Servers SHOULD check client capabilities before registering
+  UI-enabled tools", and MAY register different tool variants per host. v2 does not: every
+  caller who sees a UI tool gets its `_meta.ui` link, whatever the client declared. That is the
+  choice the M5 review left as accepted here (UI links for clients without MCP Apps support):
+  the specification's own fallback is that a host without MCP Apps treats the tool as a plain
+  tool, and v2's tools always return a meaningful `content` array ("Tools MUST return
+  meaningful content array even when UI is available"). Revisit if a host misbehaves on
+  `_meta.ui`.
+- **Resources.** `ui://` URIs, contents as `text` (HTML5) with MIME type
+  `text/html;profile=mcp-app` (MUST for contents; the listing interface says SHOULD). Listed
+  resources need a human-readable `name`; the extension defines no `title` (MCP's own
+  `Resource` has one). Servers MAY leave UI-only resources out of `resources/list`; v2 lists
+  them for callers whose tools link to them. `_meta.ui` on contents (`csp`, `permissions`,
+  `domain`, `prefersBorder`) is optional; v2 sends none, so hosts apply their restrictive
+  default CSP.
+- **Tools.** `_meta.ui = { resourceUri, visibility? }`, visibility defaulting to
+  `["model", "app"]`; v2 sends `resourceUri` only. The flat `_meta["ui/resourceUri"]` is
+  deprecated and "will be removed before GA"; v2 still sends it beside `ui.resourceUri`, as
+  ext-apps' `registerAppTool` does (the contract test pins both). Drop it when ext-apps does.
