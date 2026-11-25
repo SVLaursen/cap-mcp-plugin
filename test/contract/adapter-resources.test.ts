@@ -6,6 +6,7 @@ import {
   type ResourceContext,
   type TemplateResource,
 } from "../../src/adapter/registered-resources";
+import { McpApps } from "../../src/adapter/apps";
 import { registryCache } from "../../src/exposure-registry";
 import { compileSnippet } from "../helpers/snippet";
 
@@ -24,6 +25,7 @@ interface Setup {
   cdl?: string;
   locale?: string;
   tenant?: string;
+  apps?: McpApps;
 }
 
 function serve(setup: Setup = {}) {
@@ -41,6 +43,7 @@ function serve(setup: Setup = {}) {
     model: () => model,
     registryFor: registryCache(),
     resources,
+    ...(setup.apps && { apps: setup.apps }),
     services: {},
     log: { error: (...args: unknown[]) => void errors.push(args) },
   });
@@ -486,5 +489,29 @@ describe("mcp:resources: review fixes (ADR 0013)", () => {
       )[0]?.text;
     expect(await text()).toBe("read 1");
     expect(await text()).toBe("read 2");
+  });
+});
+
+describe("MCP App UIs in resources/list", () => {
+  test("a UI several tools link to takes its name and title from the first by tool name", async () => {
+    const apps = new McpApps();
+    apps.register("ui://shop/card.html", () => "<p>card</p>");
+    const { call } = serve({
+      apps,
+      cdl: `@mcp service S {
+        entity Books { key ID : Integer; }
+        @mcp.ui: 'ui://shop/card.html' @title: 'Zeta card' function zeta() returns Integer;
+        @mcp.ui: 'ui://shop/card.html' @title: 'Alpha card' function alpha() returns Integer;
+      }`,
+    });
+    const { result } = await call("resources/list");
+    expect(result?.resources).toEqual([
+      {
+        uri: "ui://shop/card.html",
+        name: "S_alpha",
+        title: "Alpha card",
+        mimeType: "text/html;profile=mcp-app",
+      },
+    ]);
   });
 });

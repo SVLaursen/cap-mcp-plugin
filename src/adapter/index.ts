@@ -354,9 +354,14 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
     const tools = registry
       .toolsFor(user)
       .map((tool) => ({ tool, _meta: apps.linkedMeta(tool._meta) }));
-    const uis = [
-      ...new Set(tools.map((t) => linkedUri(t._meta)).filter((u) => u !== undefined)),
-    ].sort();
+    // Each UI the caller's tools link to, named after the first of them by tool name (the
+    // registry sorts tools by name), so hosts show something readable rather than the URI.
+    const linking = new Map<string, ToolSpec>();
+    for (const { tool, _meta } of tools) {
+      const uri = linkedUri(_meta);
+      if (uri !== undefined && !linking.has(uri)) linking.set(uri, tool);
+    }
+    const uis = [...linking.keys()].sort();
     // Resources from code (ADR 0013): the fixed ones this caller may see, and every template.
     const caller: ResourceContext = { user, locale: context.locale, tenant: context.tenant };
     const fixed = options.resources
@@ -405,7 +410,7 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
       options,
       variables: (t) => options.resources?.variables(t.uriTemplate) ?? [],
     });
-    for (const uri of uis) registerApp(server, uri, apps, options);
+    for (const uri of uis) registerApp(server, uri, linking.get(uri), apps, options);
     for (const resource of fixed) registerFixed(server, resource, caller, options);
     for (const template of templates) registerFromTemplate(server, template, caller, options);
     for (const prompt of prompts) registerPrompt(server, prompt, argsSchemaFor(prompt));
@@ -578,16 +583,28 @@ function internalError(what: string, error: unknown, options: AdapterOptions): P
 }
 
 /** One MCP App UI resource (ADR 0012): its HTML, as ext-apps' registerAppResource serves it. */
-function registerApp(server: McpServer, uri: string, apps: McpApps, options: AdapterOptions): void {
-  server.registerResource(uri, uri, { mimeType: APP_MIME_TYPE }, async () => {
-    const content = apps.content(uri);
-    if (!content) throw new ResourceNotFoundError(uri);
-    try {
-      return { contents: [{ uri, mimeType: APP_MIME_TYPE, text: await content() }] };
-    } catch (error) {
-      throw internalError(`reading ${uri} failed:`, error, options);
-    }
-  });
+function registerApp(
+  server: McpServer,
+  uri: string,
+  tool: ToolSpec | undefined,
+  apps: McpApps,
+  options: AdapterOptions,
+): void {
+  const named = tool ? { title: tool.title } : {};
+  server.registerResource(
+    tool?.name ?? uri,
+    uri,
+    { mimeType: APP_MIME_TYPE, ...named },
+    async () => {
+      const content = apps.content(uri);
+      if (!content) throw new ResourceNotFoundError(uri);
+      try {
+        return { contents: [{ uri, mimeType: APP_MIME_TYPE, text: await content() }] };
+      } catch (error) {
+        throw internalError(`reading ${uri} failed:`, error, options);
+      }
+    },
+  );
 }
 
 /** A fixed resource from code (ADR 0013): `read` inside the request's cds.context, no srv.tx. */

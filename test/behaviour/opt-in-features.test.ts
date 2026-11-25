@@ -311,6 +311,32 @@ describe("opt-in: MCP Apps (issue #133)", () => {
     );
   });
 
+  test("ui:// resources are listed with the name and title of the tool that links to them", async () => {
+    const tools = (await listTools(demo.POST, "bob")).message?.result?.tools as {
+      name: string;
+      title: string;
+    }[];
+    const title = (name: string) => tools.find((t) => t.name === name)?.title;
+    const resources = (await rpc(demo.POST, "bob", "resources/list")).message?.result
+      ?.resources as Record<string, unknown>[];
+    const ui = resources.filter((r) => String(r.uri).startsWith("ui://"));
+    expect(ui).toEqual([
+      {
+        uri: "ui://bookshop/book-card.html",
+        name: "CatalogService_bookCard",
+        title: title("CatalogService_bookCard"),
+        mimeType: MIME,
+      },
+      {
+        uri: "ui://bookshop/stock-chart.html",
+        name: "CatalogService_stockByGenre",
+        title: "Stock by genre",
+        mimeType: MIME,
+      },
+    ]);
+    expect(title("CatalogService_stockByGenre")).toBe("Stock by genre");
+  });
+
   test("the ui resource serves demo/app/mcp-apps/book-card.html with the MCP App mime type", async () => {
     const html = readFileSync(path.join(DEMO_DIR, "app", "mcp-apps", "book-card.html"), "utf8");
     expect((await read("ui://bookshop/book-card.html")).message?.result).toMatchObject({

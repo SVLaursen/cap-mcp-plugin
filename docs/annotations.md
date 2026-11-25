@@ -102,7 +102,8 @@ Register inside the listener, synchronously: the plugin emits `mcp:apps` once, w
 served the app, and checks the registrations right after it (an `async` listener that awaits
 first still registers, but after the startup warnings). The function you register runs on
 every read and may be async. A UI resource is listed and readable only for
-callers who see a tool that links to it. A missing file is a startup warning (unless app code registers that URI), and the tool then
+callers who see a tool that links to it, with that tool's name and title as its `name` and
+`title` (the first by tool name when several tools link to it). A missing file is a startup warning (unless app code registers that URI), and the tool then
 has no UI link; a registration no `@mcp.ui` links to is a warning and is not served.
 
 **Resources from code** (`mcp:resources`, ADR 0013): app code and other plugins register
