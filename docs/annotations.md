@@ -219,8 +219,8 @@ mcp-skills/
     references/checklist.md
 ```
 
-- The folder is relative to the app root and must stay inside it (symlinks followed); one folder
-  per skill. A folder that does not exist, is not a folder or leaves the app root is an
+- The folder is relative to the app root and must stay inside it (symlinks followed), and may not
+  be the app root itself; one folder per skill. A folder that does not exist, is not a folder or leaves the app root is an
   `INVALID_CONFIG` error, and no skills are served.
 - Loaded once, when CAP has served the app. Each `SKILL.md` needs frontmatter with `name` (its
   folder's name) and `description`. A skill that breaks a rule (also: a symlink in it, more than
@@ -231,8 +231,8 @@ mcp-skills/
   every file reads through `resources/read` as `skill://<skill>/<path>`, and each `SKILL.md` is
   in `resources/list`. Cache hints: 60 s, private.
 - Static content: hosts bind a user's approval to the published digests, so a skill changes only
-  with a restart (and needs approving again). `cds build` copies the folder to `gen/srv`
-  (without symlinks).
+  with a restart (and needs approving again). `cds build` copies the served skills to
+  `gen/srv/<folder>`: a skill the app skips is not copied.
 - `skill:` URIs and the template name `io.modelcontextprotocol/skills` are reserved:
   `mcp:resources` refuses them.
 

@@ -214,27 +214,31 @@ export function readInstructions(
 export function skillsFolder(
   value: string | undefined,
   root: string,
-): { folder?: string; diagnostic?: Diagnostic } {
+): { folder?: string; reason?: string; diagnostic?: Diagnostic } {
   if (value === undefined) return {};
-  const refused = (why: string): { diagnostic: Diagnostic } => ({
+  const refused = (reason: string): { reason: string; diagnostic: Diagnostic } => ({
+    reason,
     diagnostic: {
       level: "error",
       code: "INVALID_CONFIG",
       target: "cds.mcp.skills",
-      message: `cds.mcp.skills folder ${value} ${why}; serving no skills`,
+      message: `cds.mcp.skills folder ${value} ${reason}; serving no skills`,
     },
   });
-  const folder = path.resolve(root, value);
   let real: string;
   try {
-    real = realpathSync(folder);
+    real = realpathSync(path.resolve(root, value));
   } catch {
     return refused("does not exist");
   }
   const inside = path.relative(realpathSync(root), real);
-  if (inside.startsWith("..") || path.isAbsolute(inside)) return refused("is outside the app root");
+  // The root itself would serve every SKILL.md below it, node_modules included.
+  if (inside === "") return refused("is the app root itself");
+  if (inside === ".." || inside.startsWith(`..${path.sep}`) || path.isAbsolute(inside))
+    return refused("is outside the app root");
   if (!statSync(real).isDirectory()) return refused("is not a folder");
-  return { folder };
+  // The path as checked: loading it must not resolve a symlink again.
+  return { folder: real };
 }
 
 /**

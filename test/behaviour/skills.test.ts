@@ -74,6 +74,8 @@ describe("serving skills", () => {
       const read = await rpc(demo.POST, "bob", "resources/read", { uri });
       const [content] = read.message?.result?.contents as { uri: string; text: string }[];
       expect(content?.uri).toBe(uri);
+      // ADR 0016: skill files are cached like our lists (the catalog's own hint wins).
+      expect(read.message?.result).toMatchObject({ ttlMs: 60_000, cacheScope: "private" });
       expect(sha256(Buffer.from(content?.text ?? "", "utf8"))).toBe(digest);
     }
   });
@@ -89,6 +91,7 @@ describe("serving skills", () => {
         mimeType: "inode/directory",
       }),
     ]);
+    expect(dir.message?.result).toMatchObject({ ttlMs: 60_000, cacheScope: "private" });
     const list = await rpc(demo.POST, "bob", "resources/list");
     expect(list.message?.result?.resources).toEqual(
       expect.arrayContaining([

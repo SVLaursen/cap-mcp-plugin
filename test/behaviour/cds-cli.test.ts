@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { setUpSkills } from "../../src/adapter/skills";
 
 /**
  * M6 — smoke tests: the real cds-dk CLI (`cds add mcp`, `cds build`) in a fresh app, with the
@@ -146,29 +147,54 @@ describe("cds build and the skills folder (ADR 0016)", () => {
     return out.stdout + out.stderr;
   };
 
-  test("copies the skills folder to where the deployed app reads it, without symlinks", () => {
-    const skill = path.join(app, "mcp-skills", "handle-return");
-    mkdirSync(path.join(skill, "references"), { recursive: true });
-    writeFileSync(path.join(skill, "SKILL.md"), "---\nname: handle-return\ndescription: x\n---\n");
-    writeFileSync(path.join(skill, "references", "checklist.md"), "# Checklist\n");
-    symlinkSync("/etc/hosts", path.join(skill, "hosts.md"));
+  test("copies exactly the skills the app serves, to where the deployed app reads them", async () => {
+    const write = (file: string, text: string) => {
+      mkdirSync(path.dirname(path.join(app, file)), { recursive: true });
+      writeFileSync(path.join(app, file), text);
+    };
+    const skill = (name: string) => `---\nname: ${name}\ndescription: x\n---\n`;
+    write("mcp-skills/handle-return/SKILL.md", skill("handle-return"));
+    write("mcp-skills/handle-return/references/checklist.md", "# Checklist\n");
+    write("mcp-skills/handle-return/.env", "SECRET=1\n");
+    // Skipped at runtime (a symlink in it): must not become a served skill in gen/.
+    write("mcp-skills/linked/SKILL.md", skill("linked"));
+    symlinkSync("/etc/hosts", path.join(app, "mcp-skills", "linked", "hosts.md"));
     setSkills("mcp-skills");
     const out = build();
-    const gen = path.join(app, "gen", "srv", "mcp-skills", "handle-return");
-    expect(readFileSync(path.join(gen, "SKILL.md"), "utf8")).toContain("name: handle-return");
-    expect(readFileSync(path.join(gen, "references", "checklist.md"), "utf8")).toBe(
-      "# Checklist\n",
-    );
-    // A symlink would become a regular file in gen/ and be served from there: never copied.
-    expect(existsSync(path.join(gen, "hosts.md"))).toBe(false);
-    expect(out).toMatch(
-      /MCP skills folder mcp-skills: handle-return\/hosts\.md is a symlink; not copied/,
-    );
+    const gen = path.join(app, "gen", "srv");
+    expect(
+      readFileSync(path.join(gen, "mcp-skills/handle-return/references/checklist.md"), "utf8"),
+    ).toBe("# Checklist\n");
+    expect(existsSync(path.join(gen, "mcp-skills/handle-return/.env"))).toBe(false);
+    expect(existsSync(path.join(gen, "mcp-skills/linked"))).toBe(false);
+    expect(out).toMatch(/MCP skills folder mcp-skills: .*linked\/hosts\.md.*symlink/);
+    // The deployed app serves what the source app serves.
+    const served = async (root: string) => (await setUpSkills("mcp-skills", root)).uris;
+    expect(await served(gen)).toEqual(await served(app));
+    expect(await served(gen)).toEqual(["skill://handle-return/SKILL.md"]);
+  }, 60_000);
+
+  test("checks the folder as the app does: outside the app root, or through a symlink out, is not copied", () => {
+    const outside = mkdtempSync(path.join(tmpdir(), "cap-mcp-outside-"));
+    try {
+      mkdirSync(path.join(outside, "x"), { recursive: true });
+      writeFileSync(path.join(outside, "x", "SKILL.md"), "---\nname: x\ndescription: x\n---\n");
+      symlinkSync(outside, path.join(app, "linked-skills"));
+      setSkills("linked-skills");
+      expect(build()).toMatch(
+        /MCP skills folder linked-skills is outside the app root; not copied/,
+      );
+      expect(existsSync(path.join(app, "gen", "srv", "linked-skills"))).toBe(false);
+      setSkills("../escape");
+      expect(build()).toMatch(/MCP skills folder \.\.\/escape .*; not copied/);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
   }, 60_000);
 
   test("says when the skills folder cannot be copied (missing, or an absolute path)", () => {
     setSkills("missing-skills");
-    expect(build()).toMatch(/MCP skills folder missing-skills not found; not copied/);
+    expect(build()).toMatch(/MCP skills folder missing-skills does not exist; not copied/);
     setSkills(path.join(app, "mcp-skills"));
     expect(build()).toMatch(
       /MCP skills folder .*mcp-skills is an absolute path; the deployed app reads it there, so it is not copied/,

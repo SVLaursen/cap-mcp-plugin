@@ -66,7 +66,6 @@ describe("loading the skills folder", () => {
     expect(setup.uris).toEqual([]);
     expect(setup.catalog).toBeUndefined();
     expect(setup.diagnostics.map((d) => [d.code, d.target, d.message])).toEqual([
-      ["INVALID_SKILL", "skills", expect.stringMatching(/no skills found/)],
       [
         "INVALID_SKILL",
         "skills/handle-return",
@@ -82,6 +81,68 @@ describe("loading the skills folder", () => {
     expect(setup.uris).toEqual(["skill://handle-return/SKILL.md"]);
     expect(setup.diagnostics.map((d) => [d.code, d.target])).toEqual([
       ["INVALID_SKILL", "skills/big"],
+    ]);
+  });
+
+  test("a nested skill inside a skipped one is reported too, not dropped silently", async () => {
+    write("skills/big/SKILL.md", skill("big"));
+    write("skills/big/data.bin", "x".repeat(16 * 1024 * 1024));
+    write("skills/big/inner/SKILL.md", skill("inner"));
+    const setup = await setUpSkills("skills", root);
+    expect(setup.uris).toEqual(["skill://handle-return/SKILL.md"]);
+    expect(setup.diagnostics.map((d) => [d.target, d.message])).toEqual([
+      ["skills/big", expect.stringMatching(/exceeds the limit/)],
+      ["skills/big/inner", expect.stringMatching(/inside skills\/big, which is not served/)],
+    ]);
+  });
+
+  test("diagnostic targets are clean paths, also for a value with a trailing slash", async () => {
+    write("skills/bad-name/SKILL.md", skill("other-name"));
+    const setup = await setUpSkills("skills/", root);
+    expect(setup.diagnostics.map((d) => d.target)).toEqual(["skills/bad-name/SKILL.md"]);
+  });
+
+  test("after startup, problems reading a skill file go to the log, once per read", async () => {
+    const warnings: string[] = [];
+    const setup = await setUpSkills("skills", root, {
+      warn: (...args) => void warnings.push(args.join(" ")),
+    });
+    write("skills/handle-return/references/checklist.md", "# Changed\n");
+    const handler = createMcpHandler(() => {
+      const server = new McpServer({ name: "t", version: "0" });
+      setup.catalog?.attach(server);
+      return server;
+    });
+    const read = () =>
+      handler.fetch(
+        new Request("http://localhost/mcp", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            accept: "application/json, text/event-stream",
+            "mcp-protocol-version": "2026-07-28",
+            "mcp-method": "resources/read",
+            "mcp-name": "skill://handle-return/references/checklist.md",
+          },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "resources/read",
+            params: {
+              uri: "skill://handle-return/references/checklist.md",
+              _meta: {
+                "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+                "io.modelcontextprotocol/clientCapabilities": {},
+              },
+            },
+          }),
+        }),
+      );
+    await read();
+    await read();
+    expect(warnings).toEqual([
+      expect.stringContaining("references/checklist.md"),
+      expect.stringContaining("references/checklist.md"),
     ]);
   });
 

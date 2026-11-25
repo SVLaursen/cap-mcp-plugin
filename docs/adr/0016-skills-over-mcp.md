@@ -165,3 +165,19 @@ decision 2 meant "not served", so the plugin skips such skills itself: it loads 
 measures each entry's published files and bytes against `SKILL_LIMITS`, and, if any skill is
 over, loads again without those skill folders. Each is an `INVALID_SKILL` warning. The decision
 is unchanged; only how it is carried out.
+
+## Clarifications from the block review (S10, 2026-11-25)
+
+How decisions 1, 2 and 9 are carried out; the decisions themselves are unchanged.
+
+- Decision 1: the app root itself is refused (`"."`, `"srv/.."`): it would serve every
+  `SKILL.md` below it, `node_modules` included. The folder is loaded at the path that was checked
+  (symlinks resolved once).
+- Decision 2: a skill nested in a skipped one goes with it and gets its own `INVALID_SKILL`
+  warning. After startup, problems the SDK finds when a file is read (changed on disk, cannot be
+  read) are logged as warnings, once per read. Any error while loading, not only a
+  `SkillCatalogError`, is `INVALID_CONFIG`, and startup goes on.
+- Decision 9: `cds build` checks the folder as the runtime does, loads it as the runtime does,
+  and copies exactly the files of the skills the app serves. A skill the runtime skips (a
+  symlink, over the limits, bad frontmatter) and files it ignores (dotfiles) are not copied, so
+  the deployed app never serves what the app does not; cds-dk's own copy follows symlinks.

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { capQueryLimit, readConfig, readInstructions, skillsFolder } from "../../src/config";
@@ -202,6 +202,7 @@ describe("skills folder (ADR 0016)", () => {
   });
   afterEach(() => rmSync(base, { recursive: true, force: true }));
   const refused = (folder: string, why: string) => ({
+    reason: why,
     diagnostic: {
       level: "error",
       code: "INVALID_CONFIG",
@@ -211,13 +212,30 @@ describe("skills folder (ADR 0016)", () => {
   });
 
   test("a folder under the app root is resolved against it", () => {
-    expect(skillsFolder("mcp-skills", root)).toEqual({ folder: path.join(root, "mcp-skills") });
+    expect(skillsFolder("mcp-skills", root)).toEqual({
+      folder: realpathSync(path.join(root, "mcp-skills")),
+    });
     expect(skillsFolder(undefined, root)).toEqual({});
   });
 
   test("a folder that does not exist, or is not a folder, is an error and serves no skills", () => {
     expect(skillsFolder("missing", root)).toEqual(refused("missing", "does not exist"));
     expect(skillsFolder("notes.md", root)).toEqual(refused("notes.md", "is not a folder"));
+  });
+
+  test("the app root itself is refused: it would serve skills from node_modules", () => {
+    for (const folder of [".", "mcp-skills/.."])
+      expect(skillsFolder(folder, root)).toEqual(refused(folder, "is the app root itself"));
+  });
+
+  test("a folder whose name starts with two dots is inside the app root", () => {
+    mkdirSync(path.join(root, "..skills"));
+    expect(skillsFolder("..skills", root).folder).toBeDefined();
+  });
+
+  test("the folder is returned with symlinks resolved, as it was checked", () => {
+    symlinkSync(path.join(root, "mcp-skills"), path.join(root, "alias"));
+    expect(skillsFolder("alias", root).folder).toEqual(skillsFolder("mcp-skills", root).folder);
   });
 
   test("a folder outside the app root, also through a symlink, is an error", () => {

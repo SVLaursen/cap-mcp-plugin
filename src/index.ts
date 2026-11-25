@@ -127,7 +127,9 @@ export function activate(cds: CdsLike): void {
     const instructions = readInstructions(config.instructions, cds.root);
     if (instructions.diagnostic) diagnostics.push(instructions.diagnostic);
     // Skills over MCP (ADR 0016): one static catalog from the configured folder.
-    const skills = await setUpSkills(config.skills, cds.root);
+    const skills = await setUpSkills(config.skills, cds.root, {
+      warn: (...args) => log.warn(...args),
+    });
     diagnostics.push(...skills.diagnostics);
     const mcpPath = config.path ?? MCP_PATH;
     const registryFor = registryCache({

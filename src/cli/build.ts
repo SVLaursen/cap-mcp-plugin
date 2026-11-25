@@ -1,7 +1,8 @@
 import { existsSync } from "node:fs";
-import { copyFile, lstat, mkdir, readdir } from "node:fs/promises";
+import { copyFile, mkdir } from "node:fs/promises";
 import path from "node:path";
-import { readConfig } from "../config";
+import { servedFiles, setUpSkills } from "../adapter/skills";
+import { readConfig, skillsFolder } from "../config";
 
 /** What the build task needs from cds-dk's `cds` (passed in, ADR 0005). */
 export interface BuildCds {
@@ -41,7 +42,7 @@ export function mcpBuildTask(cds: BuildCds) {
       const self = this as unknown as PluginSelf;
       const { file, skills } = configured();
       if (file) await copyOne(self, "instructions file", file, () => copyInstructions(self, file));
-      if (skills) await copyOne(self, "skills folder", skills, () => copySkills(self, skills));
+      if (skills) await copySkills(self, skills);
     }
   };
 
@@ -65,31 +66,27 @@ export function mcpBuildTask(cds: BuildCds) {
   }
 
   /**
-   * The skills folder, file by file. Symlinks are left out: cds-dk's copy follows them, so a
-   * skill the app skips at runtime (ADR 0016) would turn into regular files in gen/ and be served.
+   * Exactly the skills the app serves (ADR 0016), checked and loaded as the runtime does: the
+   * folder must be inside the app root, and a skill the runtime skips (a symlink in it, over the
+   * limits, bad frontmatter) is not copied, so gen/ never serves what the app does not. Files
+   * the runtime ignores (dotfiles) stay out too. cds-dk's own copy would follow symlinks.
    */
   async function copySkills(self: PluginSelf, folder: string) {
-    const from = path.resolve(cds.root, folder);
+    const warn = (message: string) =>
+      self.pushMessage(`MCP skills folder ${folder}${message}`, Base.WARNING);
+    if (path.isAbsolute(folder))
+      return warn(" is an absolute path; the deployed app reads it there, so it is not copied");
+    const checked = skillsFolder(folder, cds.root);
+    if (!checked.folder) return warn(` ${checked.reason ?? "cannot be used"}; not copied`);
+    const { catalog, diagnostics } = await setUpSkills(folder, cds.root);
+    for (const d of diagnostics) warn(`: ${d.target}: ${d.message}`);
+    if (!catalog) return;
     const to = path.resolve(self.task.dest, "srv", folder);
-    const walk = async (relative: string): Promise<void> => {
-      for (const entry of await readdir(path.join(from, relative))) {
-        const item = path.join(relative, entry);
-        const stat = await lstat(path.join(from, item));
-        if (stat.isSymbolicLink()) {
-          const shown = item.split(path.sep).join("/");
-          self.pushMessage(
-            `MCP skills folder ${folder}: ${shown} is a symlink; not copied`,
-            Base.WARNING,
-          );
-        } else if (stat.isDirectory()) {
-          await walk(item);
-        } else if (stat.isFile()) {
-          await mkdir(path.dirname(path.join(to, item)), { recursive: true });
-          await copyFile(path.join(from, item), path.join(to, item));
-          self.pushFile(path.join(to, item));
-        }
-      }
-    };
-    await walk("");
+    for (const file of servedFiles(catalog)) {
+      const dest = path.join(to, ...file.split("/"));
+      await mkdir(path.dirname(dest), { recursive: true });
+      await copyFile(path.join(checked.folder, ...file.split("/")), dest);
+      self.pushFile(dest);
+    }
   }
 }
