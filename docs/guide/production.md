@@ -44,6 +44,67 @@ The plugin is not an authorization server. It does not register clients (no dyna
 registration) and issues no tokens: how a client gets credentials is up to your XSUAA or IAS
 setup, for example an OAuth client you create for the agent's host.
 
+### How MCP clients register with XSUAA and IAS
+
+An MCP client needs a client ID at the authorization server. MCP 2026-07-28 has it try, in
+order: client information it was configured with (pre-registration), a Client ID Metadata
+Document (when the authorization server's metadata has `client_id_metadata_document_supported`),
+Dynamic Client Registration (when it has a `registration_endpoint`; deprecated in 2026-07-28),
+and otherwise asking the user.
+
+**Plan for a pre-registered OAuth client per MCP client**, for XSUAA and for IAS. Neither
+service documents Client ID Metadata Documents, and the dynamic registration IAS mentions is not
+documented far enough to rely on (see below).
+
+**XSUAA.** Clients come from the app's own XSUAA service instance: a binding or a service key
+carries a client ID and secret. Allow the MCP client's redirect URI in `xs-security.json` (XSUAA
+rejects any other; wildcards are allowed, and `localhost` is always allowed in cloud landscapes):
+
+```json
+{
+  "xsappname": "bookshop",
+  "oauth2-configuration": {
+    "redirect-uris": ["<the MCP client's callback URL>"]
+  }
+}
+```
+
+Update the service instance with it, create a service key for the MCP client
+(`cf create-service-key bookshop-auth claude-desktop`), and enter its `clientid` and
+`clientsecret` in the client's OAuth settings. The client then finds the authorization server
+through the RFC 9728 metadata above.
+
+**IAS.** Create an OpenID Connect application for the MCP client in the administration console
+of SAP Cloud Identity Services, with the client's redirect URI and the authorization code grant.
+Give it a secret, or make it a public client: IAS asks for PKCE with public clients and
+recommends it for confidential ones. Enter its client ID (and secret) in the MCP client.
+
+**What was checked, and what was not** (25 Nov 2026):
+
+- Verified in SAP's documentation (the
+  [SAP-docs/btp-cloud-platform](https://github.com/SAP-docs/btp-cloud-platform) pages for the
+  SAP Authorization and Trust Management service, and help.sap.com for Cloud Identity Services):
+  XSUAA clients come from bindings and service keys, with client ID and secret; `redirect-uris`
+  in `oauth2-configuration` are enforced, wildcards allowed, `localhost` always allowed;
+  XSUAA supports the authorization code, client credentials and SAML 2.0 bearer grants and
+  refresh tokens. IAS ([Configuring OpenID Connect](https://help.sap.com/docs/cloud-identity-services/cloud-identity-services/openid-connect))
+  supports OIDC Discovery and lists the "OAuth 2.0 Dynamic Client Registration Protocol"; its
+  [discovery document](https://help.sap.com/docs/cloud-identity-services/cloud-identity-services/call-identity-authentication-discovery-endpoint)
+  is at `https://<tenant>.accounts.ondemand.com/.well-known/openid-configuration` (or
+  `.accounts.cloud.sap`, or a custom domain) and lists `code_challenge_methods_supported:
+["plain", "S256"]`, `authorization_response_iss_parameter_supported: true` and
+  `offline_access` among its scopes; IAS requires PKCE for public clients.
+- Not found in SAP's documentation: Client ID Metadata Documents for either service; dynamic
+  client registration, a discovery URL, PKCE or public clients for XSUAA; how dynamic
+  registration is used in IAS (its endpoint and who may call it). The documented IAS discovery
+  example has no `registration_endpoint`, so an MCP client that follows discovery would not find
+  one there.
+- Not verified at all: a live tenant's metadata; any MCP client completing dynamic registration
+  against IAS; whether a CAP app with IAS accepts a token issued to a separate IAS application
+  (its audience is that application's client ID). Check these in the smoke test on BTP before
+  you rely on them. IAS also notes that an issuer without HTTPS is not OIDC-compliant; MCP
+  clients check the issuer (RFC 9207), so use an HTTPS issuer.
+
 ### Asking for scopes
 
 MCP clients choose the scopes they request from the challenge's `scope`, else from the
