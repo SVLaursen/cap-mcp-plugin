@@ -104,11 +104,18 @@ export class RegisteredHints implements HintRegistry {
 /**
  * Startup: let `mcp:hints` listeners register (synchronously, during the emit), then close the
  * registry. Emitted whether or not anything else is configured, so listeners can rely on it.
+ * Listeners get only the two methods: closing the registry or reading other plugins' providers
+ * is the plugin's side.
  */
 export function setUpHints(emit: (registry: HintRegistry) => void): RegisteredHints {
   const hints = new RegisteredHints();
+  const facade: HintRegistry = Object.freeze({
+    contractVersion: 1 as const,
+    addInstructions: (provider: InstructionsProvider) => hints.addInstructions(provider),
+    addToolNotes: (provider: ToolNotesProvider) => hints.addToolNotes(provider),
+  });
   try {
-    emit(hints);
+    emit(facade);
   } finally {
     hints.close();
   }
@@ -123,26 +130,26 @@ export interface HintLog {
 
 /**
  * One provider's answer, as text to add: trimmed, cut at `max` characters, or undefined for
- * nothing. A throw, a rejection or a non-text answer is logged and adds nothing; its message
- * stays in the log.
+ * nothing. A throw, a rejection or a non-text answer is reported (`failed`) and adds nothing;
+ * its message stays in the log.
  */
 async function ask(
   call: () => string | undefined | Promise<string | undefined>,
   what: string,
   max: number,
-  log: HintLog,
+  failed: (...message: unknown[]) => void,
   warnOnce: (key: string, message: string) => void,
 ): Promise<string | undefined> {
   let answer: unknown;
   try {
     answer = await call();
   } catch (error) {
-    log.error(`cap-mcp: ${what} failed; skipped for this request:`, error);
+    failed(`cap-mcp: ${what} failed; skipped for this request:`, error);
     return undefined;
   }
   if (answer === undefined || answer === null) return undefined;
   if (typeof answer !== "string") {
-    log.error(`cap-mcp: ${what} returned ${typeof answer}, not text; skipped for this request`);
+    failed(`cap-mcp: ${what} returned ${typeof answer}, not text; skipped for this request`);
     return undefined;
   }
   const text = answer.trim();
@@ -173,28 +180,37 @@ export function hintsFor(hints: RegisteredHints, log: HintLog) {
      */
     async instructions(base: string | undefined, ctx: HintContext): Promise<string | undefined> {
       const texts = await Promise.all(
-        hints
-          .instructions()
-          .map((p) =>
-            ask(
-              () => p.text(ctx),
-              `instructions provider ${p.id}`,
-              MAX_INSTRUCTIONS,
-              log,
-              warnOnce,
-            ),
+        hints.instructions().map((p) =>
+          ask(
+            () => p.text(ctx),
+            `instructions provider ${p.id}`,
+            MAX_INSTRUCTIONS,
+            (...message) => log.error(...message),
+            warnOnce,
           ),
+        ),
       );
       const added = texts.filter((t): t is string => !!t);
       if (added.length === 0) return base;
       return [base?.trim(), ...added].filter((t) => !!t).join("\n\n");
     },
 
-    /** The notes for each target this caller gets, by tool name; tools without notes are absent. */
+    /**
+     * The notes for each target this caller gets, by tool name; tools without notes are absent.
+     * A provider that fails is logged once for the request, not once per tool.
+     */
     async notes(targets: ToolTarget[], ctx: HintContext): Promise<Map<string, string[]>> {
       const providers = hints.toolNotes();
       const notes = new Map<string, string[]>();
       if (providers.length === 0) return notes;
+      const failedNow = new Set<string>();
+      const failedOnce =
+        (id: string) =>
+        (...message: unknown[]) => {
+          if (failedNow.has(id)) return;
+          failedNow.add(id);
+          log.error(...message);
+        };
       await Promise.all(
         targets.map(async (target) => {
           const each = await Promise.all(
@@ -203,7 +219,7 @@ export function hintsFor(hints: RegisteredHints, log: HintLog) {
                 () => p.note(target, ctx),
                 `tool notes provider ${p.id}`,
                 MAX_NOTE,
-                log,
+                failedOnce(p.id),
                 warnOnce,
               ),
             ),

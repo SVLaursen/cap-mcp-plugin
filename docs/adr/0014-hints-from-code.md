@@ -65,9 +65,12 @@ The types are exported from the package (types only), as for `mcp:resources`.
 
 ### Registration (startup)
 
-Listeners register synchronously while the event runs. Afterwards the registry is closed and
-both methods throw (so does a listener that awaits something first). A registration that throws
-fails startup. Each of these throws a `cap-mcp: …` error:
+Listeners register synchronously while the event runs. They get a frozen object with
+`contractVersion` and the two methods only, so no listener can close the registry or see
+another plugin's providers. Afterwards the registry is closed and both methods throw. A
+registration that throws during the emit fails startup. A listener that awaits something first
+and registers after it throws inside its own promise: `cds.emit` does not wait for listeners, so
+that surfaces as an unhandled rejection, not a startup error (as for `mcp:resources`). Each of these throws a `cap-mcp: …` error:
 
 - a missing or empty `id`;
 - `text` (or `note`) is not a function;
@@ -105,8 +108,14 @@ before (nothing is awaited, the output is byte for byte the same).
 
 A provider that throws, rejects, or returns anything but a string (or `undefined`/`null`) is
 skipped for that request and logged as an error (`cap-mcp: tool notes provider <id> failed;
-skipped for this request`). Its message never reaches the client. The rest of the request goes
-on as if that provider had returned nothing.
+skipped for this request`), once per provider and request (a broken notes provider is not
+logged once per tool). Its message never reaches the client. The rest of the request goes on as
+if that provider had returned nothing.
+
+There is no time limit: the factory waits for every provider, so a provider that never settles
+holds up every request, `tools/call` included. Providers must settle. A timeout would race the
+provider's own work without cancelling it; if one is ever needed, it is a later contract
+version.
 
 ### Opt-in (ADR 0004)
 

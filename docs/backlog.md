@@ -143,7 +143,7 @@ Plugins and app code add text to the server instructions and short notes to gene
 - [x] No providers: output byte for byte as before (contract test; demo baseline captured at 51b3a6e)
 - [x] Docs: ADR 0014 (proposed), `docs/annotations.md`, `docs/guide/features.md`, README, `docs/architecture.md`
 - [ ] Maintainer: accept ADR 0014
-- [ ] Review: run the `reviewer` agent on the block's diff and fix what it finds
+- [x] Review: run the `reviewer` agent on the block's diff and fix what it finds (fixed: the demo baseline fixture, a frozen copy of bob's whole tool list with the package version in it, which would have failed the `2.0.0-rc.0` release commit, replaced by a contract test that providers adding nothing change nothing, notes included; a failing notes provider is logged once per request, not once per tool; listeners get a frozen object with the two methods only; tests for notes that are not text or reject, a bound action's target, compact tools and tools the caller cannot reach getting no notes. Left as is, recorded in ADR 0014: no time limit on providers (they must settle); an `await` before registering surfaces as an unhandled rejection, as for `mcp:resources`)
 
 ### Filtered-read notices
 

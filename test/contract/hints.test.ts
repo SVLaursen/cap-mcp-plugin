@@ -50,6 +50,19 @@ describe("mcp:hints registry (ADR 0014)", () => {
     expect(register).toThrow(message);
   });
 
+  test("listeners get the registry's two methods only, not the plugin's own side", () => {
+    let given: object | undefined;
+    setUpHints((hints) => {
+      given = hints;
+    });
+    expect(Object.keys(given ?? {}).sort()).toEqual([
+      "addInstructions",
+      "addToolNotes",
+      "contractVersion",
+    ]);
+    expect(Object.isFrozen(given)).toBe(true);
+  });
+
   test("after the event, both methods throw", () => {
     let registry: RegisteredHints | undefined;
     setUpHints((hints) => {
@@ -73,14 +86,21 @@ describe("mcp:hints registry (ADR 0014)", () => {
   });
 });
 
-/** A model with entities, an action, a function and a describe tool, in two services. */
+/**
+ * A model with entities, a bound and an unbound action, a function, an entity only admins
+ * reach, a describe tool and a compact service.
+ */
 const CDL = `
   @mcp service Shop {
-    entity Books { key ID : Integer; title : String; }
+    entity Books { key ID : Integer; title : String; } actions {
+      @mcp action reserve() returns String;
+    }
+    @requires: 'admin' entity Secrets { key ID : Integer; }
     @mcp action order(book : Integer) returns String;
     function stock(book : Integer) returns Integer;
   }
   @mcp @mcp.describe service Admin { entity Authors { key ID : Integer; } }
+  @mcp @mcp.compact service Back { entity Stock { key ID : Integer; } }
 `;
 
 interface Setup {
@@ -272,14 +292,47 @@ describe("mcp:hints: tool notes", () => {
       kind: "action",
     });
     expect(byTool("Shop_stock")).toMatchObject({ definition: "Shop.stock", kind: "function" });
-    // Once per generated tool, per request. The describe tool has no definition behind it.
+    expect(byTool("Shop_Books_reserve")).toEqual({
+      tool: "Shop_Books_reserve",
+      service: "Shop",
+      definition: "Shop.Books.reserve",
+      kind: "action",
+    });
+    // Once per generated tool, per request. Describe and compact tools act on a whole service
+    // and have no definition behind them.
+    const wholeService = (name: string) => name === "Admin_describe" || name.startsWith("Back_");
     expect(seen.map((t) => t.tool).sort()).toEqual(
       listed
         .map((t) => t.name)
-        .filter((name) => name !== "Admin_describe")
+        .filter((name) => !wholeService(name))
         .sort(),
     );
-    expect(listed.map((t) => t.name)).toContain("Admin_describe");
+    expect(listed.map((t) => t.name)).toEqual(
+      expect.arrayContaining(["Admin_describe", "Back_query", "Back_get"]),
+    );
+  });
+
+  test("providers are never asked about tools the caller cannot reach", async () => {
+    const seen: ToolTarget[] = [];
+    const { tools } = serve({ notes: [{ id: "a", note: (t) => void seen.push(t) }] });
+    await tools();
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.filter((t) => t.definition === "Shop.Secrets")).toEqual([]);
+  });
+
+  test("a note that is not text, or a provider that rejects, is logged and adds nothing", async () => {
+    const before = await serve().tools();
+    const { tools, errors } = serve({
+      notes: [
+        { id: "odd", note: () => 42 as never },
+        { id: "worse", note: () => Promise.reject(new Error("secret-token")) },
+      ],
+    });
+    expect((await tools()).map((t) => t.description)).toEqual(before.map((t) => t.description));
+    expect(errors.map((e) => String(e[0])).sort()).toEqual([
+      expect.stringMatching(/tool notes provider odd returned number/),
+      expect.stringMatching(/tool notes provider worse failed/),
+    ]);
   });
 
   test("a note over 400 characters is cut there, with one warning", async () => {
@@ -310,8 +363,12 @@ describe("mcp:hints: tool notes", () => {
     const listed = res.result?.tools as { name: string; description: string }[];
     const original = before.find((t) => t.name === "Shop_order")?.description;
     expect(listed.find((t) => t.name === "Shop_order")?.description).toBe(`${original}\n\nGood.`);
-    expect(errors.length).toBeGreaterThan(0);
-    expect(errors.every((e) => /tool notes provider bad failed/.test(String(e[0])))).toBe(true);
+    // Once per provider and request, not once per tool.
+    expect(errors.map((e) => String(e[0]))).toEqual([
+      expect.stringMatching(/tool notes provider bad failed/),
+    ]);
+    await call("tools/list");
+    expect(errors).toHaveLength(2);
   });
 });
 
@@ -338,6 +395,22 @@ describe("mcp:hints: the caller", () => {
 });
 
 describe("mcp:hints: nothing registered", () => {
+  test("providers that add nothing change nothing: server/discover and tools/list as without the registry", async () => {
+    for (const base of [undefined, "Bookshop data.\n"]) {
+      const without = serve({ noRegistry: true, base });
+      const silent = serve({
+        base,
+        instructions: [{ id: "a", text: () => undefined }],
+        notes: [{ id: "b", note: () => undefined }],
+      });
+      for (const method of ["server/discover", "tools/list"]) {
+        expect(JSON.stringify(await silent.call(method))).toBe(
+          JSON.stringify(await without.call(method)),
+        );
+      }
+    }
+  });
+
   test("server/discover and tools/list are what they were without the registry", async () => {
     for (const base of [undefined, "Bookshop data.\n"]) {
       const without = serve({ noRegistry: true, base });

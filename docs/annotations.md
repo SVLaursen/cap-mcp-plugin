@@ -180,8 +180,9 @@ cds.on("mcp:hints", (hints) => {
 ```
 
 - The plugin emits `mcp:hints` once, right after `mcp:resources`, whether or not anything else
-  is configured. Register synchronously inside the listener; afterwards both methods throw, and
-  a registration that throws fails startup. `hints.contractVersion` is `1`.
+  is configured. Register synchronously inside the listener; afterwards both methods throw (after
+  an `await`, as an unhandled rejection, since `cds.emit` does not wait), and a registration
+  that throws fails startup. `hints.contractVersion` is `1`.
 - Both methods throw (`cap-mcp: …`) for an empty `id`, a callback that is not a function, and
   an `id` already registered with the same method (one plugin may use one `id` for both).
 - Providers get `{ user, locale, tenant }` and run inside the request's `cds.context`, not in a
@@ -196,7 +197,8 @@ cds.on("mcp:hints", (hints) => {
   and cut at 400 characters, is appended to that tool's description as its own paragraph,
   in registration order. Plain text, passed on as is. Describe and compact tools get no notes.
 - A provider that throws, rejects or returns something other than text is skipped for that
-  request and logged; its message never reaches the client.
+  request and logged once for it; its message never reaches the client. There is no time limit:
+  a provider must settle, or every request waits for it.
 - `note` runs for every tool on every request, `tools/call` included: answer from memory (an
   index built at startup), not with I/O per tool.
 

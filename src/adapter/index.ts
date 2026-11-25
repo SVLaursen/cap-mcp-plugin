@@ -280,16 +280,23 @@ function confirmation(
  */
 function toolTarget(spec: ExposureSpec, tool: ToolSpec): ToolTarget | undefined {
   const { target } = tool;
-  const service = serviceOf(spec, target);
-  if (!service) return undefined;
-  if (target.kind === "entity")
+  if (target.kind === "entity") {
+    const service = serviceOf(spec, target);
+    if (!service) return undefined;
     return { tool: tool.name, service, definition: target.entity, kind: "entity" };
+  }
   if (target.kind !== "operation") return undefined;
   const operation = spec.services
     .flatMap((s) => s.operations)
     .find((o) => o.name === target.operation);
-  if (!operation) return undefined;
-  return { tool: tool.name, service, definition: operation.name, kind: operation.kind };
+  return (
+    operation && {
+      tool: tool.name,
+      service: operation.service,
+      definition: operation.name,
+      kind: operation.kind,
+    }
+  );
 }
 
 /** The per-request server factory: one McpServer with the caller's tools. */
