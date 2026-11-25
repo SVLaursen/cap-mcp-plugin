@@ -44,6 +44,28 @@ The plugin is not an authorization server. It does not register clients (no dyna
 registration) and issues no tokens: how a client gets credentials is up to your XSUAA or IAS
 setup, for example an OAuth client you create for the agent's host.
 
+### Asking for scopes
+
+MCP clients choose the scopes they request from the challenge's `scope`, else from the
+metadata's `scopes_supported`, else they ask for none. To tell them, list the scopes:
+
+```json
+{
+  "cds": {
+    "mcp": { "scopes": ["bookshop!t1234.read", "openid"] }
+  }
+}
+```
+
+The challenge then reads
+`Bearer resource_metadata="…", scope="bookshop!t1234.read openid"`, and the metadata has
+`"scopes_supported": ["bookshop!t1234.read", "openid"]`. Write the scopes as your authorization
+server issues them: for XSUAA, with the `xsappname` prefix. Without the setting both are as
+above. `offline_access` is refused (`INVALID_CONFIG`): the MCP specification says servers should
+not ask for refresh tokens; clients add it themselves when the authorization server offers it.
+The scopes only tell the client what to ask for; CAP still checks `@requires` and `@restrict`
+on every call.
+
 ### Multitenant XSUAA
 
 In a multitenant app, each subscriber logs in at its own subdomain. The metadata is read before
@@ -132,6 +154,7 @@ agents need it. Set `cds.mcp.filterNotices: false` to turn the notices off.
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `allowedOrigins`     | Browser origins that may call `/mcp`; any other `Origin` gets 403, see below                                                    |
 | `tenantHostPattern`  | Multitenant XSUAA, see above                                                                                                    |
+| `scopes`             | OAuth scopes clients should ask for, in the challenge and the RFC 9728 metadata, see above                                      |
 | `limits.maxRows`     | Upper bound on `top` per query call (default 200); CAP's `@cds.query.limit` per entity and `cds.query.limit.max` cap it further |
 | `limits.defaultRows` | Page size when the agent gives none (default 25)                                                                                |
 | `name`, `version`    | Identify the server to clients; set them to tell apps apart                                                                     |

@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import {
   authErrors,
   authorizationServer,
+  challenge,
   checkOrigin,
   metadataPath,
   protectedResourceMetadata,
@@ -64,6 +65,48 @@ describe("adapter: auth metadata", () => {
       authorization_servers: ["https://tenant.example.com"],
       bearer_methods_supported: ["header"],
     });
+  });
+
+  test("cds.mcp.scopes are offered as scopes_supported (RFC 9728); without them, no such key", () => {
+    const ias = { kind: "ias", credentials };
+    expect(
+      protectedResourceMetadata("https://app.example.com/mcp", ias, {}, ["read", "write"]),
+    ).toEqual({
+      resource: "https://app.example.com/mcp",
+      authorization_servers: ["https://tenant.example.com"],
+      bearer_methods_supported: ["header"],
+      scopes_supported: ["read", "write"],
+    });
+    expect(protectedResourceMetadata("https://app.example.com/mcp", ias)).not.toHaveProperty(
+      "scopes_supported",
+    );
+  });
+
+  test("the Bearer challenge names cds.mcp.scopes in `scope` (RFC 6750); without them, as before", () => {
+    const challenged = (scopes?: string[]) => {
+      const headers: Record<string, string> = {};
+      const res = {
+        set: (name: string, value: string) => {
+          headers[name] = value;
+          return res;
+        },
+        sendStatus: () => res,
+      };
+      const req = {
+        protocol: "https",
+        get: (h: string) => (h === "host" ? "app.example.com" : undefined),
+      };
+      challenge(req as unknown as Request, res as unknown as Response, {
+        path: "/mcp",
+        auth: () => ({ kind: "xsuaa", credentials }),
+        ...(scopes && { scopes }),
+      });
+      return headers["WWW-Authenticate"];
+    };
+    const metadata =
+      'resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/mcp"';
+    expect(challenged(["read", "write"])).toBe(`Bearer ${metadata}, scope="read write"`);
+    expect(challenged()).toBe(`Bearer ${metadata}`);
   });
 
   test("only 401s become a challenge; every other error goes on to express unchanged", () => {

@@ -14,6 +14,7 @@ describe("configuration (cds.env.mcp)", () => {
       tenantHostPattern: "^(.*)-shop\\.example\\.com",
       instructions: { file: "mcp.md" },
       limits: { maxRows: 50, defaultRows: 10 },
+      scopes: ["bookshop!t1.read", "openid"],
     };
     expect(readConfig(raw)).toEqual({ config: raw, diagnostics: [] });
     expect(readConfig(undefined)).toEqual({ config: {}, diagnostics: [] });
@@ -59,6 +60,29 @@ describe("configuration (cds.env.mcp)", () => {
     expect(diagnostics[0]?.message).toBe(
       'cds.mcp.path must be a path starting with "/"; using the default',
     );
+  });
+
+  test.each([
+    ["a string", "read write", "a list of OAuth scopes (strings without spaces)"],
+    ["an empty list", [], "a list of OAuth scopes (strings without spaces)"],
+    ["a scope with a space", ["read write"], "a list of OAuth scopes (strings without spaces)"],
+    [
+      "offline_access",
+      ["read", "offline_access"],
+      "a list of OAuth scopes without offline_access (MCP servers should not ask for it)",
+    ],
+  ])("scopes as %s is an error, and none are sent", (_what, scopes, expected) => {
+    expect(readConfig({ scopes })).toEqual({
+      config: {},
+      diagnostics: [
+        {
+          level: "error",
+          code: "INVALID_CONFIG",
+          target: "cds.mcp.scopes",
+          message: `cds.mcp.scopes must be ${expected}; using the default`,
+        },
+      ],
+    });
   });
 
   test("defaultRows above maxRows is an error; the page size is capped at maxRows", () => {

@@ -168,6 +168,7 @@ export function activate(cds: CdsLike): void {
       ...(config.tenantHostPattern && {
         tenantHostPattern: new RegExp(config.tenantHostPattern, "i"),
       }),
+      ...(config.scopes && { scopes: config.scopes }),
     };
     // RFC 9728 metadata is public: clients read it to find out how to authenticate.
     cds.app.get(metadataPath(mcpPath), metadataHandler(auth));

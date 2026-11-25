@@ -27,6 +27,11 @@ export interface McpConfig {
    * to false: it exposes nothing, it only explains a smaller result.
    */
   filterNotices?: boolean;
+  /**
+   * OAuth scopes a client should ask for: sent as `scope` in the Bearer challenge and as
+   * `scopes_supported` in the RFC 9728 metadata. None by default.
+   */
+  scopes?: string[];
 }
 
 type Check = (value: unknown) => string | undefined;
@@ -51,6 +56,18 @@ const CHECKS: Record<Exclude<keyof McpConfig, "limits">, Check> = {
       ? undefined
       : "a string, or { file } naming a file relative to the app root",
   filterNotices: boolean,
+  scopes: (v) => {
+    if (
+      !Array.isArray(v) ||
+      v.length === 0 ||
+      !v.every((s) => isString(s) && /^[!#-[\]-~]+$/.test(s))
+    )
+      return "a list of OAuth scopes (strings without spaces)";
+    // MCP authorization: servers should not ask for refresh tokens on the client's behalf.
+    if (v.includes("offline_access"))
+      return "a list of OAuth scopes without offline_access (MCP servers should not ask for it)";
+    return undefined;
+  },
 };
 const LIMITS: Record<keyof Limits, Check> = {
   maxRows: positiveInteger,

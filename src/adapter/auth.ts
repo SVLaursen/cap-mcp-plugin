@@ -78,10 +78,16 @@ export function protectedResourceMetadata(
   resource: string,
   auth: AuthConfig | undefined,
   tenant: TenantHost = {},
+  scopes?: readonly string[],
 ): Record<string, unknown> | undefined {
   const server = authorizationServer(auth, tenant);
   if (!server) return undefined;
-  return { resource, authorization_servers: [server], bearer_methods_supported: ["header"] };
+  return {
+    resource,
+    authorization_servers: [server],
+    bearer_methods_supported: ["header"],
+    ...(scopes && { scopes_supported: [...scopes] }),
+  };
 }
 
 export interface AuthOptions {
@@ -91,6 +97,8 @@ export interface AuthOptions {
   auth(): AuthConfig | undefined;
   /** `cds.env.mcp.tenantHostPattern`, compiled; none by default. */
   tenantHostPattern?: RegExp;
+  /** `cds.env.mcp.scopes`: what a client should ask for; none by default. */
+  scopes?: readonly string[];
 }
 
 export interface GateOptions extends AuthOptions {
@@ -120,10 +128,16 @@ export function challenge(req: Request, res: Response, options: AuthOptions): vo
     login.call(req);
     return;
   }
-  const metadata = authorizationServer(options.auth())
-    ? ` resource_metadata="${origin(req)}${metadataPath(options.path)}"`
-    : "";
-  res.set("WWW-Authenticate", `Bearer${metadata}`).sendStatus(401);
+  // RFC 6750 parameters, only with an authorization server to get a token from.
+  const params = authorizationServer(options.auth())
+    ? [
+        `resource_metadata="${origin(req)}${metadataPath(options.path)}"`,
+        ...(options.scopes ? [`scope="${options.scopes.join(" ")}"`] : []),
+      ]
+    : [];
+  res
+    .set("WWW-Authenticate", ["Bearer", params.join(", ")].filter(Boolean).join(" "))
+    .sendStatus(401);
 }
 
 const is401 = (error: unknown) => {
@@ -142,10 +156,12 @@ export function authErrors(options: AuthOptions): ErrorRequestHandler {
 /** GET handler for the RFC 9728 document; 404 when the app has no authorization server. */
 export function metadataHandler(options: AuthOptions): RequestHandler {
   return (req, res) => {
-    const metadata = protectedResourceMetadata(`${origin(req)}${options.path}`, options.auth(), {
-      host: host(req),
-      pattern: options.tenantHostPattern,
-    });
+    const metadata = protectedResourceMetadata(
+      `${origin(req)}${options.path}`,
+      options.auth(),
+      { host: host(req), pattern: options.tenantHostPattern },
+      options.scopes,
+    );
     // Built from the request's host (and, multitenant, its subscriber): never from a cache.
     if (!metadata) res.sendStatus(404);
     else res.set("Cache-Control", "no-store").json(metadata);

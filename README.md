@@ -144,6 +144,7 @@ a feature on.
 | `instructions`       | none                             | Instructions for agents: a string, or `{ "file": "mcp-instructions.md" }` relative to the app root  |
 | `allowedOrigins`     | none                             | Browser origins that may call `/mcp` (browser-based clients, web apps); any other `Origin` gets 403 |
 | `tenantHostPattern`  | none                             | Multitenant XSUAA: regular expression over the request host, first group = subscriber subdomain     |
+| `scopes`             | none                             | OAuth scopes clients should request: `scope` in the challenge, `scopes_supported` in the metadata   |
 | `limits.maxRows`     | `200`                            | Upper bound for `top` in query tools                                                                |
 | `limits.defaultRows` | `25`                             | Page size when the agent gives none                                                                 |
 | `filterNotices`      | `true`                           | `false` turns off the notices that tell agents when `@restrict … where` filters their reads         |
