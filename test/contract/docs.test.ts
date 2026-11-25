@@ -34,6 +34,7 @@ test("the user guides are all there", () => {
       "mcp-apps.md",
       "migrating-from-v1.md",
       "production.md",
+      "skills.md",
       "troubleshooting.md",
     ].map((f) => `docs/guide/${f}`),
   );

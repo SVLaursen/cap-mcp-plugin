@@ -194,6 +194,7 @@ replaces `auth: 'none'`. See [Migrating from v1](docs/guide/migrating-from-v1.md
 - [Annotation reference](docs/guide/annotations.md)
 - [Resources, prompts, confirmation and completion](docs/guide/features.md)
 - [MCP Apps](docs/guide/mcp-apps.md)
+- [Skills](docs/guide/skills.md)
 - [Authentication and production](docs/guide/production.md)
 - [Troubleshooting](docs/guide/troubleshooting.md)
 - [Migrating from v1](docs/guide/migrating-from-v1.md)

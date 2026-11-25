@@ -136,7 +136,8 @@ older clients see the files as ordinary resources.
   checks every tool call a skill leads to.
 - Skills are read once at startup. Change one, restart the app.
 
-The demo serves one skill, `handle-return`; see [the demo app](../../demo/README.md).
+How to write one, and what makes agents pick it: [Skills](skills.md). The demo serves one
+skill, `handle-return`; see [the demo app](../../demo/README.md).
 
 ## Prompts
 

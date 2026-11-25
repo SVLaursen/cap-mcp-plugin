@@ -20,24 +20,25 @@ whose doc comments MCP does not see, and how to turn them on.
 
 ### Diagnostics
 
-| Code                           | Level | Usual cause                                                                                             | Effect                                                    |
-| ------------------------------ | ----- | ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| `UNKNOWN_ANNOTATION`           | warn  | A typo in an `@mcp.*` key                                                                               | Ignored                                                   |
-| `UNUSED_ANNOTATION`            | warn  | A feature annotation on something not exposed; `@mcp.completion` anywhere but an `@mcp.resource` key    | No effect                                                 |
-| `V1_ANNOTATION`                | warn  | A v1 annotation; the message says what to write instead                                                 | Mapped to v2, or ignored                                  |
-| `V1_DEFAULT_CHANGED`           | warn  | Something v1 gave by default or from v1 config that v2 does not                                         | Not given; the message names the annotation that keeps it |
-| `INVALID_ANNOTATION_VALUE`     | error | A value v2 does not accept (unknown `@mcp.wrap.modes` entry, `@mcp.ui` not `ui://…`, bad prompt, …)     | That value is ignored                                     |
-| `BOUND_OPERATION_WITHOUT_KEYS` | error | A bound operation on an entity without exposed keys                                                     | The operation is not exposed                              |
-| `PARAMETER_SHADOWS_KEY`        | error | A bound operation parameter named like a key of its entity                                              | The operation is not exposed                              |
-| `DRAFT_WRITE_NOT_SUPPORTED`    | error | Write modes on a composition child of a draft                                                           | Write the child through its root with `@mcp.deepInsert`   |
-| `UNSUPPORTED_TYPE`             | warn  | An element type without a JSON Schema mapping (e.g. `Vector`)                                           | Exposed as "any value"                                    |
-| `OMITTED_KEY`                  | warn  | `@mcp.omit` on a key                                                                                    | Only query (and create) are offered                       |
-| `PROMPT_NAME_CLASH`            | error | Two prompts with the same name                                                                          | Neither is exposed                                        |
-| `TOOL_NAME_CLASH`              | error | Two definitions map to one tool name (also across services)                                             | Neither is exposed, unless one is the plugin's own        |
-| `INVALID_TOOL_NAME`            | error | A tool name outside MCP's `[A-Za-z0-9._-]{1,128}` (spaces, non-ASCII, very long namespaces)             | The tool is not exposed                                   |
-| `LONG_TOOL_NAME`               | warn  | A tool name over 64 characters, which some LLM APIs reject                                              | Exposed                                                   |
-| `UNKNOWN_CONFIG`               | warn  | A misspelled `cds.mcp` key                                                                              | Ignored                                                   |
-| `INVALID_CONFIG`               | error | A `cds.mcp` value of the wrong shape, an unreadable instructions file, or `defaultRows` above `maxRows` | That key's default is used                                |
+| Code                           | Level | Usual cause                                                                                                              | Effect                                                    |
+| ------------------------------ | ----- | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| `UNKNOWN_ANNOTATION`           | warn  | A typo in an `@mcp.*` key                                                                                                | Ignored                                                   |
+| `UNUSED_ANNOTATION`            | warn  | A feature annotation on something not exposed; `@mcp.completion` anywhere but an `@mcp.resource` key                     | No effect                                                 |
+| `V1_ANNOTATION`                | warn  | A v1 annotation; the message says what to write instead                                                                  | Mapped to v2, or ignored                                  |
+| `V1_DEFAULT_CHANGED`           | warn  | Something v1 gave by default or from v1 config that v2 does not                                                          | Not given; the message names the annotation that keeps it |
+| `INVALID_ANNOTATION_VALUE`     | error | A value v2 does not accept (unknown `@mcp.wrap.modes` entry, `@mcp.ui` not `ui://…`, bad prompt, …)                      | That value is ignored                                     |
+| `BOUND_OPERATION_WITHOUT_KEYS` | error | A bound operation on an entity without exposed keys                                                                      | The operation is not exposed                              |
+| `PARAMETER_SHADOWS_KEY`        | error | A bound operation parameter named like a key of its entity                                                               | The operation is not exposed                              |
+| `DRAFT_WRITE_NOT_SUPPORTED`    | error | Write modes on a composition child of a draft                                                                            | Write the child through its root with `@mcp.deepInsert`   |
+| `UNSUPPORTED_TYPE`             | warn  | An element type without a JSON Schema mapping (e.g. `Vector`)                                                            | Exposed as "any value"                                    |
+| `OMITTED_KEY`                  | warn  | `@mcp.omit` on a key                                                                                                     | Only query (and create) are offered                       |
+| `PROMPT_NAME_CLASH`            | error | Two prompts with the same name                                                                                           | Neither is exposed                                        |
+| `TOOL_NAME_CLASH`              | error | Two definitions map to one tool name (also across services)                                                              | Neither is exposed, unless one is the plugin's own        |
+| `INVALID_TOOL_NAME`            | error | A tool name outside MCP's `[A-Za-z0-9._-]{1,128}` (spaces, non-ASCII, very long namespaces)                              | The tool is not exposed                                   |
+| `LONG_TOOL_NAME`               | warn  | A tool name over 64 characters, which some LLM APIs reject                                                               | Exposed                                                   |
+| `UNKNOWN_CONFIG`               | warn  | A misspelled `cds.mcp` key                                                                                               | Ignored                                                   |
+| `INVALID_SKILL`                | warn  | A skill that breaks a Skills rule (frontmatter, name, symlink, limits), or a skills folder with none                     | That skill is not served                                  |
+| `INVALID_CONFIG`               | error | A `cds.mcp` value of the wrong shape, an unreadable instructions file or skills folder, or `defaultRows` above `maxRows` | That key's default is used                                |
 
 [docs/annotations.md](../annotations.md#diagnostics) has the exact conditions for each code.
 
@@ -79,6 +80,41 @@ Example: this exposes `CatalogService_Books_query`, `_get` and `_update`, and th
 }
 annotate CatalogService.Books with @mcp.wrap.modes: ['update'];
 ```
+
+## A skill is missing
+
+A skill you expected is not in the client's skills list, or its `SKILL.md` is not in
+`resources/list`. See [Skills](skills.md).
+
+1. **Does the startup report list it?** The line reads
+   `skills (cds.mcp.skills): N skills (skill://…/SKILL.md, …)`. No line at all means no skill
+   is served: check the next steps.
+2. **Is `cds.mcp.skills` set, and to the right folder?** It is a folder relative to the app
+   root, holding one folder per skill. A folder that does not exist, is not a folder, is
+   outside the app root (also through a symlink) or is the app root itself is an
+   `INVALID_CONFIG` error, and no skills are served. A misspelled key is `UNKNOWN_CONFIG`.
+3. **Is there an `INVALID_SKILL` warning for it?** Its target is the file or folder under the
+   skills folder, and the message says what is wrong:
+
+   | Message says                                                | Fix                                                                     |
+   | ----------------------------------------------------------- | ----------------------------------------------------------------------- |
+   | `must contain string "name" and "description"`              | Start `SKILL.md` with `---`, a `name:` and a `description:` line, `---` |
+   | `frontmatter name "x" must match the last path segment "y"` | Rename the folder or the `name` so they are equal                       |
+   | `must be 1-64 lowercase letters, digits and single hyphens` | Use a name like `handle-return`                                         |
+   | `symlinks and other special files are not followed`         | Copy the file into the skill instead of linking it                      |
+   | `exceeds the limit of 512 files / 16777216 bytes`           | Split the skill, or move large files out of it                          |
+   | `no skills found`                                           | The folder has no `SKILL.md` one level down: check the layout           |
+
+4. **Did you restart?** Skills are read once at startup.
+5. **Deployed app only?** `cds build` copies only the skills the app serves, to
+   `gen/srv/<folder>`; its output warns about the rest. With an explicit `build.tasks` list,
+   add `{ "for": "mcp" }`.
+6. **Does the client support the Skills extension?** Clients without it do not show a skills
+   list, but still see each `SKILL.md` in `resources/list` and can read every file.
+
+After startup, a warning `cap-mcp: skill file …` means a file changed on disk or could not be
+read since it was loaded: the client gets an error for that file. Restart to load the new
+content.
 
 ## Requests fail
 
