@@ -113,7 +113,7 @@ The recipe (`test/helpers/issuer.ts`):
 
 `npm run test:coverage` (what CI runs) fails below the thresholds in `jest.config.js`
 (statements 94, branches 88, functions 96, lines 95: what 2.0 measured, rounded down). The
-`cds add` facet and the build task run in a child process (`cds-cli.test.ts`), so coverage does
-not count them. Most of what stays uncovered is the executor's own argument checks, which the SDK's
+`cds add` facet runs only in a child process (`cds-cli.test.ts`), so coverage does not count it;
+the build task also has an in-process test (`build.test.ts`) beside its CLI one. Most of what stays uncovered is the executor's own argument checks, which the SDK's
 schema validation reaches first. Coverage is a consequence of TDD here, not a target to chase:
 never weaken a test to keep a number.
