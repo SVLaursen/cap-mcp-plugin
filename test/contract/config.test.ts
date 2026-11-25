@@ -66,6 +66,12 @@ describe("configuration (cds.env.mcp)", () => {
     ["a string", "read write", "a list of OAuth scopes (strings without spaces)"],
     ["an empty list", [], "a list of OAuth scopes (strings without spaces)"],
     ["a scope with a space", ["read write"], "a list of OAuth scopes (strings without spaces)"],
+    // RFC 6749 scope-token: no quote or backslash (they would break the quoted challenge), ASCII only.
+    ["a scope with a quote", ['a"b'], "a list of OAuth scopes (strings without spaces)"],
+    ["a scope with a backslash", ["a\\b"], "a list of OAuth scopes (strings without spaces)"],
+    ["a non-ASCII scope", ["é"], "a list of OAuth scopes (strings without spaces)"],
+    ["an empty scope", [""], "a list of OAuth scopes (strings without spaces)"],
+    ["a number", [1], "a list of OAuth scopes (strings without spaces)"],
     [
       "offline_access",
       ["read", "offline_access"],

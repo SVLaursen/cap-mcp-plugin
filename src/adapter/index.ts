@@ -361,7 +361,6 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
       const uri = linkedUri(_meta);
       if (uri !== undefined && !linking.has(uri)) linking.set(uri, tool);
     }
-    const uis = [...linking.keys()].sort();
     // Resources from code (ADR 0013): the fixed ones this caller may see, and every template.
     const caller: ResourceContext = { user, locale: context.locale, tenant: context.tenant };
     const fixed = options.resources
@@ -372,7 +371,7 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
     // The SDK keys templates by name: a cap:// template's name in this model wins.
     const templates = templatesFor(registry);
     const hasResources =
-      resources.length > 0 || uis.length > 0 || fixed.length > 0 || templates.length > 0;
+      resources.length > 0 || linking.size > 0 || fixed.length > 0 || templates.length > 0;
     const listed = { ttlMs: TOOLS_TTL_MS, cacheScope: "private" } as const;
     // Hints (ADR 0014), as this caller, inside the request's cds.context; skipped without providers.
     const hinted = hints?.active
@@ -398,7 +397,15 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
       cacheHints: {
         "tools/list": listed,
         "server/discover": listed,
-        ...(hasResources ? { "resources/list": listed, "resources/templates/list": listed } : {}),
+        // Reads are per user too (cap:// rows under @restrict), and never kept: set here rather
+        // than left to the SDK's default.
+        ...(hasResources
+          ? {
+              "resources/list": listed,
+              "resources/templates/list": listed,
+              "resources/read": { ttlMs: 0, cacheScope: "private" as const },
+            }
+          : {}),
         ...(prompts.length ? { "prompts/list": listed } : {}),
       },
     });
@@ -410,7 +417,8 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
       options,
       variables: (t) => options.resources?.variables(t.uriTemplate) ?? [],
     });
-    for (const uri of uis) registerApp(server, uri, linking.get(uri), apps, options);
+    for (const [uri, tool] of [...linking].sort(([a], [b]) => (a < b ? -1 : 1)))
+      registerApp(server, uri, tool, apps, options);
     for (const resource of fixed) registerFixed(server, resource, caller, options);
     for (const template of templates) registerFromTemplate(server, template, caller, options);
     for (const prompt of prompts) registerPrompt(server, prompt, argsSchemaFor(prompt));

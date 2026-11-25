@@ -514,4 +514,22 @@ describe("MCP App UIs in resources/list", () => {
       },
     ]);
   });
+
+  test("the name comes from the caller's own tools, never from one they cannot see", async () => {
+    const apps = new McpApps();
+    apps.register("ui://shop/card.html", () => "<p>card</p>");
+    const { call } = serve({
+      apps,
+      cdl: `@mcp service S {
+        entity Books { key ID : Integer; }
+        @mcp.ui: 'ui://shop/card.html' @title: 'Zeta card' function zeta() returns Integer;
+        @requires: 'admin' @mcp.ui: 'ui://shop/card.html' @title: 'Alpha card'
+        function alpha() returns Integer;
+      }`,
+    });
+    const { result } = await call("resources/list");
+    expect(result?.resources).toEqual([
+      expect.objectContaining({ name: "S_zeta", title: "Zeta card" }),
+    ]);
+  });
 });

@@ -52,9 +52,9 @@ Document (when the authorization server's metadata has `client_id_metadata_docum
 Dynamic Client Registration (when it has a `registration_endpoint`; deprecated in 2026-07-28),
 and otherwise asking the user.
 
-**Plan for a pre-registered OAuth client per MCP client**, for XSUAA and for IAS. Neither
-service documents Client ID Metadata Documents, and the dynamic registration IAS mentions is not
-documented far enough to rely on (see below).
+**Plan for a pre-registered OAuth client**, for XSUAA and for IAS. Neither service documents
+Client ID Metadata Documents, and the dynamic registration IAS mentions is not documented far
+enough to rely on (see below).
 
 **XSUAA.** Clients come from the app's own XSUAA service instance: a binding or a service key
 carries a client ID and secret. Allow the MCP client's redirect URI in `xs-security.json` (XSUAA
@@ -69,15 +69,27 @@ rejects any other; wildcards are allowed, and `localhost` is always allowed in c
 }
 ```
 
-Update the service instance with it, create a service key for the MCP client
-(`cf create-service-key bookshop-auth claude-desktop`), and enter its `clientid` and
-`clientsecret` in the client's OAuth settings. The client then finds the authorization server
-through the RFC 9728 metadata above.
+Update the service instance with it, create a service key (`cf create-service-key bookshop-auth
+mcp-client`), and enter its `clientid` and `clientsecret` in the client's OAuth settings. The
+client then finds the authorization server through the RFC 9728 metadata above.
+
+That secret belongs to the app's own OAuth client. It also allows the client credentials grant,
+so whoever holds it can get tokens with the app's `authorities` without any user logging in:
+give it only to an MCP client that keeps secrets on the user's machine, never to a public or
+shared one. Whether each service key is a client of its own or shares the instance's client ID
+(with only the secret per key) is not verified here; decode tokens from two keys and compare
+`client_id` before you count on keys to tell MCP clients apart. A separate XSUAA instance per
+MCP client, granted the app's scopes, would give each its own client; that setup is not
+verified here either.
 
 **IAS.** Create an OpenID Connect application for the MCP client in the administration console
 of SAP Cloud Identity Services, with the client's redirect URI and the authorization code grant.
 Give it a secret, or make it a public client: IAS asks for PKCE with public clients and
-recommends it for confidential ones. Enter its client ID (and secret) in the MCP client.
+recommends it for confidential ones. Enter its client ID (and secret) in the MCP client. Open
+step: a token issued to that application carries its client ID as audience, and whether the CAP
+app accepts it depends on how the two applications are connected in IAS (for example, the app
+providing an API that the client's application consumes). That part is not verified here;
+check it before you rely on this setup.
 
 **What was checked, and what was not** (25 Nov 2026):
 
@@ -101,7 +113,8 @@ recommends it for confidential ones. Enter its client ID (and secret) in the MCP
   one there.
 - Not verified at all: a live tenant's metadata; any MCP client completing dynamic registration
   against IAS; whether a CAP app with IAS accepts a token issued to a separate IAS application
-  (its audience is that application's client ID). Check these in the smoke test on BTP before
+  (its audience is that application's client ID); whether XSUAA service keys are separate
+  OAuth clients. Check these in the smoke test on BTP before
   you rely on them. IAS also notes that an issuer without HTTPS is not OIDC-compliant; MCP
   clients check the issuer (RFC 9207), so use an HTTPS issuer.
 

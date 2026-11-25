@@ -156,6 +156,18 @@ describe("protocol: stateless 2026-07-28", () => {
         { "mcp-name": undefined },
       ],
       [
+        "a mismatched Mcp-Name header on tools/call",
+        "tools/call",
+        { name: "CatalogService_Books_get", arguments: { ID: 201 } },
+        { "mcp-name": "AdminService_Books_delete" },
+      ],
+      [
+        "a missing Mcp-Name header on resources/read",
+        "resources/read",
+        { uri: "notes://bookshop/returns-policy.md" },
+        { "mcp-name": undefined },
+      ],
+      [
         "a missing MCP-Protocol-Version header",
         "tools/list",
         {},
@@ -226,16 +238,20 @@ describe("protocol: stateless 2026-07-28", () => {
       }
     });
 
-    test("resources/read carries ttlMs and cacheScope", async () => {
-      const res = await rpc(demo.POST, "bob", "resources/read", {
-        uri: "notes://bookshop/returns-policy.md",
-      });
-      expect(res.message?.result).toEqual(
-        expect.objectContaining({ ttlMs: expect.any(Number), cacheScope: expect.any(String) }),
-      );
+    test("resources/read carries ttlMs 0 and cacheScope private: reads depend on the user", async () => {
+      // Set by the adapter, not left to the SDK's default: cap:// records are filtered per user.
+      for (const [who, uri] of [
+        ["bob", "notes://bookshop/returns-policy.md"],
+        ["alice", "cap://AdminService/Authors/101"],
+      ] as const) {
+        const res = await rpc(demo.POST, who, "resources/read", { uri });
+        expect(res.message?.result?.contents).toBeDefined();
+        expect(res.message?.result).toMatchObject({ ttlMs: 0, cacheScope: "private" });
+      }
     });
 
-    test("a call with io.modelcontextprotocol/logLevel gets no notifications/message", async () => {
+    // Ours, not the SDK's: no logging capability is declared and nothing logs.
+    test("a call with io.modelcontextprotocol/logLevel gets no notifications/message (we never log to clients)", async () => {
       const res = await callTool(
         demo.POST,
         "bob",
