@@ -1,6 +1,6 @@
 # 0016 — Skills over MCP: one static catalog from a folder
 
-Status: proposed · 2026-11-25 (2.0 RC, spike S0)
+Status: accepted · 2026-11-25 (2.0 RC, spike S0; accepted by the maintainer the same day)
 
 ## Context
 
