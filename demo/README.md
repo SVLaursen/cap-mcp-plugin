@@ -50,6 +50,7 @@ For a guided walk through every feature with MCP Inspector, see
 | Translated error messages (`_i18n/messages*.properties`)        | `ORDER_EXCEEDS_STOCK` in English and German, with arguments; CAP's own `ASSERT_MANDATORY`                                                                                                                            |
 | `cds.env.mcp.allowedOrigins`                                    | `demo/package.json`: the MCP Inspector's browser origin (`http://localhost:6274`), for its direct connection mode                                                                                                    |
 | `cds.env.mcp.instructions` from a file                          | `demo/mcp-instructions.md`, set in `demo/package.json`; clients read it in `server/discover` / `initialize`                                                                                                          |
+| `cds.env.mcp.skills` (Skills over MCP, ADR 0016)                | `demo/mcp-skills/handle-return/` (`SKILL.md` and `references/checklist.md`), set in `demo/package.json` (from S2): one skill for every caller, served as `skill://handle-return/…`                                   |
 | Failed commit surfaces as error                                 | `AdminService` DELETE of Books ID 207 fails at commit                                                                                                                                                                |
 
 When you add a feature to the plugin, add its target here first.
