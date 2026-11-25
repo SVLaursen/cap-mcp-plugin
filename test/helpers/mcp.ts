@@ -39,6 +39,8 @@ export interface RpcResponse {
   headers: Record<string, unknown>;
   /** The JSON-RPC response; undefined if the HTTP response carried none (401, 405, …). */
   message?: RpcMessage;
+  /** The raw body, for assertions on every SSE event (notifications, not just the result). */
+  body?: unknown;
 }
 
 export interface RpcOptions {
@@ -95,7 +97,8 @@ function nameOf(method: string, params: Record<string, unknown>): string | undef
 /**
  * Send one 2026-07-28 JSON-RPC request to /mcp: no initialize handshake, no session. The SDK
  * requires the `MCP-Protocol-Version` and `Mcp-Method` headers (and `Mcp-Name` for calls), and
- * the protocol version, client capabilities and client info in `_meta` (ADR 0010).
+ * the protocol version and client capabilities in `_meta`; client info is a SHOULD, sent too
+ * (ADR 0010).
  * Use this for protocol-level assertions; feature tests use `callTool` / `listTools`.
  */
 export async function rpc(
@@ -134,7 +137,7 @@ export async function rpc(
       ...options.headers,
     }),
   });
-  return { status: res.status, headers: res.headers, message: messageOf(res) };
+  return { status: res.status, headers: res.headers, message: messageOf(res), body: res.data };
 }
 
 /**

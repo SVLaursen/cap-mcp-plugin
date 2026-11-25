@@ -140,6 +140,133 @@ describe("protocol: stateless 2026-07-28", () => {
     }
   });
 
+  // Characterisation (RC1): the 2026-07-28 wire contract the SDK enforces for us today. The
+  // official conformance suite has no 2026-07-28 scenarios yet, so these pin it against an SDK
+  // upgrade changing it silently.
+  describe("wire contract the SDK guarantees (characterisation)", () => {
+    const HEADER_MISMATCH = -32020;
+
+    test.each([
+      ["a missing Mcp-Method header", "tools/list", {}, { "mcp-method": undefined }],
+      ["a mismatched Mcp-Method header", "tools/list", {}, { "mcp-method": "prompts/list" }],
+      [
+        "a missing Mcp-Name header on tools/call",
+        "tools/call",
+        { name: "CatalogService_Books_get", arguments: { ID: 201 } },
+        { "mcp-name": undefined },
+      ],
+      [
+        "a missing MCP-Protocol-Version header",
+        "tools/list",
+        {},
+        { "mcp-protocol-version": undefined },
+      ],
+    ])("%s is HTTP 400 with -32020 (HeaderMismatch)", async (_case, method, params, headers) => {
+      const res = await rpc(demo.POST, "bob", method, params, { headers });
+      expect(res.status).toBe(400);
+      expect(res.message?.error?.code).toBe(HEADER_MISMATCH);
+    });
+
+    test("a request without the _meta envelope is HTTP 400 with -32602 naming the missing keys", async () => {
+      const res = await listTools(demo.POST, "bob", {
+        meta: {
+          "io.modelcontextprotocol/protocolVersion": undefined,
+          "io.modelcontextprotocol/clientCapabilities": undefined,
+          "io.modelcontextprotocol/clientInfo": undefined,
+        },
+      });
+      expect(res.status).toBe(400);
+      expect(res.message?.error).toMatchObject({
+        code: -32602,
+        // The spec's required keys; clientInfo is a SHOULD, so it is not named.
+        data: {
+          envelope: {
+            missing: [
+              "io.modelcontextprotocol/protocolVersion",
+              "io.modelcontextprotocol/clientCapabilities",
+            ],
+          },
+        },
+      });
+    });
+
+    test("clientInfo is optional in the envelope (a SHOULD in the spec)", async () => {
+      const res = await listTools(demo.POST, "bob", {
+        meta: { "io.modelcontextprotocol/clientInfo": undefined },
+      });
+      expect(res.status).toBe(200);
+      expect(res.message?.result?.tools).toBeDefined();
+    });
+
+    test.each(["ping", "logging/setLevel"])(
+      "%s is gone in 2026-07-28: -32601 (method not found)",
+      async (method) => {
+        const res = await rpc(demo.POST, "bob", method, method === "ping" ? {} : { level: "info" });
+        expect(res.message?.error?.code).toBe(-32601);
+      },
+    );
+
+    test("every result carries io.modelcontextprotocol/serverInfo in _meta", async () => {
+      const serverInfo = { name: "@gavdi/cap-mcp", version: pkg.version };
+      for (const res of [
+        await rpc(demo.POST, "bob", "server/discover"),
+        await listTools(demo.POST, "bob"),
+        await callTool(demo.POST, "bob", "CatalogService_Books_get", { ID: 201 }),
+        await callTool(demo.POST, "bob", "CatalogService_Books_get", { ID: 999 }),
+        await rpc(demo.POST, "bob", "resources/list"),
+        await rpc(demo.POST, "bob", "resources/templates/list"),
+        await rpc(demo.POST, "bob", "resources/read", {
+          uri: "notes://bookshop/returns-policy.md",
+        }),
+        await rpc(demo.POST, "alice", "prompts/list"),
+      ]) {
+        expect(res.message?.result?._meta).toMatchObject({
+          "io.modelcontextprotocol/serverInfo": serverInfo,
+        });
+      }
+    });
+
+    test("resources/read carries ttlMs and cacheScope", async () => {
+      const res = await rpc(demo.POST, "bob", "resources/read", {
+        uri: "notes://bookshop/returns-policy.md",
+      });
+      expect(res.message?.result).toEqual(
+        expect.objectContaining({ ttlMs: expect.any(Number), cacheScope: expect.any(String) }),
+      );
+    });
+
+    test("a call with io.modelcontextprotocol/logLevel gets no notifications/message", async () => {
+      const res = await callTool(
+        demo.POST,
+        "bob",
+        "CatalogService_Books_get",
+        { ID: 201 },
+        { meta: { "io.modelcontextprotocol/logLevel": "debug" } },
+      );
+      expect(res.message?.result?.structuredContent).toMatchObject({ ID: 201 });
+      expect(String(res.body)).not.toContain("notifications/message");
+    });
+
+    test("subscriptions/listen is acknowledged with nothing subscribed, and ends", async () => {
+      // listChanged is false everywhere, so the SDK honours nothing and closes gracefully.
+      const res = await rpc(demo.POST, "bob", "subscriptions/listen", {
+        notifications: { toolsListChanged: true, resourcesListChanged: true },
+      });
+      expect(res.status).toBe(200);
+      const events = String(res.body)
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => JSON.parse(line.slice(5)) as Record<string, unknown>);
+      expect(events).toEqual([
+        expect.objectContaining({
+          method: "notifications/subscriptions/acknowledged",
+          params: expect.objectContaining({ notifications: {} }),
+        }),
+        expect.objectContaining({ result: expect.objectContaining({ resultType: "complete" }) }),
+      ]);
+    });
+  });
+
   test("two users hitting the same endpoint concurrently each get their own tool list", async () => {
     const registry = ExposureRegistry.fromModel(cds.model);
     const callers = ["alice", "bob", "carol", "alice", "bob", "carol"] as const;
