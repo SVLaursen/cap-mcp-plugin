@@ -191,6 +191,15 @@ An app serves Agent Skills (folders with a `SKILL.md`) beside its tools through 
 - [x] S9 Docs: `docs/annotations.md` (Configuration; `INVALID_SKILL` in Diagnostics; a "Skills (`cds.mcp.skills`)" section next to resources from code: example, rules, limits of 512 files and 16 MiB per skill, static content and why, restart to change, reserved `skill:` scheme), `docs/guide/features.md`, `docs/guide/production.md` (skills are instructions for agents, not data; CAP still authorizes every call; every caller the endpoint lets in sees them), README feature list and opt-in table, `docs/architecture.md` (request lifecycle, adapter files) _(`docs.test.ts`)_
 - [x] S10 Review: run the `reviewer` agent on the block's diff and fix what it finds, test first (fixed: the build copied a skill the runtime skips once its symlink was left out, and did not check the folder, so `../x` or a symlinked folder could read and write outside the app; it now checks and loads the folder as the runtime does and copies only the served skills' files (no dotfiles). `skills: "."` served skills from `node_modules`: the app root is refused. Read-time warnings went to an array that grew per read: they are logged. A nested skill inside a skipped one is reported; no misleading "no skills found"; clean diagnostic targets; `..skills` is inside the root; the checked path is the loaded path; any load error is `INVALID_CONFIG`; cache hints on skill files and directory reads pinned. Recorded in ADR 0016, clarifications)
 
+### Skills in the hint context (ADR 0017)
+
+cap-okf informs agents about the app through `mcp:hints`; it should be able to point them at skills too. Skills cannot carry that text (frontmatter verbatim, digests bind approval), so providers learn which skills are served. Maintainer decision (25 Nov 2026), ADR 0017. One commit per task, test first.
+
+- [ ] K1 Demo target: `demo/server.js` adds an instructions line for support and admin naming the `handle-return` skill, only when `ctx.skills` has it; bob's output is unchanged
+- [ ] K2 Context: every provider's context has `skills` (`{ uri, name, description }`, sorted by URI, frozen, the same array on every request); empty without `cds.mcp.skills`; no output changes without a provider that uses it _(`hints.test.ts`, `skills.test.ts`)_
+- [ ] K3 Docs: `docs/annotations.md` (Hints from code), `docs/guide/features.md`, `docs/guide/skills.md`, `docs/architecture.md`; types exported
+- [ ] K4 Review: run the `reviewer` agent on the block's diff and fix what it finds
+
 ### Release
 
 - [x] RC5 Docs: `docs/mcp-spec-notes.md` gets the official extensions (MCP Apps, Skills, Tasks, OAuth client credentials, enterprise-managed authorization) with where v2 stands, and the note that the conformance suite has no 2026-07-28 scenarios yet (re-check on each release of `@modelcontextprotocol/conformance`). → True of 0.1.16, which we run; the 0.2.0 prereleases (`alpha`, 0.2.0-alpha.12) have 2026-07-28 scenarios. Recorded in `docs/mcp-spec-notes.md` › Conformance
