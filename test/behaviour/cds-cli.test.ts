@@ -126,3 +126,52 @@ test("cds build says when the instructions file cannot be copied (missing, or an
     /MCP instructions file .*mcp\.md is an absolute path; the deployed app reads it there, so it is not copied/,
   );
 }, 60_000);
+
+describe("cds build and the skills folder (ADR 0016)", () => {
+  const pkgFile = () => path.join(app, "package.json");
+  const setSkills = (value: string) => {
+    const pkg = JSON.parse(readFileSync(pkgFile(), "utf8"));
+    delete pkg.cds.mcp.instructions;
+    pkg.cds.mcp.skills = value;
+    writeFileSync(pkgFile(), JSON.stringify(pkg, null, 2));
+  };
+  const build = () => {
+    const env = { ...process.env };
+    delete env.CDS_CONFIG; // test/setup-env.js: the CLI must load the plugin from lib/
+    const out = spawnSync(process.execPath, [CDS, "build", "--production"], {
+      cwd: app,
+      env,
+      encoding: "utf8",
+    });
+    return out.stdout + out.stderr;
+  };
+
+  test("copies the skills folder to where the deployed app reads it, without symlinks", () => {
+    const skill = path.join(app, "mcp-skills", "handle-return");
+    mkdirSync(path.join(skill, "references"), { recursive: true });
+    writeFileSync(path.join(skill, "SKILL.md"), "---\nname: handle-return\ndescription: x\n---\n");
+    writeFileSync(path.join(skill, "references", "checklist.md"), "# Checklist\n");
+    symlinkSync("/etc/hosts", path.join(skill, "hosts.md"));
+    setSkills("mcp-skills");
+    const out = build();
+    const gen = path.join(app, "gen", "srv", "mcp-skills", "handle-return");
+    expect(readFileSync(path.join(gen, "SKILL.md"), "utf8")).toContain("name: handle-return");
+    expect(readFileSync(path.join(gen, "references", "checklist.md"), "utf8")).toBe(
+      "# Checklist\n",
+    );
+    // A symlink would become a regular file in gen/ and be served from there: never copied.
+    expect(existsSync(path.join(gen, "hosts.md"))).toBe(false);
+    expect(out).toMatch(
+      /MCP skills folder mcp-skills: handle-return\/hosts\.md is a symlink; not copied/,
+    );
+  }, 60_000);
+
+  test("says when the skills folder cannot be copied (missing, or an absolute path)", () => {
+    setSkills("missing-skills");
+    expect(build()).toMatch(/MCP skills folder missing-skills not found; not copied/);
+    setSkills(path.join(app, "mcp-skills"));
+    expect(build()).toMatch(
+      /MCP skills folder .*mcp-skills is an absolute path; the deployed app reads it there, so it is not copied/,
+    );
+  }, 60_000);
+});
