@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { DEMO_DIR, bootDemo, inProduction } from "../helpers/demo";
-import { rpc } from "../helpers/mcp";
+import { legacyInitialize, legacyRpc, rpc } from "../helpers/mcp";
 
 /**
  * Skills over MCP (ADR 0016) on the demo: `cds.mcp.skills` names demo/mcp-skills, which holds
@@ -114,5 +114,34 @@ describe("who gets skills", () => {
       restrict_all_services: true,
     });
     expect(res.status).toBe(401);
+  });
+});
+
+describe("2025-era clients (stateless, ADR 0010)", () => {
+  test("initialize declares the extension; skills/list and skills/get answer, without cache fields", async () => {
+    const init = await legacyInitialize(demo.POST, "bob");
+    expect(init.message?.result?.capabilities).toMatchObject({
+      resources: { listChanged: false },
+      extensions: { "io.modelcontextprotocol/skills": { directoryRead: true } },
+    });
+    const list = await legacyRpc(demo.POST, "bob", "skills/list");
+    expect((list.message?.result?.skills as SkillEntry[]).map((s) => s.uri)).toEqual([SKILL]);
+    expect(list.message?.result).not.toHaveProperty("ttlMs");
+    expect(list.message?.result).not.toHaveProperty("cacheScope");
+    const get = await legacyRpc(demo.POST, "bob", "skills/get", { uri: SKILL });
+    expect(get.message?.result).toMatchObject({ skill: { uri: SKILL } });
+  });
+
+  test("skill files are ordinary resources: SKILL.md in resources/list, every file readable", async () => {
+    const list = await legacyRpc(demo.POST, "bob", "resources/list");
+    expect(list.message?.result?.resources).toEqual(
+      expect.arrayContaining([expect.objectContaining({ uri: SKILL, name: "handle-return" })]),
+    );
+    for (const [uri, file] of Object.entries(FILES)) {
+      const read = await legacyRpc(demo.POST, "bob", "resources/read", { uri });
+      expect(read.message?.result?.contents).toEqual([
+        expect.objectContaining({ uri, text: readFileSync(file, "utf8") }),
+      ]);
+    }
   });
 });
