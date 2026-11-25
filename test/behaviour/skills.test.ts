@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { DEMO_DIR, bootDemo } from "../helpers/demo";
+import { DEMO_DIR, bootDemo, inProduction } from "../helpers/demo";
 import { rpc } from "../helpers/mcp";
 
 /**
@@ -95,5 +95,24 @@ describe("serving skills", () => {
         expect.objectContaining({ uri: SKILL, name: "handle-return", mimeType: "text/markdown" }),
       ]),
     );
+  });
+});
+
+describe("who gets skills", () => {
+  test("every caller the endpoint lets in gets the same catalog, anonymous ones included", async () => {
+    const listOf = async (who: "alice" | "bob" | "anonymous") =>
+      ((await rpc(demo.POST, who, "skills/list")).message?.result?.skills as SkillEntry[]).map(
+        (s) => s.uri,
+      );
+    for (const who of ["alice", "bob", "anonymous"] as const) {
+      expect(await listOf(who)).toEqual([SKILL]);
+    }
+  });
+
+  test("in production, anonymous callers must log in first, as for every request", async () => {
+    const res = await inProduction(() => rpc(demo.POST, "anonymous", "skills/list"), {
+      restrict_all_services: true,
+    });
+    expect(res.status).toBe(401);
   });
 });

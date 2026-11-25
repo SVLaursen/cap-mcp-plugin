@@ -17,7 +17,7 @@ export interface ResourceContext {
 
 /** One resource at a fixed URI. */
 export interface FixedResource {
-  /** Absolute and canonical (`new URL(uri).href === uri`); not cap: or ui:. Unique. */
+  /** Absolute and canonical (`new URL(uri).href === uri`); not cap:, ui: or skill:. Unique. */
   uri: string;
   name: string;
   title?: string;
@@ -63,7 +63,10 @@ export interface ResourceRegistry {
 }
 
 /** Schemes this plugin serves itself: records (ADR 0006) and MCP Apps (ADR 0012). */
-const RESERVED = new Set(["cap:", "ui:"]);
+/** cap: records, ui: MCP Apps, skill: the Skills catalog (ADR 0016): the plugin's own. */
+const RESERVED = new Set(["cap:", "ui:", "skill:"]);
+/** The SDK keys templates by name; the Skills extension's own would make attach throw. */
+const RESERVED_TEMPLATE_NAMES = new Set(["io.modelcontextprotocol/skills"]);
 const SCHEME = /^([a-z][a-z0-9+.-]*:)/i;
 
 const fail = (message: string): never => {
@@ -124,6 +127,8 @@ export class RegisteredResources implements ResourceRegistry {
       if (template[key] !== undefined && typeof template[key] !== "function")
         fail(`${key} of ${uri} must be a function`);
     }
+    if (RESERVED_TEMPLATE_NAMES.has(template.name))
+      fail(`${uri}: the template name ${template.name} is reserved for cap-mcp`);
     if (this.#templates.has(uri)) fail(`${uri} is already registered`);
     const clash = [...this.#templates.values()].find((t) => t.name === template.name);
     if (clash)

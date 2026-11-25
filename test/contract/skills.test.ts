@@ -7,7 +7,10 @@ import {
   memorySkillFiles,
   SkillsExtension,
 } from "@modelcontextprotocol/server/ext/skills";
+import { serverFactory } from "../../src/adapter";
 import { setUpSkills } from "../../src/adapter/skills";
+import { registryCache } from "../../src/exposure-registry";
+import { compileSnippet } from "../helpers/snippet";
 
 /** Skills over MCP (ADR 0016): loading the folder once at startup, and what it reports. */
 
@@ -177,5 +180,65 @@ describe("the SDK's skills wiring we rely on", () => {
     expect(
       (await call(catalog, "skills/get", { uri: "skill://a/SKILL.md" })).result,
     ).toHaveProperty("skill");
+  });
+});
+
+describe("the resources capability with skills (ADR 0016)", () => {
+  test("a caller with no other resource gets resources with listChanged off and our cache hints", async () => {
+    const model = compileSnippet(`@mcp service S { entity Books { key ID : Integer; } }`);
+    const catalog = await SkillsExtension.load(memorySkillFiles({ "a/SKILL.md": skill("a") }), {
+      cacheHint: { ttlMs: 60_000, cacheScope: "private" },
+    });
+    const factory = (skills?: SkillsExtension) =>
+      createMcpHandler(
+        serverFactory({
+          serverInfo: { name: "t", version: "0" },
+          context: () => ({ user: { id: "u", is: () => false } }),
+          model: () => model,
+          registryFor: registryCache(),
+          services: {},
+          log: { error: () => undefined },
+          ...(skills && { skills }),
+        }),
+      );
+    const ask = async (handler: ReturnType<typeof factory>, method: string) => {
+      const res = await handler.fetch(
+        new Request("http://localhost/mcp", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            accept: "application/json, text/event-stream",
+            "mcp-protocol-version": "2026-07-28",
+            "mcp-method": method,
+          },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method,
+            params: {
+              _meta: {
+                "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+                "io.modelcontextprotocol/clientCapabilities": {},
+              },
+            },
+          }),
+        }),
+      );
+      return ((await res.json()) as { result: Record<string, unknown> }).result;
+    };
+    // Without skills this caller has no resources at all.
+    expect((await ask(factory(), "server/discover")).capabilities).toEqual({
+      tools: { listChanged: false },
+    });
+    const withSkills = factory(catalog);
+    expect((await ask(withSkills, "server/discover")).capabilities).toEqual({
+      tools: { listChanged: false },
+      resources: { listChanged: false },
+      extensions: { [SKILLS_EXTENSION_ID]: { directoryRead: true } },
+    });
+    expect(await ask(withSkills, "resources/list")).toMatchObject({
+      ttlMs: 60_000,
+      cacheScope: "private",
+    });
   });
 });

@@ -50,6 +50,7 @@ describe("mcp:resources registry (ADR 0013)", () => {
     ["not canonical (a space)", fixed({ uri: "notes://shop/a b.md" }), /canonical/],
     ["the cap: scheme", fixed({ uri: "cap://Shop/Books/1" }), /cap:/],
     ["the ui: scheme", fixed({ uri: "ui://shop/a.html" }), /ui:/],
+    ["the skill: scheme (ADR 0016)", fixed({ uri: "skill://shop/SKILL.md" }), /skill:/],
     ["an empty name", fixed({ name: "" }), /name/],
     ["no mimeType", fixed({ mimeType: undefined as unknown as string }), /mimeType/],
     ["read that is not a function", fixed({ read: "text" as never }), /read/],
@@ -72,6 +73,12 @@ describe("mcp:resources registry (ADR 0013)", () => {
     ["no scheme", template({ uriTemplate: "topics/{+path}" }), /absolute/],
     ["the cap: scheme", template({ uriTemplate: "cap://Shop/Books/{key}" }), /cap:/],
     ["the ui: scheme", template({ uriTemplate: "ui://shop/{page}" }), /ui:/],
+    ["the skill: scheme (ADR 0016)", template({ uriTemplate: "skill://{+path}" }), /skill:/],
+    [
+      "the Skills extension's template name (ADR 0016)",
+      template({ name: "io.modelcontextprotocol/skills" }),
+      /io\.modelcontextprotocol\/skills is reserved/,
+    ],
     ["no variable", template({ uriTemplate: "notes://shop/topics" }), /variable/],
     [
       "an unclosed expression",

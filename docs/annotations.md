@@ -134,7 +134,8 @@ cds.on("mcp:resources", (resources) => {
   an `await`); after it, `register` and `registerTemplate` throw, and a registration that throws
   fails startup. `resources.contractVersion` is `1`.
 - `register` throws (`cap-mcp: …`, naming the URI) for a URI that is not absolute or not
-  canonical (`new URL(uri).href` must equal it), the `cap:` and `ui:` schemes, a URI or
+  canonical (`new URL(uri).href` must equal it), the `cap:`, `ui:` and `skill:` schemes (`skill:` is the
+  Skills catalog's, ADR 0016), the template name `io.modelcontextprotocol/skills`, a URI or
   template registered twice, a second template with the same `name`, a template the SDK cannot
   parse, one without a variable or not canonical once expanded, an empty `name` or `mimeType`,
   and callbacks that are not functions.
