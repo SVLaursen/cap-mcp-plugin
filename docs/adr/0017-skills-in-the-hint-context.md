@@ -1,6 +1,6 @@
 # 0017 — Skills in the hint context
 
-Status: accepted · 2026-11-25 (the maintainer chose this option among three; details below)
+Status: accepted · 2026-11-25 (the maintainer chose this option among three, then accepted the ADR as written after the block review)
 
 ## Context
 
