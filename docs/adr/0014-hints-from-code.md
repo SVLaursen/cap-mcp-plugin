@@ -1,6 +1,6 @@
 # 0014 — Hints from code: the `mcp:hints` event
 
-Status: proposed · 2026-11-17 (after 2.0)
+Status: accepted · 2026-11-25 (proposed 2026-11-17; accepted by the maintainer after the block review)
 
 ## Context
 

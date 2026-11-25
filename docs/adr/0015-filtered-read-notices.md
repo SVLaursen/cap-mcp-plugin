@@ -1,6 +1,6 @@
 # 0015 — Tell the agent when its reads are filtered
 
-Status: proposed · 2026-11-18
+Status: accepted · 2026-11-25 (proposed 2026-11-18; accepted by the maintainer after the block review, including the default-on exception to ADR 0004)
 
 ## Context
 
