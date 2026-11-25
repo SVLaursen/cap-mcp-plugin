@@ -104,7 +104,9 @@ These reads are not filtered in CAP's sense, so the plugin is also silent:
 - the entity has no `@restrict`, or it restricts only bound operations;
 - a composition child that inherits its ancestor's grants (CAP adds no condition to a direct
   read of it);
-- a service-level `@restrict` (a role check only).
+- a service-level `@restrict` (a role check only);
+- a grant whose `where` is empty: CAP checks the value, so it adds no condition;
+- a privileged user (`cds.User.Privileged`, in-process calls only), whom CAP does not check.
 
 A `where` that compares only `$user` attributes with constants (`$user.level > 2`) is resolved
 by CAP per user, to all rows or none. The plugin cannot tell which without evaluating the

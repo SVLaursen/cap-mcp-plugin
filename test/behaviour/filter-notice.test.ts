@@ -36,9 +36,14 @@ const tools = async (who: Caller) =>
     outputSchema?: { properties?: Record<string, unknown> };
   }[];
 const textOf = (result: Result) => (result.content as { text: string }[])[0]?.text;
-/** Timestamps are set when the demo boots, so they differ from the captured run. */
-const stable = (value: unknown) =>
-  JSON.stringify(value).replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z/g, "…");
+/**
+ * Timestamps are set when the demo boots, so they differ from the captured run; `_meta` names
+ * the server and its package version, which a release changes.
+ */
+const stable = (value: unknown) => {
+  const { _meta: _server, ...rest } = value as Record<string, unknown>;
+  return JSON.stringify(rest).replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z/g, "…");
+};
 
 describe("a filtered user", () => {
   test.each([

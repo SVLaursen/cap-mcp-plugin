@@ -38,34 +38,45 @@ function permits(user: UserLike, restrict: GrantSpec[] | undefined, event: strin
   return grantFor(user, restrict, event) !== "refused";
 }
 
+/**
+ * The grants that apply to this user for the event (restrictions.js: `*` or the event, to one
+ * of the user's roles), or undefined when the entity is not restricted for it: no @restrict,
+ * or CRUD while every grant is for a bound operation.
+ */
+function applicable(
+  user: UserLike,
+  restrict: GrantSpec[] | undefined,
+  event: string,
+): GrantSpec[] | undefined {
+  if (!restrict) return undefined;
+  if (CRUD.has(event) && restrict.every((g) => g.grant !== "*" && !CRUD.has(g.grant)))
+    return undefined;
+  return restrict.filter(
+    (g) => (g.grant === "*" || g.grant === event) && g.to.some((role) => has(user, role)),
+  );
+}
+
 /** "open": not restricted for the event; "granted": by some grant; "refused": by none. */
 function grantFor(
   user: UserLike,
   restrict: GrantSpec[] | undefined,
   event: string,
 ): "open" | "granted" | "refused" {
-  if (!restrict) return "open";
-  if (CRUD.has(event) && restrict.every((g) => g.grant !== "*" && !CRUD.has(g.grant)))
-    return "open";
-  return restrict.some(
-    (g) => (g.grant === "*" || g.grant === event) && g.to.some((role) => has(user, role)),
-  )
-    ? "granted"
-    : "refused";
+  const grants = applicable(user, restrict, event);
+  if (!grants) return "open";
+  return grants.length > 0 ? "granted" : "refused";
 }
 
 /**
  * Whether CAP filters this user's reads of the entity by a `where` (ADR 0015): every grant
  * that lets the user READ it has one. Not filtered when one grant has none, when the entity is
- * not restricted for READ, or when the user may not read it at all (the tools are hidden then).
+ * not restricted for READ, when the user may not read it at all (the tools are hidden then),
+ * or for a privileged user, whom CAP does not check at all.
  */
 export function readsFiltered(user: UserLike, entity: EntitySpec): boolean {
-  const restrict = entity.restrict;
-  if (!restrict || grantFor(user, restrict, "READ") !== "granted") return false;
-  const applicable = restrict.filter(
-    (g) => (g.grant === "*" || g.grant === "READ") && g.to.some((role) => has(user, role)),
-  );
-  return applicable.every((g) => g.where);
+  if ((user as { _is_privileged?: boolean })._is_privileged) return false;
+  const grants = applicable(user, entity.restrict, "READ");
+  return !!grants?.length && grants.every((g) => g.where);
 }
 
 export function canUseMode(

@@ -33,6 +33,17 @@ const source = `
     @restrict: [{ grant: 'reopen', to: 'support', where: 'createdBy = $user' }]
     entity Tickets { key ID: Integer; createdBy: String; } actions { @mcp action reopen(); }
     entity Books { key ID: Integer; title: String; }
+    @restrict: [{ grant: 'READ', to: 'any', where: '' }]
+    entity Notes { key ID: Integer; }
+    @restrict: [{ grant: 'READ', to: 'any', where: 'createdBy = $user' }]
+    entity Drafts { key ID: Integer; createdBy: String; }
+  }
+  @mcp @mcp.compact service C {
+    @restrict: [
+      { grant: '*', to: 'authenticated-user', where: 'createdBy = $user' },
+      { grant: 'READ', to: 'support' }
+    ]
+    entity Orders { key ID: Integer; createdBy: String; }
   }
 `;
 
@@ -40,7 +51,9 @@ const csn = compileSnippet(source);
 const make = (options: RegistryOptions = {}) => new ExposureRegistry(readModel(csn).spec, options);
 const registry = make();
 const entity = (name: string): EntitySpec => {
-  const found = registry.spec.services[0]?.entities.find((e) => e.name === `S.${name}`);
+  const found = registry.spec.services
+    .flatMap((s) => s.entities)
+    .find((e) => e.name === (name.includes(".") ? name : `S.${name}`));
   if (!found) throw new Error(`S.${name} is missing`);
   return found;
 };
@@ -66,6 +79,10 @@ describe("model-reader: which grants have a condition", () => {
     ]);
   });
 
+  test("an empty `where` is no condition, as for CAP (it checks the value, not the key)", () => {
+    expect(entity("Notes").restrict).toEqual([{ grant: "READ", to: ["any"] }]);
+  });
+
   test("a composition child's inherited grants are not: CAP filters only the parent's path", () => {
     expect(entity("Items").restrict).toEqual([
       { grant: "*", to: ["authenticated-user"] },
@@ -84,8 +101,15 @@ describe("access: readsFiltered", () => {
     ["no restriction", bob, "Books", false],
     ["a composition child (CAP adds no condition)", bob, "Items", false],
     ["grants for bound operations only (CRUD stays open)", carol, "Tickets", false],
+    ["an empty where (CAP adds nothing)", bob, "Notes", false],
   ] as const)("%s", (_what, user, name, filtered) => {
     expect(readsFiltered(user, entity(name))).toBe(filtered);
+  });
+
+  test("a privileged user is never filtered: CAP skips its checks entirely", () => {
+    // Drafts has only a grant with where, which applies to everyone else.
+    expect(readsFiltered(bob, entity("Drafts"))).toBe(true);
+    expect(readsFiltered(new cds.User.Privileged(), entity("Drafts"))).toBe(false);
   });
 });
 
@@ -96,12 +120,24 @@ describe("registry: one line on the read tools of a filtered user", () => {
     return found;
   };
 
-  test("the query and get tools say it; write and operation tools do not", () => {
+  test("the query and get tools say it; nothing else about them changes; write and operation tools do not", () => {
     const plain = make().toolsFor(carol);
     const tools = registry.toolsFor(bob);
-    for (const name of ["S_Orders_query", "S_Orders_get"]) {
-      expect(tool(tools, name).description).toBe(`${tool(plain, name).description}\n\n${LINE}`);
-    }
+    const query = tool(plain, "S_Orders_query");
+    const notice = { type: "string" };
+    expect(tool(tools, "S_Orders_query")).toEqual({
+      ...query,
+      description: `${query.description}\n\n${LINE}`,
+      outputSchema: {
+        ...query.outputSchema,
+        properties: { notice, ...(query.outputSchema?.properties as object) },
+      },
+    });
+    const get = tool(plain, "S_Orders_get");
+    expect(tool(tools, "S_Orders_get")).toEqual({
+      ...get,
+      description: `${get.description}\n\n${LINE}`,
+    });
     for (const name of [
       "S_Orders_create",
       "S_Orders_update",
@@ -119,21 +155,25 @@ describe("registry: one line on the read tools of a filtered user", () => {
   });
 
   test("users whose reads are not filtered get the tools exactly as before", () => {
-    // Carol reads Orders unfiltered and Returns filtered; alice the other way round.
+    // Carol reads Orders unfiltered and Returns filtered; alice the other way round. Both read
+    // Drafts filtered.
     const off = make({ filterNotices: false });
     for (const [user, filtered] of [
       [carol, "S_Returns_"],
       [alice, "S_Orders_"],
     ] as const) {
+      const isFiltered = (name: string) =>
+        name.startsWith(filtered) || name.startsWith("S_Drafts_");
       const unfiltered = (tools: ToolSpec[]) =>
-        JSON.stringify(tools.filter((t) => !t.name.startsWith(filtered)));
+        JSON.stringify(tools.filter((t) => !isFiltered(t.name)));
       expect(unfiltered(registry.toolsFor(user))).toBe(unfiltered(off.toolsFor(user)));
       expect(
         registry
           .toolsFor(user)
           .filter((t) => t.description?.includes(LINE))
-          .map((t) => t.name),
-      ).toEqual([`${filtered}get`, `${filtered}query`]);
+          .map((t) => t.name)
+          .sort(),
+      ).toEqual(["S_Drafts_get", "S_Drafts_query", `${filtered}get`, `${filtered}query`].sort());
     }
   });
 
@@ -231,6 +271,57 @@ describe("executor: the notice in results", () => {
     const missing = await call(bob, "S_Orders_get", { ID: 7 }, nothing, { filterNotices: false })
       .result;
     expect(missing.text).toBe('NOT_FOUND: No S.Orders with {"ID":7}');
+  });
+});
+
+describe("compact tools (@mcp.compact): the notice in _query and _get results", () => {
+  const compact = (user: cds.User, name: string) => {
+    const found = registry.toolsFor(user).find((t) => t.name === name);
+    if (!found) throw new Error(`${name} is missing`);
+    return found;
+  };
+  const run = (user: cds.User, name: string, args: Record<string, unknown>, service: ServiceLike) =>
+    new Executor(registry.spec, { filterNotices: registry.filterNotices })
+      .execute(compact(user, name), args, service, user)
+      .catch((error: unknown) => errorResult(error) ?? Promise.reject(error));
+  const one = [{ ID: 1, createdBy: "bob" }];
+  const service = (found: Record<string, unknown>[]): ServiceLike => ({
+    name: "C",
+    run: async (q) =>
+      (q as { SELECT: { one?: boolean } }).SELECT.one
+        ? found[0] && { total: found.length, ...found[0] }
+        : found,
+    send: async () => undefined,
+  });
+
+  test("a filtered user's _query result carries the notice first", async () => {
+    const { structuredContent } = await run(bob, "C_query", { entity: "C.Orders" }, service(one));
+    expect(Object.keys(structuredContent as object)[0]).toBe("notice");
+    expect(structuredContent).toEqual({ notice: NOTICE("C.Orders"), rows: one, total: 1 });
+  });
+
+  test("a filtered user's _get that finds nothing says it may not be visible", async () => {
+    const missing = await run(bob, "C_get", { entity: "C.Orders", key: { ID: 7 } }, service([]));
+    expect(missing.structuredContent).toEqual({
+      error: {
+        code: "NOT_FOUND",
+        message:
+          'No C.Orders with {"ID":7}, or it is not visible to you: your authorization limits which C.Orders records you can see.',
+      },
+    });
+  });
+
+  test("an unfiltered user's results carry neither", async () => {
+    const found = await run(carol, "C_query", { entity: "C.Orders" }, service(one));
+    expect(found.structuredContent).toEqual({ rows: one, total: 1 });
+    const missing = await run(carol, "C_get", { entity: "C.Orders", key: { ID: 7 } }, service([]));
+    expect(missing.text).toBe('NOT_FOUND: No C.Orders with {"ID":7}');
+  });
+
+  test("compact tool descriptions get no line: one tool covers many entities", () => {
+    for (const name of ["C_query", "C_get"]) {
+      expect(compact(bob, name)).toEqual(compact(carol, name));
+    }
   });
 });
 

@@ -156,7 +156,7 @@ Tell the agent when `@restrict … where` filters its reads, only then (ADR 0015
 - [x] Config: `cds.mcp.filterNotices: false` turns it off
 - [x] Docs: ADR 0015 (proposed), `docs/annotations.md`, `docs/guide/production.md`, `docs/guide/annotations.md`, README, `docs/architecture.md`
 - [ ] Maintainer: accept ADR 0015
-- [ ] Review: run the `reviewer` agent on the block's diff and fix what it finds
+- [x] Review: run the `reviewer` agent on the block's diff and fix what it finds (fixed: tests for the compact `_query`/`_get` notice, which had none; an empty `where` and a privileged user are not filtered, as in CAP; the grant rule written once (`applicable` in `src/access.ts`); the registry test pins that only the description and the output schema change; the demo baseline comparison ignores `_meta`, which carries the package version and would have failed the `2.0.0-rc.0` release commit. Left for the maintainer: `filterNotices` is on by default, an exception to ADR 0004 that stands only once ADR 0015 is accepted)
 
 Decided against (maintainer, 2026-11-11):
 

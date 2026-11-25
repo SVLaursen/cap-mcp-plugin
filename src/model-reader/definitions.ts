@@ -212,7 +212,8 @@ export function grants(def: Definition): GrantSpec[] | undefined {
   if (!Array.isArray(restrict)) return undefined;
   return restrict.flatMap((r: { grant?: unknown; to?: unknown; where?: unknown }) => {
     const to = list(r.to) ?? ["any"];
-    const where = r.where !== undefined && r.where !== null ? { where: true as const } : {};
+    // CAP checks the value, not the key: an empty `where` adds no condition.
+    const where = r.where ? { where: true as const } : {};
     return (list(r.grant) ?? ["*"]).flatMap((grant) =>
       (grant === "WRITE" ? ["CREATE", "UPDATE", "DELETE"] : [grant]).map((g) => ({
         grant: g,
