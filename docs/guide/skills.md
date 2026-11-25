@@ -4,13 +4,16 @@ Your tools say what each one does. A skill says how to do a task with them: whic
 which order, what to read first, what to check before answering. Agents that support the
 [Skills extension](https://skills.extensions.modelcontextprotocol.io/specification/beta/skills)
 list your skills, and load one when a request matches its description. Agents without it see
-the skill files as ordinary resources.
+each skill's `SKILL.md` as an ordinary resource in `resources/list`, and can read the other
+files by URI.
 
 Skills are opt-in: nothing is served until you name a folder.
 
 ## Turn them on
 
-Put one folder per skill in a folder of your app, and name that folder in the config:
+Put one folder per skill in a folder of your app (subfolders are fine, they become part of
+the URI: `team/restock/` is `skill://team/restock/SKILL.md`), and name that folder in the
+config:
 
 ```json
 { "cds": { "mcp": { "skills": "mcp-skills" } } }
@@ -63,13 +66,16 @@ checklist with a relative Markdown link, which agents can follow.
 
 ### The frontmatter
 
-| Field           | Rule                                                                                         |
-| --------------- | -------------------------------------------------------------------------------------------- |
-| `name`          | Required. 1–64 lowercase letters, digits and single hyphens, and exactly the folder's name   |
-| `description`   | Required. 1–1024 characters                                                                  |
-| `compatibility` | Optional. At most 500 characters, e.g. which clients or app version the skill is written for |
+| Field           | Rule                                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------ |
+| `name`          | Required. 1–64 lowercase letters, digits and single hyphens, and exactly the folder's name |
+| `description`   | Required. 1–1024 characters                                                                |
+| `compatibility` | Optional. 1–500 characters, e.g. which clients or app version the skill is written for     |
 
-Other fields are passed on to clients as they are. A skill that breaks a rule is not served;
+Other fields are passed on to clients as they are, within what the frontmatter reader accepts: a subset of YAML (`key: value` pairs, quoted and
+block values, nested lists and maps; no anchors, aliases, tags or complex keys), and `metadata`
+must map strings to strings. A skill
+that breaks a rule is not served;
 the startup report says why (`INVALID_SKILL`, see [Troubleshooting](troubleshooting.md#a-skill-is-missing)).
 
 ### The description decides when it is used
@@ -85,8 +91,9 @@ request matches. Write the description for that choice:
 ### The body
 
 - **Name the tools exactly**, as `tools/list` shows them (`OrdersService_Orders_query`). The
-  agent calls what you name. Tool names are `<Service>_<Entity>_<mode>` and
-  `<Service>_<operation>` ([tool names](troubleshooting.md#a-tool-is-missing)).
+  agent calls what you name. Tool names are `<Service>_<Entity>_<mode>`,
+  `<Service>_<operation>`, and for bound operations `<Service>_<Entity>_<operation>`
+  (`OrdersService_Orders_cancel`); see [tool names](troubleshooting.md#a-tool-is-missing).
 - **Name resources by URI**: `notes://…` documents your app registers through `mcp:resources`,
   or `cap://<Service>/<Entity>/<key>` records. Say when to read them.
 - **Steps, in order.** Short numbered steps work better than prose. Say what to do when a step

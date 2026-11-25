@@ -71,7 +71,13 @@ interface HintSkill {
 ## Consequences
 
 - `HintContext` and the new `HintSkill` type are part of the exported contract
-  (docs/annotations.md); `contractVersion` stays 1.
+  (docs/annotations.md); `contractVersion` stays 1. The change is additive at runtime: a
+  provider written for ADR 0014 gets one more property and works unchanged. At the type level
+  `skills` is required, so TypeScript code that builds a `HintContext` itself (a provider's own
+  unit test) must add `skills: []`; this ships in 2.0 with ADR 0014, so no released contract
+  breaks.
+- The list is a snapshot of the catalog at startup. That holds while the catalog is static
+  (ADR 0016: no reload in 2.0); wiring up `reload()` must rebuild it.
 - The adapter keeps one frozen list per activation, from the catalog's entries.
 - A provider that names a skill which is not served writes text pointing nowhere; checking
   `ctx.skills` first avoids that, and the docs say so.

@@ -96,14 +96,22 @@ A skill you expected is not in the client's skills list, or its `SKILL.md` is no
 3. **Is there an `INVALID_SKILL` warning for it?** Its target is the file or folder under the
    skills folder, and the message says what is wrong:
 
-   | Message says                                                | Fix                                                                     |
-   | ----------------------------------------------------------- | ----------------------------------------------------------------------- |
-   | `must contain string "name" and "description"`              | Start `SKILL.md` with `---`, a `name:` and a `description:` line, `---` |
-   | `frontmatter name "x" must match the last path segment "y"` | Rename the folder or the `name` so they are equal                       |
-   | `must be 1-64 lowercase letters, digits and single hyphens` | Use a name like `handle-return`                                         |
-   | `symlinks and other special files are not followed`         | Copy the file into the skill instead of linking it                      |
-   | `exceeds the limit of 512 files / 16777216 bytes`           | Split the skill, or move large files out of it                          |
-   | `no skills found`                                           | The folder has no `SKILL.md` one level down: check the layout           |
+   | Message says                                                | Fix                                                                                   |
+   | ----------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+   | `must begin with a "---" line`                              | Start `SKILL.md` with frontmatter: `---`, a `name:` and a `description:` line, `---`  |
+   | `no closing "---" line`                                     | End the frontmatter with a `---` line                                                 |
+   | `must contain string "name" and "description"`              | Add the missing `name:` or `description:` line to the frontmatter                     |
+   | `frontmatter name "x" must match the last path segment "y"` | Rename the folder or the `name` so they are equal                                     |
+   | `must be 1-64 lowercase letters, digits and single hyphens` | Use a name like `handle-return`, and the same for its folder                          |
+   | `File names are case-sensitive`                             | Name the file `SKILL.md` exactly                                                      |
+   | `at the root has no skill path`                             | `cds.mcp.skills` names a skill's own folder: name the folder that holds skill folders |
+   | `symlinks and other special files are not followed`         | Copy the file into the skill instead of linking it                                    |
+   | `exceeds the limit of 512 files / 16777216 bytes`           | Split the skill, or move large files out of it                                        |
+   | `no skills found`                                           | No valid `SKILL.md` anywhere below the folder: see the other `INVALID_SKILL` lines    |
+
+   The frontmatter reader takes a subset of YAML (`key: value` pairs, quoted and block values,
+   nested lists and maps; no anchors, aliases, tags or complex keys); anything else is a warning
+   naming the line.
 
 4. **Did you restart?** Skills are read once at startup.
 5. **Deployed app only?** `cds build` copies only the skills the app serves, to

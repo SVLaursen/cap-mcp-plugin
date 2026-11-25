@@ -196,9 +196,9 @@ An app serves Agent Skills (folders with a `SKILL.md`) beside its tools through 
 cap-okf informs agents about the app through `mcp:hints`; it should be able to point them at skills too. Skills cannot carry that text (frontmatter verbatim, digests bind approval), so providers learn which skills are served. Maintainer decision (25 Nov 2026), ADR 0017. One commit per task, test first.
 
 - [x] K1 Demo target: `demo/server.js` adds an instructions line for support and admin naming the `handle-return` skill, only when `ctx.skills` has it; bob's output is unchanged. Committed with K2: before it, the demo provider would read a `skills` that does not exist yet and fail on every staff request
-- [x] K2 Context: every provider's context has `skills` (`{ uri, name, description }`, sorted by URI, frozen, the same array on every request); empty without `cds.mcp.skills`; no output changes without a provider that uses it _(`hints.test.ts`, `skills.test.ts`)_
+- [x] K2 Context: every provider's context has `skills` (`{ uri, name, description }`, sorted by URI, frozen, the same array on every request); empty without `cds.mcp.skills`; no output changes without a provider that uses it _(`hints.test.ts`)_
 - [x] K3 Docs: `docs/annotations.md` (Hints from code), `docs/guide/features.md`, `docs/guide/skills.md`, `docs/architecture.md`; types exported
-- [ ] K4 Review: run the `reviewer` agent on the block's diff and fix what it finds
+- [x] K4 Review: run the `reviewer` agent on the block's diff and fix what it finds (fixed: the troubleshooting table quoted one message with the wrong fix and missed the common ones (no frontmatter, no closing line, a misspelled `SKILL.md`, the skills key naming a skill's own folder); every quoted message is now pinned by a test against the SDK, and "no skills found" no longer claims skills must be one level down; the skills guide on subfolders, `compatibility`, the frontmatter subset, bound tool names and what older clients see; ADR 0017 says the change is runtime-additive and the list a startup snapshot; a skills-off test that could not fail removed)
 
 ### Release
 

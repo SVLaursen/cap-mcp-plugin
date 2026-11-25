@@ -444,7 +444,8 @@ describe("mcp:hints: the skills served (ADR 0017)", () => {
       }),
     );
 
-  test("every provider sees the served skills by URI, name and description, sorted by URI", async () => {
+  // The order is the SDK catalog's (sorted by URI); this pins it, our code does not sort.
+  test("every provider sees the served skills by URI, name and description, in catalog order", async () => {
     const seen: HintContext[] = [];
     const { call } = serve({
       skills: await catalog(),

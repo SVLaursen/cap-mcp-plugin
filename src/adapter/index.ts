@@ -319,7 +319,7 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
       })
     : undefined;
   // The served skills for hint providers (ADR 0017): one catalog for every caller, so one frozen
-  // list for every request.
+  // list for every request. A snapshot: right while the catalog is static (ADR 0016, no reload).
   const skillsForHints: readonly HintSkill[] = Object.freeze(
     (options.skills?.entries ?? []).map((entry) =>
       Object.freeze({

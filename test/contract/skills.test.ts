@@ -147,6 +147,57 @@ describe("loading the skills folder", () => {
     ]);
   });
 
+  test("skills may sit in subfolders: the path below the skills folder is the URI", async () => {
+    write("skills/team/restock/SKILL.md", skill("restock"));
+    const setup = await setUpSkills("skills", root);
+    expect(setup.uris).toEqual(["skill://handle-return/SKILL.md", "skill://team/restock/SKILL.md"]);
+  });
+
+  // The messages docs/guide/troubleshooting.md quotes, as the SDK words them.
+  test.each([
+    ["no frontmatter", "other/a/SKILL.md", "# A\n", 'must begin with a "---" line'],
+    ["no closing line", "other/a/SKILL.md", "---\nname: a\n", 'no closing "---" line'],
+    [
+      "no description",
+      "other/a/SKILL.md",
+      "---\nname: a\n---\n",
+      'must contain string "name" and "description"',
+    ],
+    [
+      "a name that is not the folder's",
+      "other/a/SKILL.md",
+      skill("b"),
+      "must match the last path segment",
+    ],
+    [
+      "a bad name",
+      "other/A_1/SKILL.md",
+      skill("A_1"),
+      "must be 1-64 lowercase letters, digits and single hyphens",
+    ],
+    ["a misspelled SKILL.md", "other/a/skill.md", skill("a"), "File names are case-sensitive"],
+    [
+      "the folder is a skill itself",
+      "other/SKILL.md",
+      skill("other"),
+      "at the root has no skill path",
+    ],
+  ])("%s: the warning says so", async (_case, file, text, message) => {
+    write(file, text);
+    const setup = await setUpSkills("other", root);
+    expect(setup.uris).toEqual([]);
+    expect(setup.diagnostics.map((d) => d.message).join("\n")).toContain(message);
+  });
+
+  test("a folder whose only skills are invalid also says no skills were found", async () => {
+    write("other/a/SKILL.md", skill("b"));
+    const setup = await setUpSkills("other", root);
+    expect(setup.diagnostics.map((d) => [d.target, d.message])).toEqual([
+      ["other", expect.stringMatching(/no skills found/)],
+      ["other/a/SKILL.md", expect.stringMatching(/must match/)],
+    ]);
+  });
+
   test("a folder without a valid skill gives no catalog", async () => {
     write("other/broken/SKILL.md", "no frontmatter");
     const setup = await setUpSkills("other", root);

@@ -57,9 +57,3 @@ test("a skill file is not readable", async () => {
   });
   expect(res.message?.error?.code).toBe(-32602);
 });
-
-test("hint providers see no skills, so the demo names none (ADR 0017)", async () => {
-  const res = await rpc(demo.POST, "carol", "server/discover");
-  expect(res.message?.result?.instructions).toContain("Shop policies are MCP resources.");
-  expect(res.message?.result?.instructions).not.toContain("handle-return");
-});
