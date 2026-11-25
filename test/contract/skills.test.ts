@@ -1,6 +1,12 @@
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { McpServer, createMcpHandler } from "@modelcontextprotocol/server";
+import {
+  SKILLS_EXTENSION_ID,
+  memorySkillFiles,
+  SkillsExtension,
+} from "@modelcontextprotocol/server/ext/skills";
 import { setUpSkills } from "../../src/adapter/skills";
 
 /** Skills over MCP (ADR 0016): loading the folder once at startup, and what it reports. */
@@ -107,5 +113,69 @@ describe("loading the skills folder", () => {
     } finally {
       chmodSync(path.join(root, "skills"), 0o755);
     }
+  });
+});
+
+/**
+ * `attach` is marked experimental in the SDK (ADR 0016, decision 8): pin what the plugin relies
+ * on, so an SDK upgrade that changes the wiring fails here first.
+ */
+describe("the SDK's skills wiring we rely on", () => {
+  const call = async (catalog: SkillsExtension, method: string, params = {}) => {
+    const handler = createMcpHandler(() => {
+      // As our factory builds it: resources declared first, listChanged off.
+      const server = new McpServer(
+        { name: "t", version: "0" },
+        { capabilities: { tools: { listChanged: false }, resources: { listChanged: false } } },
+      );
+      catalog.attach(server);
+      return server;
+    });
+    const res = await handler.fetch(
+      new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+          "mcp-protocol-version": "2026-07-28",
+          "mcp-method": method,
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method,
+          params: {
+            ...params,
+            _meta: {
+              "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+              "io.modelcontextprotocol/clientCapabilities": {},
+            },
+          },
+        }),
+      }),
+    );
+    return (await res.json()) as { result?: Record<string, unknown>; error?: { code: number } };
+  };
+
+  test("one catalog attaches to a fresh server per request: extension, template, methods", async () => {
+    expect(SKILLS_EXTENSION_ID).toBe("io.modelcontextprotocol/skills");
+    const catalog = await SkillsExtension.load(memorySkillFiles({ "a/SKILL.md": skill("a") }));
+    for (let i = 0; i < 2; i++) {
+      expect((await call(catalog, "server/discover")).result?.capabilities).toEqual({
+        tools: { listChanged: false },
+        resources: { listChanged: false },
+        extensions: { [SKILLS_EXTENSION_ID]: { directoryRead: true } },
+      });
+    }
+    expect((await call(catalog, "resources/templates/list")).result?.resourceTemplates).toEqual([
+      { name: "io.modelcontextprotocol/skills", uriTemplate: "skill://{+path}" },
+    ]);
+    const list = await call(catalog, "skills/list");
+    expect((list.result?.skills as { uri: string }[]).map((s) => s.uri)).toEqual([
+      "skill://a/SKILL.md",
+    ]);
+    expect(
+      (await call(catalog, "skills/get", { uri: "skill://a/SKILL.md" })).result,
+    ).toHaveProperty("skill");
   });
 });

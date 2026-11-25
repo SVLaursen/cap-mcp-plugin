@@ -482,12 +482,13 @@ describe("protocol: mounting inside CAP", () => {
 
   test("only implemented capabilities are advertised (tools, listChanged off)", async () => {
     const res = await rpc(demo.POST, "bob", "server/discover");
-    // Bob's resources are the MCP App UIs of his CatalogService tools and the demo's notes from
-    // code, whose topics template completes (ADR 0013); he has no prompts.
+    // Bob's resources are the MCP App UIs of his CatalogService tools, the demo's notes from
+    // code, whose topics template completes (ADR 0013), and its skill (ADR 0016); no prompts.
     expect(res.message?.result?.capabilities).toEqual({
       tools: { listChanged: false },
       resources: { listChanged: false },
       completions: {},
+      extensions: { "io.modelcontextprotocol/skills": { directoryRead: true } },
     });
   });
 

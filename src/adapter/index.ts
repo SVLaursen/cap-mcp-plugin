@@ -21,6 +21,7 @@ import type {
 import { createHash } from "node:crypto";
 import { toNodeHandler } from "@modelcontextprotocol/node";
 import type { RequestHandler } from "express";
+import type { SkillsExtension } from "@modelcontextprotocol/server/ext/skills";
 import { APP_MIME_TYPE, McpApps, linkedUri } from "./apps";
 import { isProduction } from "./auth";
 import { hintsFor, withNotes, type RegisteredHints, type ToolTarget } from "./hints";
@@ -103,6 +104,8 @@ export interface AdapterOptions {
   resources?: RegisteredResources;
   /** Instructions and tool notes from code (`mcp:hints`, ADR 0014); none when omitted. */
   hints?: RegisteredHints;
+  /** Skills over MCP (`cds.mcp.skills`, ADR 0016): one static catalog; none when omitted. */
+  skills?: SkillsExtension;
   /** CAP services by name (cds.services). */
   services: Record<string, TxService | undefined>;
   /** CAP's messages (cds.i18n.messages.at), so errors read as they do over OData. */
@@ -371,7 +374,13 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
     // The SDK keys templates by name: a cap:// template's name in this model wins.
     const templates = templatesFor(registry);
     const hasResources =
-      resources.length > 0 || linking.size > 0 || fixed.length > 0 || templates.length > 0;
+      resources.length > 0 ||
+      linking.size > 0 ||
+      fixed.length > 0 ||
+      templates.length > 0 ||
+      // The Skills extension requires the resources capability; declared here, it keeps
+      // listChanged off and our cache hints (the SDK's own default would not).
+      options.skills !== undefined;
     const listed = { ttlMs: TOOLS_TTL_MS, cacheScope: "private" } as const;
     // Hints (ADR 0014), as this caller, inside the request's cds.context; skipped without providers.
     const hinted = hints?.active
@@ -466,6 +475,8 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
         },
       );
     }
+    // Skills (ADR 0016): the same catalog on every request's server, after our registrations.
+    options.skills?.attach(server);
     return server;
   };
 }
