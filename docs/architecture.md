@@ -142,6 +142,15 @@ before it builds the `McpServer`: the texts follow the app's instructions, the n
 tool descriptions. Nothing is cached; a provider that fails is logged and skipped. Without
 providers nothing is awaited and the output is unchanged.
 
+Skills (ADR 0016, `adapter/skills.ts`): with `cds.mcp.skills`, `activate()` loads the folder once
+(`loadSkills` from the SDK's skills extension, skipping skills over the limits itself) before it
+logs the startup report, and passes the catalog to the handler. The factory counts it as a
+resource (the extension requires the `resources` capability) and attaches it to every request's
+server after our own registrations: one template (`skill://{+path}`, named
+`io.modelcontextprotocol/skills`) and the `skills/list`, `skills/get` and
+`resources/directory/read` handlers. Files are read from disk on each read and checked
+against the published digests by the SDK.
+
 ## Describe tools and access
 
 Describe tools (`<Service>_describe`, compact `list_entities` / `describe_entity`) never call CAP:

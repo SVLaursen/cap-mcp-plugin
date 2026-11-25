@@ -204,6 +204,38 @@ cds.on("mcp:hints", (hints) => {
 - `note` runs for every tool on every request, `tools/call` included: answer from memory (an
   index built at startup), not with I/O per tool.
 
+**Skills** (`cds.mcp.skills`, ADR 0016): Agent Skills (folders with a `SKILL.md`) served beside
+the tools through the Skills extension (`io.modelcontextprotocol/skills`). Not an annotation:
+the key is the opt-in, and without it `/mcp` is unchanged.
+
+```json
+{ "cds": { "mcp": { "skills": "mcp-skills" } } }
+```
+
+```
+mcp-skills/
+  handle-return/
+    SKILL.md            # ---\nname: handle-return\ndescription: …\n---\n…
+    references/checklist.md
+```
+
+- The folder is relative to the app root and must stay inside it (symlinks followed); one folder
+  per skill. A folder that does not exist, is not a folder or leaves the app root is an
+  `INVALID_CONFIG` error, and no skills are served.
+- Loaded once, when CAP has served the app. Each `SKILL.md` needs frontmatter with `name` (its
+  folder's name) and `description`. A skill that breaks a rule (also: a symlink in it, more than
+  512 files or 16 MiB) is an `INVALID_SKILL` warning and is not served at all.
+- Every caller the endpoint lets in sees the same catalog (CAP's authentication applies first).
+  `server/discover` and `initialize` declare the extension (with `directoryRead`) and the
+  `resources` capability; `skills/list`, `skills/get` and `resources/directory/read` answer;
+  every file reads through `resources/read` as `skill://<skill>/<path>`, and each `SKILL.md` is
+  in `resources/list`. Cache hints: 60 s, private.
+- Static content: hosts bind a user's approval to the published digests, so a skill changes only
+  with a restart (and needs approving again). `cds build` copies the folder to `gen/srv`
+  (without symlinks).
+- `skill:` URIs and the template name `io.modelcontextprotocol/skills` are reserved:
+  `mcp:resources` refuses them.
+
 **Completion** (`@mcp.completion` on the key of a single-key `@mcp.resource` entity): a client
 sends `completion/complete` with `ref/resource` and the template
 `cap://<Service>/<Entity>/{key}`; the plugin answers with keys that start with the typed value,
@@ -283,6 +315,7 @@ camelCase, read through `cds.env` only (profiles work as usual). No key turns a 
 | `instructions`       | none                             | Server instructions sent to clients: a string, or `{ file }` relative to the app root, read once at startup (a missing file is an error and the server has none). `cds build` copies the file to `gen/srv/<file>` and warns when it is missing or an absolute path; with an explicit `build.tasks` list, add `{ "for": "mcp" }` |
 | `limits.maxRows`     | `200`                            | Upper bound for `top`                                                                                                                                                                                                                                                                                                           |
 | `limits.defaultRows` | `25`                             | Default page size                                                                                                                                                                                                                                                                                                               |
+| `skills`             | none                             | Skills over MCP (ADR 0016): a folder of skill folders, relative to the app root and inside it. `cds build` copies it to `gen/srv/<folder>`                                                                                                                                                                                      |
 | `filterNotices`      | `true`                           | `false` turns off the filtered-read notices (ADR 0015): the line in read tools' descriptions, `notice` in query results and the "or it is not visible to you" in get's not-found. They expose nothing, so they are on unless switched off                                                                                       |
 
 Read once, when CAP has served the app; a change needs a restart, as for the rest of CAP. This is

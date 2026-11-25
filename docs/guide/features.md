@@ -117,6 +117,27 @@ cds.on("mcp:hints", (hints) => {
 
 The demo adds a hint for support and admin users; see [the demo app](../../demo/README.md).
 
+## Skills: `cds.mcp.skills`
+
+Agent Skills are folders with a `SKILL.md` that tell an agent how to do a task with your tools:
+which ones, in which order, what to read first. Put them in a folder and name it:
+
+```json
+{ "cds": { "mcp": { "skills": "mcp-skills" } } }
+```
+
+Each skill is a folder with a `SKILL.md` that starts with frontmatter (`name`, the folder's name,
+and `description`, when to use it), and any files it refers to. Clients that support the
+Skills extension list them with `skills/list` and read each file as `skill://<skill>/<path>`;
+older clients see the files as ordinary resources.
+
+- Without the key nothing changes. A broken skill is a startup warning and is not served.
+- Every caller the endpoint lets in sees the same skills. They are guidance, not data: CAP still
+  checks every tool call a skill leads to.
+- Skills are read once at startup. Change one, restart the app.
+
+The demo serves one skill, `handle-return`; see [the demo app](../../demo/README.md).
+
 ## Prompts
 
 Prompts are reusable instructions the user picks in the client.

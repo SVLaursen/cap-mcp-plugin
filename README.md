@@ -16,6 +16,7 @@ transaction, exactly as it does for OData. Nothing is exposed unless you annotat
 - Resources from code: other plugins and app code add documents through `mcp:resources`
 - Hints from code: other plugins and app code add to server instructions and tool descriptions
   through `mcp:hints`
+- Skills over MCP: Agent Skills from a folder, served beside the tools (`cds.mcp.skills`)
 - XSUAA and IAS (also with X.509 credentials), `@sap/ams`, multitenant XSUAA, RFC 9728 metadata
 - A startup report that tells you what is served and what in your model needs a look
 
@@ -98,12 +99,13 @@ processes over stdio use a bridge such as [`mcp-remote`](https://www.npmjs.com/p
 | MCP Apps UI                         | `@mcp.ui: 'ui://…'` on the operation                      |
 | Documents as resources, from code   | `cds.on('mcp:resources')` in your app or another plugin   |
 | Hints in instructions and tools     | `cds.on('mcp:hints')` in your app or another plugin       |
+| Agent Skills                        | `cds.mcp.skills` naming a folder of skills                |
 | User confirmation before a call     | `@mcp.elicit` on the operation                            |
 | Key completion                      | `@mcp.completion` on the key of an `@mcp.resource` entity |
 | Model description tool              | `@mcp.describe` on the service                            |
 | Compact generic tool set            | `@mcp.compact` on the service                             |
 
-`@mcp: false` or `@cds.api.ignore` excludes an entity. No configuration switches a feature on.
+`@mcp: false` or `@cds.api.ignore` excludes an entity. No configuration default switches a feature on: `cds.mcp.skills` serves skills only when set.
 See the [annotation reference](docs/guide/annotations.md).
 
 ## Security model
@@ -147,6 +149,7 @@ a feature on.
 | `scopes`             | none                             | OAuth scopes clients should request: `scope` in the challenge, `scopes_supported` in the metadata   |
 | `limits.maxRows`     | `200`                            | Upper bound for `top` in query tools                                                                |
 | `limits.defaultRows` | `25`                             | Page size when the agent gives none                                                                 |
+| `skills`             | none                             | A folder of Agent Skills, relative to the app root (Skills over MCP)                                |
 | `filterNotices`      | `true`                           | `false` turns off the notices that tell agents when `@restrict … where` filters their reads         |
 
 ```json

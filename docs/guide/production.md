@@ -221,6 +221,9 @@ agents need it. Set `cds.mcp.filterNotices: false` to turn the notices off.
   anything runs. Clients that cannot ask get an error instead of a silent call.
 - `@mcp.describe` and `@mcp.compact` describe only what the caller can reach, but they still
   publish your model's shape. Leave them off unless agents need them.
+- Skills (`cds.mcp.skills`) are instructions for agents, not data and not authorization: every
+  caller the endpoint lets in reads the same skills, and CAP still checks every call a skill
+  leads to. Write nothing in a skill that a caller of `/mcp` may not read.
 
 ## Settings to review
 
@@ -228,6 +231,7 @@ agents need it. Set `cds.mcp.filterNotices: false` to turn the notices off.
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `allowedOrigins`     | Browser origins that may call `/mcp`; any other `Origin` gets 403, see below                                                    |
 | `tenantHostPattern`  | Multitenant XSUAA, see above                                                                                                    |
+| `skills`             | Skills over MCP: a folder of skills every caller can read, see Exposure above                                                   |
 | `scopes`             | OAuth scopes clients should ask for, in the challenge and the RFC 9728 metadata, see above                                      |
 | `limits.maxRows`     | Upper bound on `top` per query call (default 200); CAP's `@cds.query.limit` per entity and `cds.query.limit.max` cap it further |
 | `limits.defaultRows` | Page size when the agent gives none (default 25)                                                                                |
