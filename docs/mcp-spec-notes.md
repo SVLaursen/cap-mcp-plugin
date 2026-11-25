@@ -27,6 +27,35 @@ Target: [MCP 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-2
 | Any JSON Schema 2020-12 in input/output schemas; `structuredContent` any JSON             | schema-mapper can emit full constraints                                                          |
 | Error code ranges: `-32020…-32099` reserved for MCP                                       | `UnsupportedProtocolVersion` is `-32022`                                                         |
 
+## Official extensions
+
+Extensions became part of the protocol in 2026-07-28 ([overview](https://modelcontextprotocol.io/extensions)):
+off by default, negotiated through `extensions` in client and server capabilities. Checked
+2026-11-25; stages from the overview page.
+
+| Extension                        | Identifier                                                 | Stage                             | Where v2 stands                                                                                                                                                                                                                                                                             |
+| -------------------------------- | ---------------------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MCP Apps                         | `io.modelcontextprotocol/ui`                               | Stable (spec 2026-01-26)          | Served: `@mcp.ui` (ADR 0012). The extension's specification defines only the client's declaration, so `server/discover` declares nothing (ADR 0012, addendum); the extensions overview shows a server declaring `{}` in an example, without normative language. UI links go to every client |
+| Skills over MCP (SEP-2640)       | `io.modelcontextprotocol/skills`                           | Beta (the Skills page says Final) | Planned for 2.0, opt-in through `cds.mcp.skills` (ADR 0016, proposed); not built yet                                                                                                                                                                                                        |
+| Tasks                            | `io.modelcontextprotocol/tasks`                            | Beta, to core                     | Not offered (P2, long-running actions). Moved out of core in 2026-07-28 (SEP-2663)                                                                                                                                                                                                          |
+| OAuth client credentials         | `io.modelcontextprotocol/oauth-client-credentials`         | Stable                            | Not declared (2.x). Machine clients with a token from the client-credentials grant already work wherever CAP accepts the token (XSUAA, IAS): validation is CAP's                                                                                                                            |
+| Enterprise-managed authorization | `io.modelcontextprotocol/enterprise-managed-authorization` | Stable                            | Not offered (2.x). Mostly the authorization server's job (ID-JAG validation); the resource server's part is not specified in a concrete field yet                                                                                                                                           |
+
+Also listed, not considered for 2.0: Server Cards and Events (Beta), and five experimental
+extensions (interceptors, variants, tool annotations, file uploads, filesystems).
+
+## Conformance
+
+`@modelcontextprotocol/conformance` 0.1.16 (`latest`, what `npm run conformance` uses) has no
+2026-07-28 scenarios; `test/behaviour/protocol.test.ts` › "wire contract the SDK guarantees"
+pins that contract instead. The 0.2.0 prereleases (`alpha` dist-tag, 0.2.0-alpha.12 on
+2026-11-25) add `--spec-version 2026-07-28` and a requirements file for it
+(`requirements/2026-07-28.yaml`, anchored to 0.2.0-alpha.10): server scenarios such as
+`server-stateless`, `tools-list`, `tools-call-*` and `input-required-result-*`, with the
+extension scenarios (`tasks-*`, `auth/client-credentials-*`,
+`auth/enterprise-managed-authorization`) run but not scored. Re-check on each release of the
+suite; move `npm run conformance` to 2026-07-28 once 0.2.0 is `latest`.
+
 ## Deprecated (don't adopt)
 
 Roots, Sampling, Logging features · HTTP+SSE transport · Dynamic Client Registration (use

@@ -70,7 +70,10 @@ from it.
   `extensions["io.modelcontextprotocol/ui"] = { mimeTypes: ["text/html;profile=mcp-app"] }` in
   their capabilities. The specification defines no server-side declaration, no shape for one,
   and no MUST, SHOULD or MAY for it. So `server/discover` and `initialize` carry no
-  `extensions` entry for MCP Apps, and RC2 adds none (no code). If a later revision of the
+  `extensions` entry for MCP Apps, and RC2 adds none (no code). The protocol's extensions
+  overview (modelcontextprotocol.io/extensions) shows a server declaring
+  `"io.modelcontextprotocol/ui": {}` in a `server/discover` example, with no MUST, SHOULD or MAY
+  behind it; the extension's own pages say nothing about it. If a later revision of the
   extension asks servers to declare it, advertise it only to callers with at least one UI tool,
   as for every other capability (ADR 0004).
 - **Checking the client.** "Servers SHOULD check client capabilities before registering

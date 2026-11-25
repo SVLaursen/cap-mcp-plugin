@@ -193,7 +193,7 @@ An app serves Agent Skills (folders with a `SKILL.md`) beside its tools through 
 
 ### Release
 
-- [ ] RC5 Docs: `docs/mcp-spec-notes.md` gets the official extensions (MCP Apps, Skills, Tasks, OAuth client credentials, enterprise-managed authorization) with where v2 stands, and the note that the conformance suite has no 2026-07-28 scenarios yet (re-check on each release of `@modelcontextprotocol/conformance`)
+- [x] RC5 Docs: `docs/mcp-spec-notes.md` gets the official extensions (MCP Apps, Skills, Tasks, OAuth client credentials, enterprise-managed authorization) with where v2 stands, and the note that the conformance suite has no 2026-07-28 scenarios yet (re-check on each release of `@modelcontextprotocol/conformance`). → True of 0.1.16, which we run; the 0.2.0 prereleases (`alpha`, 0.2.0-alpha.12) have 2026-07-28 scenarios. Recorded in `docs/mcp-spec-notes.md` › Conformance
 - [ ] RC6 Docs: `docs/guide/production.md` says how MCP clients register with XSUAA and IAS. Check SAP's documentation for Client ID Metadata Documents and dynamic client registration; where neither is supported, say that each client needs a pre-registered OAuth client and show the setup for one. State what was verified and what was not
 - [ ] RC7 Review: run the `reviewer` agent on the Protocol edge and Release tasks' diff and fix what it finds
 - [ ] Maintainer: the open boxes above (ADR 0014 and ADR 0015 accepted; `repository`, `homepage`, `bugs` in M7)
