@@ -5,12 +5,24 @@
  * and `mcp:resources`; this file holds the registry, its rules, and the per-request calls.
  */
 
-/** Who is asking: from the request's cds.context. */
+/** Who is asking (from the request's cds.context), and the skills the app serves. */
 export interface HintContext {
   /** cds.context.user (a cds.User). */
   user: unknown;
   tenant?: string;
   locale?: string;
+  /**
+   * The skills served (ADR 0016, 0017), sorted by URI: the same frozen list for every caller.
+   * Empty without `cds.mcp.skills`.
+   */
+  skills: readonly HintSkill[];
+}
+
+/** A served skill, as hint providers see it: its SKILL.md URI and frontmatter. */
+export interface HintSkill {
+  readonly uri: string;
+  readonly name: string;
+  readonly description: string;
 }
 
 /** A generated tool, as a notes provider sees it. */

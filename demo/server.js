@@ -62,6 +62,14 @@ cds.on("mcp:hints", (hints) => {
         ? "Shop policies are MCP resources. Read notes://bookshop/returns-policy.md before you answer a question about returns or cancellations."
         : undefined,
   });
+  // ADR 0017: point staff at the demo's skill, only when the app serves it (cds.mcp.skills).
+  hints.addInstructions({
+    id: "bookshop-skills",
+    text: ({ user, skills }) =>
+      staff(user) && skills.some((s) => s.name === "handle-return")
+        ? "For a return or cancellation, load the handle-return skill (skill://handle-return/SKILL.md)."
+        : undefined,
+  });
   hints.addToolNotes({
     id: "bookshop-policies",
     note: ({ definition }, { user }) =>

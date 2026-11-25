@@ -34,6 +34,9 @@ const demo = bootDemo();
 
 const FILE = "Bookshop data over MCP.";
 const POLICY = "Shop policies are MCP resources.";
+/** demo/server.js points staff at the demo's skill, when it is served (ADR 0017). */
+const SKILL_HINT =
+  "For a return or cancellation, load the handle-return skill (skill://handle-return/SKILL.md).";
 const NOTE =
   "A cancelled order that was delivered is a return: read notes://bookshop/returns-policy.md first.";
 
@@ -47,7 +50,13 @@ describe("mcp:hints: instructions", () => {
     const text = await instructions("carol");
     expect(text.startsWith(FILE)).toBe(true);
     expect(text).toMatch(new RegExp(`\\.\\n\\n${POLICY}`));
-    expect(text.endsWith("returns or cancellations.")).toBe(true);
+    expect(text).toContain("returns or cancellations.");
+  });
+
+  test("staff are pointed at the skill the app serves, after the policy hint (ADR 0017)", async () => {
+    const text = await instructions("carol");
+    expect(text.endsWith(`returns or cancellations.\n\n${SKILL_HINT}`)).toBe(true);
+    expect(await instructions("bob")).not.toContain("handle-return");
   });
 
   test("2025-era clients get the same instructions in initialize", async () => {

@@ -6,6 +6,7 @@ import {
   SKILLS_EXTENSION_ID,
   memorySkillFiles,
   SkillsExtension,
+  type SkillCatalog,
 } from "@modelcontextprotocol/server/ext/skills";
 import { serverFactory } from "../../src/adapter";
 import { setUpSkills } from "../../src/adapter/skills";
@@ -250,7 +251,7 @@ describe("the resources capability with skills (ADR 0016)", () => {
     const catalog = await SkillsExtension.load(memorySkillFiles({ "a/SKILL.md": skill("a") }), {
       cacheHint: { ttlMs: 60_000, cacheScope: "private" },
     });
-    const factory = (skills?: SkillsExtension) =>
+    const factory = (skills?: SkillCatalog) =>
       createMcpHandler(
         serverFactory({
           serverInfo: { name: "t", version: "0" },

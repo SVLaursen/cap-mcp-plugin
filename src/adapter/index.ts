@@ -21,10 +21,16 @@ import type {
 import { createHash } from "node:crypto";
 import { toNodeHandler } from "@modelcontextprotocol/node";
 import type { RequestHandler } from "express";
-import type { SkillsExtension } from "@modelcontextprotocol/server/ext/skills";
+import type { SkillCatalog } from "@modelcontextprotocol/server/ext/skills";
 import { APP_MIME_TYPE, McpApps, linkedUri } from "./apps";
 import { isProduction } from "./auth";
-import { hintsFor, withNotes, type RegisteredHints, type ToolTarget } from "./hints";
+import {
+  hintsFor,
+  withNotes,
+  type HintSkill,
+  type RegisteredHints,
+  type ToolTarget,
+} from "./hints";
 import {
   isNotFound,
   visibleFixed,
@@ -105,7 +111,7 @@ export interface AdapterOptions {
   /** Instructions and tool notes from code (`mcp:hints`, ADR 0014); none when omitted. */
   hints?: RegisteredHints;
   /** Skills over MCP (`cds.mcp.skills`, ADR 0016): one static catalog; none when omitted. */
-  skills?: SkillsExtension;
+  skills?: SkillCatalog;
   /** CAP services by name (cds.services). */
   services: Record<string, TxService | undefined>;
   /** CAP's messages (cds.i18n.messages.at), so errors read as they do over OData. */
@@ -312,6 +318,17 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
         warn: (...args) => (options.log.warn ?? options.log.error)(...args),
       })
     : undefined;
+  // The served skills for hint providers (ADR 0017): one catalog for every caller, so one frozen
+  // list for every request.
+  const skillsForHints: readonly HintSkill[] = Object.freeze(
+    (options.skills?.entries ?? []).map((entry) =>
+      Object.freeze({
+        uri: entry.uri,
+        name: String(entry.frontmatter.name),
+        description: String(entry.frontmatter.description),
+      }),
+    ),
+  );
   // Per model: each generated tool's target for notes providers (structure only, no answers).
   const targets = new WeakMap<ToolSpec, ToolTarget | null>();
   const targetOf = (registry: ExposureRegistry, tool: ToolSpec) => {
@@ -383,12 +400,14 @@ export function serverFactory(options: AdapterOptions): McpServerFactory {
       options.skills !== undefined;
     const listed = { ttlMs: TOOLS_TTL_MS, cacheScope: "private" } as const;
     // Hints (ADR 0014), as this caller, inside the request's cds.context; skipped without providers.
+    // Providers also see the served skills (ADR 0017).
+    const hintContext = { ...caller, skills: skillsForHints };
     const hinted = hints?.active
       ? await Promise.all([
-          hints.instructions(options.instructions, caller),
+          hints.instructions(options.instructions, hintContext),
           hints.notes(
             tools.map(({ tool }) => targetOf(registry, tool)).filter((t) => t !== undefined),
-            caller,
+            hintContext,
           ),
         ])
       : undefined;

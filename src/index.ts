@@ -71,6 +71,7 @@ export type {
 export type {
   HintContext,
   HintRegistry,
+  HintSkill,
   InstructionsProvider,
   ToolNotesProvider,
   ToolTarget,

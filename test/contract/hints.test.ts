@@ -9,6 +9,11 @@ import {
   type ToolTarget,
 } from "../../src/adapter/hints";
 import { registryCache } from "../../src/exposure-registry";
+import {
+  SkillsExtension,
+  memorySkillFiles,
+  type SkillCatalog,
+} from "@modelcontextprotocol/server/ext/skills";
 import { compileSnippet } from "../helpers/snippet";
 
 /** Hints from code (ADR 0014): the `mcp:hints` registry, and what the adapter does with it. */
@@ -111,6 +116,8 @@ interface Setup {
   base?: string;
   locale?: string;
   tenant?: string;
+  /** Skills served (ADR 0016), for the hint context (ADR 0017). */
+  skills?: SkillCatalog;
 }
 
 function serve(setup: Setup = {}) {
@@ -129,6 +136,7 @@ function serve(setup: Setup = {}) {
     model: () => model,
     registryFor: registryCache(),
     ...(!setup.noRegistry && { hints }),
+    ...(setup.skills && { skills: setup.skills }),
     services: {},
     log: {
       error: (...args: unknown[]) => void errors.push(args),
@@ -383,7 +391,7 @@ describe("mcp:hints: the caller", () => {
     });
     await call("tools/list");
     expect(seen.length).toBeGreaterThan(1);
-    for (const ctx of seen) expect(ctx).toEqual({ user, tenant: "t1", locale: "de" });
+    for (const ctx of seen) expect(ctx).toEqual({ user, tenant: "t1", locale: "de", skills: [] });
   });
 
   test("providers are asked again on every request, never cached", async () => {
@@ -421,5 +429,79 @@ describe("mcp:hints: nothing registered", () => {
         );
       }
     }
+  });
+});
+
+describe("mcp:hints: the skills served (ADR 0017)", () => {
+  const skill = (name: string, description: string) =>
+    `---\nname: ${name}\ndescription: ${description}\n---\n\n# ${name}\n`;
+  const catalog = () =>
+    SkillsExtension.load(
+      memorySkillFiles({
+        "restock/SKILL.md": skill("restock", "Plan a restock."),
+        "handle-return/SKILL.md": skill("handle-return", "Handle a return."),
+        "handle-return/references/checklist.md": "# Checklist\n",
+      }),
+    );
+
+  test("every provider sees the served skills by URI, name and description, sorted by URI", async () => {
+    const seen: HintContext[] = [];
+    const { call } = serve({
+      skills: await catalog(),
+      instructions: [{ id: "a", text: (ctx) => void seen.push(ctx) }],
+      notes: [{ id: "b", note: (_t, ctx) => void seen.push(ctx) }],
+    });
+    await call("tools/list");
+    expect(seen.length).toBeGreaterThan(1);
+    for (const ctx of seen)
+      expect(ctx.skills).toEqual([
+        {
+          uri: "skill://handle-return/SKILL.md",
+          name: "handle-return",
+          description: "Handle a return.",
+        },
+        { uri: "skill://restock/SKILL.md", name: "restock", description: "Plan a restock." },
+      ]);
+  });
+
+  test("the list is frozen and the same on every request: one catalog for every caller", async () => {
+    const seen: HintContext[] = [];
+    const { call } = serve({
+      skills: await catalog(),
+      instructions: [{ id: "a", text: (ctx) => void seen.push(ctx) }],
+    });
+    await call("server/discover");
+    await call("server/discover");
+    expect(seen[0]?.skills).toBe(seen[1]?.skills);
+    expect(Object.isFrozen(seen[0]?.skills)).toBe(true);
+    expect(Object.isFrozen(seen[0]?.skills[0])).toBe(true);
+  });
+
+  test("a provider can point agents at a skill in its instructions and tool notes", async () => {
+    const before = await serve().tools();
+    const { instructionsText, tools } = serve({
+      skills: await catalog(),
+      instructions: [
+        {
+          id: "okf",
+          text: ({ skills }) =>
+            skills.some((s) => s.name === "handle-return")
+              ? "For returns, load the handle-return skill."
+              : undefined,
+        },
+      ],
+      notes: [
+        {
+          id: "okf",
+          note: (t, { skills }) =>
+            t.tool === "Shop_order" ? `Skill: ${skills[0]?.uri}` : undefined,
+        },
+      ],
+    });
+    expect(await instructionsText()).toBe("For returns, load the handle-return skill.");
+    const original = before.find((t) => t.name === "Shop_order")?.description;
+    expect((await tools()).find((t) => t.name === "Shop_order")?.description).toBe(
+      `${original}\n\nSkill: skill://handle-return/SKILL.md`,
+    );
   });
 });
