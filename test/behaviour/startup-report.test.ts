@@ -24,6 +24,11 @@ test("the plugin logs what it serves and every diagnostic when the app is served
     "info",
     "from code (mcp:resources): 3 resources (notes://bookshop/missing.md, notes://bookshop/returns-policy.md, notes://bookshop/stock-policy.md), 1 resource template (notes://bookshop/topics/{+path})",
   ]);
+  // demo/mcp-skills, named by cds.mcp.skills (ADR 0016).
+  expect(lines[2]).toEqual([
+    "info",
+    "skills (cds.mcp.skills): 1 skill (skill://handle-return/SKILL.md)",
+  ]);
   // The demo reads cleanly: nothing but the summary.
   expect(lines.filter(([level]) => level !== "info")).toEqual([]);
 });

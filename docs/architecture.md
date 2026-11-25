@@ -45,12 +45,12 @@ Inside the larger modules, one file per concern; each module's `index.ts` header
   `completion.ts`, `errors.ts`, `results.ts`.
 - `adapter/`: `index.ts` (the per-request server factory and the HTTP handler), `auth.ts`,
   `apps.ts` (MCP Apps, `mcp:apps`), `registered-resources.ts` (`mcp:resources`), `hints.ts`
-  (`mcp:hints`).
+  (`mcp:hints`), `skills.ts` (Skills over MCP).
 - `cli/`: `startup-report.ts`, `add.ts` (`cds add mcp`), `build.ts` (the build task).
 
 ## Request lifecycle
 
-1. `activate(cds)` logs the startup report (`cli`: counts and every diagnostic) and mounts one `/mcp` route (all methods) on `served`. A request with an `Origin`
+1. `activate(cds)` loads the skills folder, if `cds.mcp.skills` names one (ADR 0016, `adapter/skills.ts`; problems are `INVALID_SKILL` or `INVALID_CONFIG` diagnostics), logs the startup report (`cli`: counts and every diagnostic) and mounts one `/mcp` route (all methods) on `served`. A request with an `Origin`
    that is not in `cds.env.mcp.allowedOrigins` gets 403 (DNS rebinding; no implicit own origin, since
    that would come from the Host header); the
    rest go through `cds.middlewares.before` (ADR 0009). That chain authenticates the request and sets `cds.context` (user, tenant,

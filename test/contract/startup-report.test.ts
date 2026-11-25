@@ -1,5 +1,10 @@
 import { RegisteredResources } from "../../src/adapter/registered-resources";
-import { docCommentHint, exposureReport, registeredReport } from "../../src/cli/startup-report";
+import {
+  docCommentHint,
+  exposureReport,
+  registeredReport,
+  skillsReport,
+} from "../../src/cli/startup-report";
 import { ExposureRegistry } from "../../src/exposure-registry";
 import { compileSnippet } from "../helpers/snippet";
 
@@ -95,5 +100,18 @@ describe("startup report: resources from code (ADR 0013)", () => {
 
   test("says nothing when nothing was registered", () => {
     expect(registeredReport(new RegisteredResources())).toBeUndefined();
+  });
+});
+
+describe("skills in the startup report (ADR 0016)", () => {
+  test("lists the served skills by URI", () => {
+    expect(skillsReport(["skill://a/SKILL.md", "skill://b/SKILL.md"])).toEqual({
+      level: "info",
+      text: "skills (cds.mcp.skills): 2 skills (skill://a/SKILL.md, skill://b/SKILL.md)",
+    });
+  });
+
+  test("says nothing when no skill is served", () => {
+    expect(skillsReport([])).toBeUndefined();
   });
 });

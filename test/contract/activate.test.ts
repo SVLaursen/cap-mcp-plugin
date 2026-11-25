@@ -103,20 +103,21 @@ test("mcp:hints is emitted once, after mcp:resources, with an open registry that
   for (const add of late) expect(add).toThrow(/after the mcp:hints event/);
 });
 
-test("a duplicate hint provider fails startup with the plugin's message", () => {
+// The served listener is async (skills load first): CAP awaits it, so a throw fails startup.
+test("a duplicate hint provider fails startup with the plugin's message", async () => {
   const { served } = fakeCds({}, (event, registry) => {
     if (event !== "mcp:hints") return;
     const hints = registry as { addToolNotes(p: unknown): void };
     hints.addToolNotes({ id: "a", note: () => undefined });
     hints.addToolNotes({ id: "a", note: () => undefined });
   });
-  expect(served).toThrow(/^cap-mcp: .*already registered/);
+  await expect(served()).rejects.toThrow(/^cap-mcp: .*already registered/);
 });
 
-test("a bad registration fails startup with the plugin's message", () => {
+test("a bad registration fails startup with the plugin's message", async () => {
   const { served } = fakeCds({}, (event, registry) => {
     if (event === "mcp:resources")
       (registry as { register(r: unknown): void }).register({ uri: "no-scheme", name: "x" });
   });
-  expect(served).toThrow(/^cap-mcp: /);
+  await expect(served()).rejects.toThrow(/^cap-mcp: /);
 });

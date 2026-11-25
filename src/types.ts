@@ -188,6 +188,8 @@ export type DiagnosticCode =
   | "DRAFT_WRITE_NOT_SUPPORTED"
   | "V1_ANNOTATION"
   | "V1_DEFAULT_CHANGED"
+  /** A skill in the cds.mcp.skills folder that breaks the Skills rules; not served (ADR 0016). */
+  | "INVALID_SKILL"
   /** A cds.env.mcp key the plugin does not know; ignored. */
   | "UNKNOWN_CONFIG"
   /** A cds.env.mcp value of the wrong shape; the key's default is used. */

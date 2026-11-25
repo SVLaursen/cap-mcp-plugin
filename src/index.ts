@@ -13,7 +13,13 @@ import {
   requireUser,
   type AuthConfig,
 } from "./adapter/auth";
-import { docCommentHint, exposureReport, registeredReport } from "./cli/startup-report";
+import {
+  docCommentHint,
+  exposureReport,
+  registeredReport,
+  skillsReport,
+} from "./cli/startup-report";
+import { setUpSkills } from "./adapter/skills";
 import { mcpFacet, type FacetCds } from "./cli/add";
 import { mcpBuildTask, type BuildCds } from "./cli/build";
 import { capQueryLimit, readConfig, readInstructions } from "./config";
@@ -22,7 +28,8 @@ import { DEFAULT_LIMITS } from "./schema-mapper";
 
 /** The parts of the `cds` facade the plugin uses. Passed in, never read from a global (ADR 0005). */
 export interface CdsLike {
-  on(event: "served", handler: () => void): unknown;
+  /** CAP awaits each `served` listener in turn (lib/index.js), so it may be async. */
+  on(event: "served", handler: () => void | Promise<void>): unknown;
   on(event: string, handler: (...args: never[]) => void): unknown;
   emit(event: string, ...args: unknown[]): unknown;
   log(module: string): {
@@ -113,11 +120,15 @@ export function plugin(
  */
 export function activate(cds: CdsLike): void {
   const log = cds.log("mcp");
-  cds.on("served", () => {
+  // Async: CAP awaits each `served` listener before it listens, so skills load before requests.
+  cds.on("served", async () => {
     // Read once the app's env is complete (profiles applied).
     const { config, v1, diagnostics } = readConfig(cds.env.mcp);
     const instructions = readInstructions(config.instructions, cds.root);
     if (instructions.diagnostic) diagnostics.push(instructions.diagnostic);
+    // Skills over MCP (ADR 0016): one static catalog from the configured folder.
+    const skills = await setUpSkills(config.skills, cds.root);
+    diagnostics.push(...skills.diagnostics);
     const mcpPath = config.path ?? MCP_PATH;
     const registryFor = registryCache({
       limits: capQueryLimit({ ...DEFAULT_LIMITS, ...config.limits }, cds.env.query?.limit),
@@ -135,6 +146,8 @@ export function activate(cds: CdsLike): void {
     const resources = setUpResources((registry) => cds.emit("mcp:resources", registry));
     const fromCode = registeredReport(resources);
     if (fromCode) log[fromCode.level](fromCode.text);
+    const served = skillsReport(skills.uris);
+    if (served) log[served.level](served.text);
     // Hints from code (ADR 0014): instructions and tool notes, asked as the caller per request.
     const hints = setUpHints((registry) => cds.emit("mcp:hints", registry));
     const handler = mcpHandler({

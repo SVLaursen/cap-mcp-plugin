@@ -50,6 +50,16 @@ export function registeredReport(resources: RegisteredResources): ReportLine | u
     : undefined;
 }
 
+/** The skills served from `cds.mcp.skills` (ADR 0016); undefined when there are none. */
+export function skillsReport(uris: string[]): ReportLine | undefined {
+  return uris.length
+    ? {
+        level: "info",
+        text: `skills (cds.mcp.skills): ${count(uris.length, "skill")} (${uris.join(", ")})`,
+      }
+    : undefined;
+}
+
 /** The slice of a CSN definition the doc-comment check reads. */
 interface DocDefinition {
   doc?: string;

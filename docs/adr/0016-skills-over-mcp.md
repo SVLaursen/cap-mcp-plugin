@@ -155,3 +155,13 @@ limits (the SDK's 512 files and 16 MiB apply), dynamic (`"dynamic"`) skills, and
   for hosts, a new approval, since its digests change).
 - Skills are instructions for agents, not data and not authorization: CAP still checks every
   tool call they lead to (docs/guide/production.md).
+
+## Correction while building S3 (2026-11-25)
+
+Decision 2 says the SDK skips an invalid skill whole. That holds for frontmatter, naming and
+symlink problems, but not for the publication limits: over 512 files or 16 MiB, the SDK only
+warns and still serves the skill. The specification says servers SHOULD NOT serve it, and
+decision 2 meant "not served", so the plugin skips such skills itself: it loads the folder,
+measures each entry's published files and bytes against `SKILL_LIMITS`, and, if any skill is
+over, loads again without those skill folders. Each is an `INVALID_SKILL` warning. The decision
+is unchanged; only how it is carried out.
