@@ -140,7 +140,9 @@ provider is registered, the (then async) factory asks every instructions provide
 generated tool the caller gets, every notes provider, as the caller inside `cds.context`,
 before it builds the `McpServer`: the texts follow the app's instructions, the notes end the
 tool descriptions. Nothing is cached; a provider that fails is logged and skipped. Without
-providers nothing is awaited and the output is unchanged.
+providers nothing is awaited and the output is unchanged. Providers also see the served skills
+(ADR 0017): the factory builds one frozen `{ uri, name, description }` list from the catalog
+per activation and passes it in every provider's context.
 
 Skills (ADR 0016, `adapter/skills.ts`): with `cds.mcp.skills`, `activate()` loads the folder once
 (`loadSkills` from the SDK's skills extension, skipping skills over the limits itself) before it

@@ -114,6 +114,19 @@ cds.on("mcp:hints", (hints) => {
   `cds.context`. Answer from memory; a provider that does I/O per tool slows every call.
 - A provider that throws is skipped for that request and logged; the client never sees its
   message.
+- Providers also get `skills`, the skills the app serves (`{ uri, name, description }`, empty
+  without `cds.mcp.skills`). Point agents at the one that fits; check the list first, so you
+  never name a skill that is not served:
+
+```js
+hints.addInstructions({
+  id: "bookshop-skills",
+  text: ({ skills }) =>
+    skills.some((s) => s.name === "handle-return")
+      ? "For a return or cancellation, load the handle-return skill (skill://handle-return/SKILL.md)."
+      : undefined,
+});
+```
 
 The demo adds a hint for support and admin users; see [the demo app](../../demo/README.md).
 

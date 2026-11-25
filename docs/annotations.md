@@ -187,8 +187,11 @@ cds.on("mcp:hints", (hints) => {
   that throws fails startup. `hints.contractVersion` is `1`.
 - Both methods throw (`cap-mcp: …`) for an empty `id`, a callback that is not a function, and
   an `id` already registered with the same method (one plugin may use one `id` for both).
-- Providers get `{ user, locale, tenant }` and run inside the request's `cds.context`, not in a
-  CAP transaction, on every request; nothing they return is cached. They may be async.
+- Providers get `{ user, locale, tenant, skills }` and run inside the request's `cds.context`,
+  not in a CAP transaction, on every request; nothing they return is cached. They may be async.
+  `skills` lists the skills the app serves (`cds.mcp.skills`, ADR 0017) as
+  `{ uri, name, description }`, sorted by URI: the same frozen list for every caller, empty
+  without skills. Use it to point agents at a skill; skills themselves cannot be changed.
 - Instructions: the app's own (`cds.mcp.instructions`), then each provider's text, trimmed, a
   blank line apart, in registration order. `undefined` and empty texts add nothing; each text
   is cut at 1,500 characters (with one warning). 2026-07-28 clients read them in

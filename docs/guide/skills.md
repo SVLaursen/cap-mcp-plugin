@@ -119,6 +119,14 @@ Skills are instructions, not authorization. A skill that mentions an admin-only 
 give anyone access to it: the tool is not in that caller's `tools/list`, and CAP checks every
 call. Still, write nothing in a skill that a caller of `/mcp` may not read.
 
+## Point agents at a skill from code
+
+Agents pick a skill by its description. To point them at one from your app or another plugin,
+such as a knowledge plugin, use `mcp:hints`: every provider gets `skills`, the skills served,
+and can name one in the server instructions or in a tool's description
+([Hints from code](features.md#hints-from-code-mcphints)). A skill's own text cannot be changed
+from code: hosts tie a user's approval to its files' digests.
+
 ## Test a skill
 
 1. Start the app (`npm run demo` for the demo) and check the startup report lists the skill.
