@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { DEFAULT_LIMITS, type Limits } from "./schema-mapper";
 import type { Diagnostic, V1Options } from "./types";
@@ -32,6 +32,8 @@ export interface McpConfig {
    * `scopes_supported` in the RFC 9728 metadata. None by default.
    */
   scopes?: string[];
+  /** Skills over MCP (ADR 0016): a folder of skill folders, relative to the app root. */
+  skills?: string;
 }
 
 type Check = (value: unknown) => string | undefined;
@@ -56,6 +58,10 @@ const CHECKS: Record<Exclude<keyof McpConfig, "limits">, Check> = {
       ? undefined
       : "a string, or { file } naming a file relative to the app root",
   filterNotices: boolean,
+  skills: (v) =>
+    isString(v) && v.length > 0
+      ? undefined
+      : "a folder relative to the app root (a non-empty string)",
   scopes: (v) => {
     if (
       !Array.isArray(v) ||
@@ -199,6 +205,36 @@ export function readInstructions(
       },
     };
   }
+}
+
+/**
+ * The skills folder (ADR 0016), resolved against the app root. It must exist, be a folder, and
+ * stay inside the app root once symlinks are followed (the build copies it with the app).
+ */
+export function skillsFolder(
+  value: string | undefined,
+  root: string,
+): { folder?: string; diagnostic?: Diagnostic } {
+  if (value === undefined) return {};
+  const refused = (why: string): { diagnostic: Diagnostic } => ({
+    diagnostic: {
+      level: "error",
+      code: "INVALID_CONFIG",
+      target: "cds.mcp.skills",
+      message: `cds.mcp.skills folder ${value} ${why}; serving no skills`,
+    },
+  });
+  const folder = path.resolve(root, value);
+  let real: string;
+  try {
+    real = realpathSync(folder);
+  } catch {
+    return refused("does not exist");
+  }
+  const inside = path.relative(realpathSync(root), real);
+  if (inside.startsWith("..") || path.isAbsolute(inside)) return refused("is outside the app root");
+  if (!statSync(real).isDirectory()) return refused("is not a folder");
+  return { folder };
 }
 
 /**

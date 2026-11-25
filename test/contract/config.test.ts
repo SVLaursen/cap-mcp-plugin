@@ -1,7 +1,7 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { capQueryLimit, readConfig, readInstructions } from "../../src/config";
+import { capQueryLimit, readConfig, readInstructions, skillsFolder } from "../../src/config";
 
 /** M6 — cds.env.mcp keys (docs/annotations.md, Configuration): camelCase, checked at startup. */
 describe("configuration (cds.env.mcp)", () => {
@@ -15,6 +15,7 @@ describe("configuration (cds.env.mcp)", () => {
       instructions: { file: "mcp.md" },
       limits: { maxRows: 50, defaultRows: 10 },
       scopes: ["bookshop!t1.read", "openid"],
+      skills: "mcp-skills",
     };
     expect(readConfig(raw)).toEqual({ config: raw, diagnostics: [] });
     expect(readConfig(undefined)).toEqual({ config: {}, diagnostics: [] });
@@ -86,6 +87,25 @@ describe("configuration (cds.env.mcp)", () => {
           code: "INVALID_CONFIG",
           target: "cds.mcp.scopes",
           message: `cds.mcp.scopes must be ${expected}; using the default`,
+        },
+      ],
+    });
+  });
+
+  test.each([
+    ["an empty string", ""],
+    ["a number", 42],
+    ["an object", { folder: "skills" }],
+  ])("skills as %s is an error, and no skills are served", (_what, skills) => {
+    expect(readConfig({ skills })).toEqual({
+      config: {},
+      diagnostics: [
+        {
+          level: "error",
+          code: "INVALID_CONFIG",
+          target: "cds.mcp.skills",
+          message:
+            "cds.mcp.skills must be a folder relative to the app root (a non-empty string); using the default",
         },
       ],
     });
@@ -167,5 +187,47 @@ describe("instructions", () => {
           "cds.mcp.instructions file missing.md cannot be read; serving without instructions",
       },
     });
+  });
+});
+
+describe("skills folder (ADR 0016)", () => {
+  let base: string;
+  let root: string;
+  beforeEach(() => {
+    base = mkdtempSync(path.join(tmpdir(), "cap-mcp-skills-"));
+    root = path.join(base, "app");
+    mkdirSync(path.join(root, "mcp-skills"), { recursive: true });
+    mkdirSync(path.join(base, "outside"));
+    writeFileSync(path.join(root, "notes.md"), "x");
+  });
+  afterEach(() => rmSync(base, { recursive: true, force: true }));
+  const refused = (folder: string, why: string) => ({
+    diagnostic: {
+      level: "error",
+      code: "INVALID_CONFIG",
+      target: "cds.mcp.skills",
+      message: `cds.mcp.skills folder ${folder} ${why}; serving no skills`,
+    },
+  });
+
+  test("a folder under the app root is resolved against it", () => {
+    expect(skillsFolder("mcp-skills", root)).toEqual({ folder: path.join(root, "mcp-skills") });
+    expect(skillsFolder(undefined, root)).toEqual({});
+  });
+
+  test("a folder that does not exist, or is not a folder, is an error and serves no skills", () => {
+    expect(skillsFolder("missing", root)).toEqual(refused("missing", "does not exist"));
+    expect(skillsFolder("notes.md", root)).toEqual(refused("notes.md", "is not a folder"));
+  });
+
+  test("a folder outside the app root, also through a symlink, is an error", () => {
+    expect(skillsFolder("../outside", root)).toEqual(
+      refused("../outside", "is outside the app root"),
+    );
+    expect(skillsFolder(path.join(base, "outside"), root)).toEqual(
+      refused(path.join(base, "outside"), "is outside the app root"),
+    );
+    symlinkSync(path.join(base, "outside"), path.join(root, "linked"));
+    expect(skillsFolder("linked", root)).toEqual(refused("linked", "is outside the app root"));
   });
 });

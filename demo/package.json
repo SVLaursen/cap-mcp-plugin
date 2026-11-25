@@ -48,7 +48,8 @@
       ],
       "instructions": {
         "file": "mcp-instructions.md"
-      }
+      },
+      "skills": "mcp-skills"
     }
   }
 }
